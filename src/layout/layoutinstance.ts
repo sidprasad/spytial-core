@@ -3,7 +3,7 @@ import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import { resolveIconPath } from './icon-registry';
-import type { SelectorErrorDetail } from './error-state';
+import type { SelectorErrorDetail, LayoutWarning } from './error-state';
 
 
 import {
@@ -51,6 +51,60 @@ const UNIVERSAL_TYPE = "univ";
 type ConstraintSource = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint;
 
 /**
+ * Reduces a constraint's `toHTML()` output to plain text.
+ *
+ * `toHTML()` exists to be injected into the error modal's markup, so it wraps
+ * selectors in `<code>`. Warning labels are consumed as *text* — rendered with
+ * textContent, logged to a console, asserted in a test — so the tags have to go,
+ * or every consumer sees a literal `<code>next</code>`. Stripping here rather
+ * than at each render point keeps the label usable everywhere.
+ */
+/**
+ * Spec types written under `constraints:` rather than `directives:`, so a warning
+ * can call the offending item by the name its author used. Mirrors the
+ * `kind: 'constraint'` classification in `src/spec-editor/core/registry.ts` —
+ * note `size` and `hideAtom` are authored as constraints even though
+ * `parseLayoutSpec` files them under `directives`.
+ */
+const CONSTRAINT_SPEC_TYPES: ReadonlySet<string> = new Set([
+    'orientation', 'cyclic', 'align', 'group', 'size', 'hideAtom'
+]);
+
+/**
+ * Composes the user-facing text for an evaluator diagnostic.
+ *
+ * Written here rather than passed through from simple-graph-query: sgq's own
+ * message has to stand alone for any consumer, so it re-explains the empty-set
+ * semantics and how to write a string literal. We already show the offending
+ * item's label above the message and the selector below it, so most of that is
+ * redundant here. What the spec author actually needs is the name that missed
+ * and the consequence.
+ */
+function warningMessage(
+    d: { kind: string; name?: string; message: string },
+    specType: string
+): string {
+    if (d.kind !== 'unresolved-name' || !d.name) {
+        return d.message;
+    }
+    const noun = CONSTRAINT_SPEC_TYPES.has(specType) ? 'constraint' : 'directive';
+    return `'${d.name}' did not match any type, relation, or atom. `
+        + `This ${noun} does not apply to anything.`;
+}
+
+function stripHtml(html: string): string {
+    return html
+        .replace(/<[^>]*>/g, '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+/**
  * Result of layout generation. When constraints are unsatisfiable, `layout`
  * contains a counterfactual diagram built from the maximal feasible subset
  * of constraints, annotated with error metadata (conflictingConstraints,
@@ -60,6 +114,14 @@ type CounterfactualLayoutResult = {
     layout: InstanceLayout;
     error: ConstraintError | null;
     selectorErrors: SelectorErrorDetail[];
+    /**
+     * Advisory notes about individual constraints and directives — a selector
+     * naming something that does not exist, say. The layout still rendered; each
+     * warning explains one item that quietly had no effect. Separate from
+     * `selectorErrors` so that list keeps its errors-only meaning for existing
+     * consumers.
+     */
+    warnings: LayoutWarning[];
     /** The qualitative constraint validator, if used. Exposes modal spatial queries (must/can/cannot). */
     validator?: QualitativeConstraintValidator;
 };
@@ -256,6 +318,24 @@ export class LayoutInstance {
     private selectorErrors: SelectorErrorDetail[] = [];
 
     /**
+     * Collector for advisory warnings about individual constraints and
+     * directives. Reset at the start of each generateLayout() call, so on an
+     * animated trace each frame reports its own state rather than accumulating.
+     */
+    private warnings: LayoutWarning[] = [];
+
+    /**
+     * Dedup keys for {@link warnings}, scoped to one generateLayout() call.
+     *
+     * A single render evaluates the same selector many times over — isAttributeField
+     * and isHiddenField re-evaluate theirs once per graph edge — and one selector
+     * can name the same missing thing repeatedly. Keyed by spec item plus the
+     * unresolved name, so two different constraints with the same typo are still
+     * reported separately.
+     */
+    private warningKeys: Set<string> = new Set();
+
+    /**
      * Map of hidden node IDs to the hideAtom selector that caused them to be hidden.
      * Populated by ensureNoExtraNodes() and used by constraint generation to detect conflicts.
      * Reset at the start of each generateLayout() call.
@@ -302,6 +382,67 @@ export class LayoutInstance {
     }
 
     /**
+     * Records an advisory warning about one constraint or directive.
+     *
+     * Deduplicated within the render, because a selector is typically evaluated
+     * many times per layout and would otherwise report the same missing name once
+     * per evaluation.
+     */
+    private recordWarning(warning: LayoutWarning): void {
+        const key = `${warning.code}|${warning.specType ?? ''}|${warning.specIndex ?? ''}|${warning.name ?? warning.selector}`;
+        if (this.warningKeys.has(key)) {
+            return;
+        }
+        this.warningKeys.add(key);
+        this.warnings.push(warning);
+    }
+
+    /**
+     * Drains any diagnostics the evaluator raised for `selector` and records one
+     * warning per diagnostic, attributed to the spec item that owns the selector.
+     *
+     * Call this after every successful `evaluator.evaluate(...)`. An unresolved
+     * name does not fail evaluation — it yields the empty set — so without this
+     * the constraint silently does nothing and looks identical to one that
+     * legitimately matched nothing.
+     *
+     * @param source - The owning constraint or directive. Constraints supply a
+     *   `toHTML()` label; directives are plain objects and fall back to
+     *   `type[index] · selector`.
+     */
+    private collectSelectorDiagnostics(
+        selectorRes: IEvaluatorResult,
+        selector: string,
+        context: string,
+        specType: string,
+        specIndex: number,
+        source?: { toHTML?: () => string }
+    ): void {
+        const diagnostics = selectorRes.getDiagnostics?.() ?? [];
+        if (diagnostics.length === 0) {
+            return;
+        }
+        const label = typeof source?.toHTML === 'function'
+            ? stripHtml(source.toHTML())
+            : `${specType}[${specIndex}] · ${selector}`;
+
+        for (const d of diagnostics) {
+            this.recordWarning({
+                severity: 'warning',
+                code: d.kind,
+                message: warningMessage(d, specType),
+                selector,
+                context,
+                specType,
+                specIndex,
+                label,
+                name: d.name,
+                suggestion: d.suggestion
+            });
+        }
+    }
+
+    /**
      * Checks whether the selector result has the expected arity.
      * Records a SelectorArityError and returns false if mismatched.
      * @param selectorRes - The evaluated selector result
@@ -335,6 +476,50 @@ export class LayoutInstance {
                 context,
                 new SelectorArityError(selector, 'unary', 'binary')
             );
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Decides whether a just-evaluated selector result is usable, recording
+     * anything noteworthy on the way. Returns false when the owning constraint or
+     * directive should be skipped — every *other* one still applies.
+     *
+     * This exists because `evaluator.evaluate()` does not throw on a bad selector:
+     * simple-graph-query returns an error *result*, and the throw only happens
+     * later, inside `selectedTwoples()` / `selectedAtoms()` / `selectedTuplesAll()`.
+     * At several call sites those extractors sat outside the try/catch, so a single
+     * malformed selector escaped the local handler and killed the whole layout.
+     * `checkSelectorArity` did not catch it either — `maxArity()` reports 0 for an
+     * error result, and arity 0 reads as "no results, nothing to validate".
+     *
+     * @param expectedArity - `'any'` skips the arity check, for sites that legitimately
+     *   accept both (group-by-selector) or validate arity themselves.
+     */
+    private acceptSelectorResult(
+        selectorRes: IEvaluatorResult,
+        selector: string,
+        context: string,
+        expectedArity: 'unary' | 'binary' | 'any',
+        specType: string,
+        specIndex: number,
+        source?: { toHTML?: () => string }
+    ): boolean {
+        // Collect diagnostics before the error check. A selector that warns about an
+        // unresolved name and *then* fails for an unrelated reason should still
+        // surface the warning — that is when it is most worth having.
+        this.collectSelectorDiagnostics(selectorRes, selector, context, specType, specIndex, source);
+
+        // Guarded rather than called outright: `isError` is part of IEvaluatorResult,
+        // but hand-rolled and third-party evaluators in the wild implement only the
+        // extractors they need. Skipping the check for those leaves them exactly as
+        // they behaved before, instead of failing on a missing method.
+        if (typeof selectorRes.isError === 'function' && selectorRes.isError()) {
+            this.recordSelectorError(selector, context, new Error(selectorRes.prettyPrint()));
+            return false;
+        }
+        if (expectedArity !== 'any' && !this.checkSelectorArity(selectorRes, selector, expectedArity, context)) {
             return false;
         }
         return true;
@@ -621,7 +806,7 @@ export class LayoutInstance {
         let groups: LayoutGroup[] = [];
 
         // First we go through the group by selector constraints.
-        for (var gc of groupBySelectorConstraints) {
+        for (const [specIndex, gc] of groupBySelectorConstraints.entries()) {
 
             let selector = gc.selector;
             let selectorRes;
@@ -632,6 +817,11 @@ export class LayoutInstance {
                 continue; // Skip this group constraint
             }
 
+            // Arity is 'any' here: groups intentionally accept both unary and binary
+            // selectors, and the branch below picks the path from maxArity().
+            if (!this.acceptSelectorResult(selectorRes, selector, 'groupBySelector selector', 'any', 'group', specIndex, gc)) {
+                continue; // Skip this group only — every other constraint still applies
+            }
 
             // Now, we should support both unary and binary selectors.
 
@@ -1086,11 +1276,11 @@ export class LayoutInstance {
         // Pre-evaluate all hideAtom directives once (not per node)
         const hiddenAtomDirectives = this._layoutSpec.directives.hiddenAtoms;
         const evaluatedHideDirectives: { selector: string; hiddenSet: Set<string> }[] = [];
-        for (const directive of hiddenAtomDirectives) {
+        for (const [specIndex, directive] of hiddenAtomDirectives.entries()) {
             try {
                 const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                if (!this.checkSelectorArity(selectorResult, directive.selector, 'unary', 'hideAtom selector')) {
-                    continue; // Skip — binary selector in unary position (recorded once)
+                if (!this.acceptSelectorResult(selectorResult, directive.selector, 'hideAtom selector', 'unary', 'hideAtom', specIndex)) {
+                    continue; // Skip this directive only (recorded once)
                 }
                 const selectedAtoms = selectorResult.selectedAtoms();
                 evaluatedHideDirectives.push({
@@ -1191,6 +1381,8 @@ export class LayoutInstance {
     ): CounterfactualLayoutResult {
         // Reset selector errors at the start of each layout generation
         this.selectorErrors = [];
+        this.warnings = [];
+        this.warningKeys.clear();
         // Reset hidden-node tracking at the start of each layout generation
         this.hiddenNodeSelectors = new Map();
         this.hiddenNodeConflicts = new Map();
@@ -1405,10 +1597,11 @@ export class LayoutInstance {
         layout.constraints = constraints;
         layout.groups = groups.filter(g => !g.negated);
 
-        // Return layout with selectorErrors (if any) - these don't block the layout
-        // but callers should check and display them to the user
+        // Return layout with selectorErrors and warnings (if any) - neither blocks
+        // the layout, but callers should check and display them to the user
         const qualitativeValidator = validator instanceof QualitativeConstraintValidator ? validator : undefined;
-        return { layout, error: null, selectorErrors: this.selectorErrors, validator: qualitativeValidator };
+        layout.warnings = this.warnings;
+        return { layout, error: null, selectorErrors: this.selectorErrors, warnings: this.warnings, validator: qualitativeValidator };
     }
 
     /**
@@ -1436,13 +1629,15 @@ export class LayoutInstance {
             edges: layoutEdges,
             constraints: context.constraints,
             groups: layoutGroups,
-            disjunctiveConstraints: []
+            disjunctiveConstraints: [],
+            warnings: this.warnings
         };
 
         return {
             layout: counterfactualLayout,
             error,
-            selectorErrors: this.selectorErrors
+            selectorErrors: this.selectorErrors,
+            warnings: this.warnings
         };
     }
 
@@ -1514,13 +1709,15 @@ export class LayoutInstance {
         // Apply the same edge-visibility post-processing that the normal path performs.
         const counterfactualLayout: InstanceLayout = {
             ...layout,
-            edges: this.filterHiddenEdges(layout.edges)
+            edges: this.filterHiddenEdges(layout.edges),
+            warnings: this.warnings
         };
 
         return {
             layout: counterfactualLayout,
             error,
-            selectorErrors: this.selectorErrors
+            selectorErrors: this.selectorErrors,
+            warnings: this.warnings
         };
     }
 
@@ -1549,12 +1746,14 @@ export class LayoutInstance {
             edges: layout.edges,
             constraints,
             groups: layout.groups,
-            conflictingConstraints: [...minimalConflictingSet.values()].flat()
+            conflictingConstraints: [...minimalConflictingSet.values()].flat(),
+            warnings: this.warnings
         };
         return {
             layout: counterfactualLayout,
             error: error,
-            selectorErrors: this.selectorErrors
+            selectorErrors: this.selectorErrors,
+            warnings: this.warnings
         };
     }
 
@@ -1588,11 +1787,13 @@ export class LayoutInstance {
             constraints: layout.constraints,
             groups: overlappingGroups,
             overlappingNodes: error.overlappingNodes,
+            warnings: this.warnings
         }
         return { 
             layout: counterfactualLayout, 
             error: error,
-            selectorErrors: this.selectorErrors
+            selectorErrors: this.selectorErrors,
+            warnings: this.warnings
         };
     }
 
@@ -1615,7 +1816,7 @@ export class LayoutInstance {
         const disjunctions: DisjunctiveConstraint[] = [];
 
         // For each cyclic constraint, extract fragments
-        for (const [, c] of cyclicConstraints.entries()) {
+        for (const [specIndex, c] of cyclicConstraints.entries()) {
             let selectorRes;
             try {
                 selectorRes = this.evaluator.evaluate(c.selector, { instanceIndex: this.instanceNum });
@@ -1623,8 +1824,8 @@ export class LayoutInstance {
                 this.recordSelectorError(c.selector, 'cyclic orientation selector', error);
                 continue; // Skip this cyclic constraint
             }
-            if (!this.checkSelectorArity(selectorRes, c.selector, 'binary', 'cyclic orientation selector')) {
-                continue; // Skip — unary selector in binary position
+            if (!this.acceptSelectorResult(selectorRes, c.selector, 'cyclic orientation selector', 'binary', 'cyclic', specIndex, c)) {
+                continue; // Skip this constraint only — every other one still applies
             }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
             let nextNodeMap: Map<LayoutNode, LayoutNode[]> = new Map<LayoutNode, LayoutNode[]>();
@@ -1852,7 +2053,7 @@ export class LayoutInstance {
         const leftOfGraph = new Map<string, Set<string>>();
         const aboveGraph = new Map<string, Set<string>>();
 
-        relativeOrientationConstraints.forEach((c: RelativeOrientationConstraint) => {
+        relativeOrientationConstraints.forEach((c: RelativeOrientationConstraint, specIndex: number) => {
 
             let directions = c.directions;
             let selector = c.selector;
@@ -1864,8 +2065,8 @@ export class LayoutInstance {
                 this.recordSelectorError(selector, 'orientation selector', error);
                 return; // Skip this orientation constraint
             }
-            if (!this.checkSelectorArity(selectorRes, selector, 'binary', 'orientation selector')) {
-                return; // Skip — unary selector in binary position
+            if (!this.acceptSelectorResult(selectorRes, selector, 'orientation selector', 'binary', 'orientation', specIndex, c)) {
+                return; // Skip this constraint only — every other one still applies
             }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
@@ -2190,7 +2391,7 @@ export class LayoutInstance {
         // Use normalized key (sorted node IDs) since alignment is symmetric
         const generatedAlignments = new Set<string>();
 
-        alignConstraints.forEach((c: AlignConstraint) => {
+        alignConstraints.forEach((c: AlignConstraint, specIndex: number) => {
             let direction = c.direction;
             let selector = c.selector;
 
@@ -2201,8 +2402,8 @@ export class LayoutInstance {
                 this.recordSelectorError(selector, 'align selector', error);
                 return; // Skip this align constraint
             }
-            if (!this.checkSelectorArity(selectorRes, selector, 'binary', 'align selector')) {
-                return; // Skip — unary selector in binary position
+            if (!this.acceptSelectorResult(selectorRes, selector, 'align selector', 'binary', 'align', specIndex, c)) {
+                return; // Skip this constraint only — every other one still applies
             }
             let selectedTuples: string[][] = selectorRes.selectedTwoples();
 
@@ -2662,12 +2863,12 @@ export class LayoutInstance {
         // (matching `sat_size` in the Lean mechanization: ∀ a ∈ S, b.width = w
         // ∧ b.height = h).
         let sizeDirectives = this._layoutSpec.directives.sizes;
-        sizeDirectives.forEach((sizeDirective) => {
+        sizeDirectives.forEach((sizeDirective, specIndex) => {
             let selectedNodes: string[];
             try {
                 const selectorRes = this.evaluator.evaluate(sizeDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.checkSelectorArity(selectorRes, sizeDirective.selector, 'unary', 'size selector')) {
-                    return; // Skip — binary selector in unary position
+                if (!this.acceptSelectorResult(selectorRes, sizeDirective.selector, 'size selector', 'unary', 'size', specIndex)) {
+                    return; // Skip this directive only
                 }
                 selectedNodes = selectorRes.selectedAtoms();
             } catch (error) {
@@ -2738,15 +2939,15 @@ export class LayoutInstance {
         const allNodeIdSet = new Set(allNodeIds);
         const rulesByNode: Record<string, AtomStyleRule[]> = {};
 
-        rules.forEach((rule) => {
+        rules.forEach((rule, specIndex) => {
             let matched: string[];
             if (!rule.selector) {
                 matched = allNodeIds; // no selector → applies to every atom
             } else {
                 try {
                     const selectorRes = this.evaluator.evaluate(rule.selector, { instanceIndex: this.instanceNum });
-                    if (!this.checkSelectorArity(selectorRes, rule.selector, 'unary', 'atomStyle selector')) {
-                        return; // Skip — binary selector in unary position
+                    if (!this.acceptSelectorResult(selectorRes, rule.selector, 'atomStyle selector', 'unary', 'atomStyle', specIndex)) {
+                        return; // Skip this rule only
                     }
                     matched = selectorRes.selectedAtoms();
                 } catch (error) {
@@ -2819,12 +3020,12 @@ export class LayoutInstance {
 
         // Apply icon directives first
         let iconDirectives = this._layoutSpec.directives.icons;
-        iconDirectives.forEach((iconDirective) => {
+        iconDirectives.forEach((iconDirective, specIndex) => {
             let selected: string[];
             try {
                 const selectorRes = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.checkSelectorArity(selectorRes, iconDirective.selector, 'unary', 'icon selector')) {
-                    return; // Skip — binary selector in unary position
+                if (!this.acceptSelectorResult(selectorRes, iconDirective.selector, 'icon selector', 'unary', 'icon', specIndex)) {
+                    return; // Skip this directive only
                 }
                 selected = selectorRes.selectedAtoms();
             } catch (error) {
@@ -3116,8 +3317,12 @@ export class LayoutInstance {
         // Draw-qualified directives need groups to resolve their endpoints, and
         // groups don't exist yet at this point — they run in a second pass
         // (addDrawInferredEdges) after generateGroups().
-        let inferredEdges = this._layoutSpec.directives.inferredEdges.filter(he => !he.draw);
-        inferredEdges.forEach((he) => {
+        // Iterate the full list and skip `draw` directives inline, so specIndex stays
+        // a position in directives.inferredEdges rather than in a filtered copy.
+        this._layoutSpec.directives.inferredEdges.forEach((he, specIndex) => {
+            if (he.draw) {
+                return;
+            }
 
             let res;
             try {
@@ -3125,6 +3330,9 @@ export class LayoutInstance {
             } catch (error) {
                 this.recordSelectorError(he.selector, 'inferredEdge selector', error);
                 return; // Skip this inferred edge
+            }
+            if (!this.acceptSelectorResult(res, he.selector, 'inferredEdge selector', 'any', 'inferredEdge', specIndex)) {
+                return; // Skip this directive only — every other one still applies
             }
 
             let selectedTuples: string[][] = res.selectedTuplesAll();
@@ -3173,8 +3381,12 @@ export class LayoutInstance {
     private addDrawInferredEdges(g: Graph, groups: LayoutGroup[]) {
 
         const inferredEdgePrefix = "_inferred_";
-        const drawDirectives = this._layoutSpec.directives.inferredEdges.filter(he => he.draw);
-        drawDirectives.forEach((he) => {
+        // Iterate the full list and skip non-`draw` directives inline, so specIndex
+        // stays a position in directives.inferredEdges rather than in a filtered copy.
+        this._layoutSpec.directives.inferredEdges.forEach((he, specIndex) => {
+            if (!he.draw) {
+                return;
+            }
 
             const draw = he.draw!;
 
@@ -3223,6 +3435,9 @@ export class LayoutInstance {
             } catch (error) {
                 this.recordSelectorError(he.selector, 'inferredEdge selector', error);
                 return; // Skip this inferred edge
+            }
+            if (!this.acceptSelectorResult(res, he.selector, 'inferredEdge selector', 'any', 'inferredEdge', specIndex)) {
+                return; // Skip this directive only — every other one still applies
             }
 
             // `draw` also supports unary selectors: the single atom feeds both

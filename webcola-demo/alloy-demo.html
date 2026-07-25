@@ -658,15 +658,16 @@
                 layoutResult = layoutInstance.generateLayout(instanceForLayout);
                 currentInstanceLayout = layoutResult.layout;
 
-                // 1. Check for selector errors first - early out if present
+                // 1. Report selector errors, but keep rendering. A broken selector drops
+                // only its own constraint; every other one still applied, so the diagram
+                // is worth showing. (This used to set `unsat` and bail, which left the
+                // user with a blank diagram and — since showSelectorErrors was never
+                // defined — no explanation.)
                 if (layoutResult.selectorErrors && layoutResult.selectorErrors.length > 0) {
                     console.warn('Selector errors:', layoutResult.selectorErrors);
                     if (window.showSelectorErrors) {
                         window.showSelectorErrors(layoutResult.selectorErrors);
                     }
-                    const webcolaGraphElement = document.getElementById('graph-container');
-                    webcolaGraphElement.setAttribute('unsat', '');
-                    return;
                 }
 
                 // 2. Standard IIS/constraint error handling

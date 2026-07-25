@@ -46,6 +46,30 @@ export interface ErrorResult {
 }
 
 /**
+ * An advisory note raised while evaluating an expression. The evaluation still
+ * produced a value — this says something about *how*.
+ *
+ * Declared structurally rather than re-exported from simple-graph-query so this
+ * module stays free of evaluator-specific imports; sgq's `Diagnostic` is
+ * assignable to it. Today the only kind is `'unresolved-name'`, which evaluates
+ * to the empty set. That matters more than it sounds: an empty set satisfies
+ * predicates vacuously (`no Playr` is `true`), so a typo produces the same
+ * *value* as a selector that legitimately matched nothing. This is the only
+ * signal separating the two.
+ */
+export interface EvaluationDiagnostic {
+  /** Machine-readable category, e.g. `'unresolved-name'`. */
+  kind: string;
+  severity: 'warning' | 'info';
+  /** The name that could not be resolved, when the kind carries one. */
+  name?: string;
+  /** Human-readable message suitable for showing to a spec author. */
+  message: string;
+  /** Closest name in the instance, when one is near enough to be worth offering. */
+  suggestion?: string;
+}
+
+/**
  * Configuration options for evaluators
  */
 export interface EvaluatorConfig {
@@ -113,7 +137,16 @@ export interface IEvaluatorResult {
   /** Get the raw result data */
   getRawResult(): EvaluatorResult;
 
-  
+  /**
+   * Advisory diagnostics raised while evaluating the expression — a name that
+   * resolved to nothing, say. Distinct from {@link isError}: the evaluation
+   * succeeded, but something about it is worth telling the spec author.
+   *
+   * Optional because only the simple-graph-query evaluator produces these; the
+   * SQL, Forge and layout evaluators simply omit it. Callers should reach for it
+   * with `result.getDiagnostics?.() ?? []`.
+   */
+  getDiagnostics?(): readonly EvaluationDiagnostic[];
 }
 
 /**

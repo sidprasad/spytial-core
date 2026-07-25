@@ -243,6 +243,9 @@ describe('WebColaCnDGraph overlapping renders', () => {
         const fakeThis: any = {
           renderGeneration: 0,
           teardownInflightRender: vi.fn(() => order.push('teardown')),
+          // Runs between teardown and transition-mode resolution; stubbed so the
+          // ordering assertions below still see exactly two entries.
+          renderLayoutWarnings: vi.fn(),
           resolveTransitionMode: vi.fn(() => { order.push('resolveTransitionMode'); return 'replace'; }),
           hasValidTransform: () => false,
           applyViewportRenderPolicy: vi.fn(),
