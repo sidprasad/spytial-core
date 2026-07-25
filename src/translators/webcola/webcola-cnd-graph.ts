@@ -988,20 +988,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
       throw new Error(`Layout cannot have both conflictingConstraints (${conflictingNodeIds}) and overlappingNodes ${overlappingNodeIds}`);
     }
 
-    // Visible atoms whose relationship was dropped because their partner was hidden.
-    // These are mutually exclusive with the constraint/overlap conflicts above (a
-    // hidden-node conflict short-circuits before those validators run).
-    const hiddenConflictNodes = this.currentLayout.hiddenConflictNodes;
-
-    const errorNodes = [...conflictingNodes, ...overlappingNodes, ...hiddenConflictNodes];
+    const errorNodes = [...conflictingNodes, ...overlappingNodes];
 
     return errorNodes.some((errorNode: LayoutNode) => errorNode.id === node.id); // NOTE: `id` should be unique
   }
 
   /**
-   * Determines if a node was re-introduced — i.e. hidden by a hideAtom directive but shown
-   * anyway because a layout constraint references it. These are marked distinctly so the
-   * user understands why an atom they asked to hide is visible.
+   * Determines if a node is hidden-but-shown — hidden by a hideAtom directive that a layout
+   * constraint conflicts with, so the counterfactual diagram draws it anyway. These are
+   * marked distinctly (dashed outline) so the user can see which atom caused the conflict.
    * @param node - Node object to check
    * @returns True if the node is in the layout's set of re-introduced nodes
    */

@@ -277,17 +277,10 @@ export interface InstanceLayout {
      */
     warnings?: LayoutWarning[];
     /**
-     * Still-visible nodes that were the other end of a relationship dropped because the
-     * relationship's other end was hidden by a hideAtom directive. Surfaced so the
-     * counterfactual diagram can highlight the atoms a hidden-node conflict actually affects.
-     * Only populated by the drop-the-constraint fallback (see `reintroducedNodes` for the
-     * default re-introduction behavior).
-     */
-    hiddenConflictNodes?: LayoutNode[];
-    /**
-     * Atoms hidden by a hideAtom directive that were re-introduced into the diagram because
-     * a layout constraint references them. Surfaced so the renderer can mark them distinctly
-     * ("shown because a constraint needs it") rather than dropping the relationship.
+     * Atoms hidden by a hideAtom directive that a layout constraint references. The hide
+     * and the constraint cannot both be satisfied (the layout is reported unsat via
+     * HiddenNodeConflictError); this counterfactual diagram shows the atoms anyway, and
+     * the renderer marks them distinctly (dashed outline) as hidden-but-shown.
      */
     reintroducedNodes?: LayoutNode[];
     /**

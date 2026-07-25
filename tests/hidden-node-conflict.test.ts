@@ -1,11 +1,14 @@
 /**
  * Tests for hidden-node conflict detection and reporting.
- * 
+ *
  * When a hideAtom directive hides a node that is also referenced by a layout constraint
- * (orientation or alignment), the system should:
- * 1. Report the conflict in an IIS-like table format (Source Constraints | Diagram Elements)
- * 2. Drop the conflicting pairwise constraints from the layout (counterfactual)
- * 3. Still produce a valid layout with the remaining constraints
+ * (orientation or alignment), the spec is unsatisfiable — the atom cannot be both hidden
+ * and placed. The system should:
+ * 1. Report the conflict as an error, in an IIS-like table format
+ *    (Source Constraints | Diagram Elements)
+ * 2. Return a counterfactual layout in which the conflicting hidden atoms are shown
+ *    despite the hide (marked on layout.reintroducedNodes; drawn with a dashed outline)
+ *    so the conflicting relationships are visible
  */
 
 import { describe, it, expect } from 'vitest';
@@ -218,8 +221,8 @@ directives:
     });
   });
 
-  describe('Counterfactual layout (re-introduced atoms)', () => {
-    it('re-introduces the hidden node into the layout rather than removing it', () => {
+  describe('Counterfactual layout (hidden atoms shown)', () => {
+    it('shows the hidden node in the counterfactual rather than removing it', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -281,8 +284,8 @@ directives:
     });
   });
 
-  describe('Re-introduction of conflicting hidden atoms', () => {
-    it('marks the re-introduced atom in layout.reintroducedNodes', () => {
+  describe('Marking of conflicting hidden atoms', () => {
+    it('marks the shown-despite-hide atom in layout.reintroducedNodes', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -300,7 +303,7 @@ directives:
       expect(ids).not.toContain('D');
     });
 
-    it('reports the resolution as "reintroduced" on the error', () => {
+    it('reports the shown atoms and the unsatisfiability on the error', () => {
       const result = createLayout(`
 constraints:
   - align:
@@ -312,12 +315,11 @@ directives:
 `);
 
       const error = result.error as HiddenNodeConflictError;
-      expect(error.resolution).toBe('reintroduced');
       expect(error.reintroducedNodeIds).toContain('B');
-      expect(error.message.toLowerCase()).toContain('re-introduced');
+      expect(error.message).toContain('cannot both be satisfied');
     });
 
-    it('produces a satisfiable layout (no further conflicts) once atoms are re-introduced', () => {
+    it('keeps all constraints in the counterfactual (nothing is silently dropped)', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -328,14 +330,13 @@ directives:
       selector: B
 `);
 
-      // The conflict is resolved by re-introduction, not by an unsatisfiable counterfactual.
-      const error = result.error as HiddenNodeConflictError;
-      expect(error.resolution).toBe('reintroduced');
+      // The error stands, but the counterfactual keeps every constraint.
+      expect(result.error).not.toBeNull();
       // All edge tuples are kept as constraints (A->B, B->C, C->D = 3 orientation constraints).
       expect(result.layout.constraints.length).toBeGreaterThanOrEqual(3);
     });
 
-    it('re-introduces both ends when every atom of a relationship is hidden', () => {
+    it('shows both ends when every atom of a relationship is hidden', () => {
       const twoNodeData = {
         atoms: [
           { id: 'X', type: 'Node', label: 'X' },

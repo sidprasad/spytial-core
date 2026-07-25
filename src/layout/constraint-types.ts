@@ -48,8 +48,11 @@ export interface GroupOverlapError extends ConstraintError {
 }
 
 /**
- * Error for when a hideAtom directive hides a node that is also referenced by layout constraints.
- * Reported in a table format similar to IIS conflicts.
+ * Error for when a hideAtom directive hides a node that a layout constraint references.
+ * The two are mutually unsatisfiable — the atom cannot be both hidden and placed — so the
+ * layout is unsat. Reported in a table format similar to IIS conflicts. The accompanying
+ * counterfactual layout shows the conflicting atoms despite the hide (dashed outline);
+ * see `reintroducedNodeIds` and `InstanceLayout.reintroducedNodes`.
  */
 export interface HiddenNodeConflictError extends ConstraintError {
     type: 'hidden-node-conflict';
@@ -59,14 +62,7 @@ export interface HiddenNodeConflictError extends ConstraintError {
     droppedConstraints: Map<string, string[]>;
     /** Structured error messages for UI rendering (same format as positional errors) */
     errorMessages: ErrorMessages;
-    /**
-     * How the conflict was resolved:
-     * - 'reintroduced' (default): the hidden atoms were shown anyway because constraints
-     *   reference them; no constraints were dropped.
-     * - 'dropped': fallback — the conflicting constraints were dropped and the atoms stayed hidden.
-     */
-    resolution: 'reintroduced' | 'dropped';
-    /** Node IDs that were re-introduced into the diagram (only when resolution is 'reintroduced'). */
+    /** Node IDs the counterfactual layout draws despite the hide (dashed outline). */
     reintroducedNodeIds?: string[];
 }
 

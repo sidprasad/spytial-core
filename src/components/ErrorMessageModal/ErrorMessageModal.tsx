@@ -207,7 +207,7 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
   const descriptionText = useMemo(() => {
     if (isSelectorError) return 'One or more selectors in your layout specification could not be evaluated.';
     if (isOtherError) return 'An error occurred while processing your data.';
-    if (isHiddenNodeError) return 'Some layout constraints reference atoms hidden by a hideAtom directive. Those atoms have been re-introduced into the diagram (shown despite the hide) so the relationships can be drawn. Re-introduced atoms are outlined with a dashed border.';
+    if (isHiddenNodeError) return 'Some layout constraints reference atoms hidden by a hideAtom directive. An atom cannot be both hidden and placed, so this layout is unsatisfiable. The diagram shows what the layout would look like if those atoms were not hidden — they are outlined with a dashed border.';
     return 'Your data causes the following visualization constraints to conflict.';
   }, [isSelectorError, isOtherError, isHiddenNodeError]);
 
