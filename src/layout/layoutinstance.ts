@@ -616,6 +616,25 @@ export class LayoutInstance {
         }
     }
 
+    /**
+     * Records a conflict where a group contains a hideAtom-hidden atom — unsatisfiable
+     * for the same reason as the pairwise case: the atom cannot be both hidden and drawn
+     * inside the group. generateLayout() shows the atom in the counterfactual and reports
+     * the conflict as a layout error. (Group keys are exempt: a binary group's key is not
+     * inside the hull, and hiding keys while keeping the group is a sanctioned pattern.)
+     * @param group - The group that contains the hidden atom
+     * @param hiddenNodeId - The hidden member atom
+     */
+    private recordHiddenGroupMemberConflict(group: LayoutGroup, hiddenNodeId: string): void {
+        const sourceHTML = group.sourceConstraint?.toHTML() ?? `group <code>${group.name}</code>`;
+        const description = `${hiddenNodeId} is in group ${group.name}`;
+        if (!this.hiddenNodeConflicts.has(sourceHTML)) {
+            this.hiddenNodeConflicts.set(sourceHTML, []);
+        }
+        this.hiddenNodeConflicts.get(sourceHTML)!.push(description);
+        this.conflictedHiddenNodes.add(hiddenNodeId);
+    }
+
 
     /**
      * Constructs a new `LayoutInstance` object.
@@ -1330,10 +1349,13 @@ export class LayoutInstance {
 
     /**
     * Modifies the graph to remove extraneous nodes (ex. those to be hidden)
-    * Also populates this.hiddenNodeSelectors so constraint generation can detect conflicts.
+    * Also populates this.hiddenNodeSelectors so constraint generation can detect conflicts,
+    * and records hide-vs-group conflicts against the already-generated groups (groups are
+    * built before hiding, so membership is checked here at hide time).
     * @param g - The graph, which will be modified to remove extraneous nodes.
+    * @param groups - The groups generated for this pass, checked for hidden members/keys.
     */
-    private ensureNoExtraNodes(g: Graph, a: IDataInstance) {
+    private ensureNoExtraNodes(g: Graph, a: IDataInstance, groups: LayoutGroup[]) {
 
         let nodes = [...g.nodes()];
 
@@ -1398,6 +1420,18 @@ export class LayoutInstance {
                     // Track selector-hidden nodes so constraint generation can report conflicts
                     if (hideBySelector && hidingSelector) {
                         this.hiddenNodeSelectors.set(node, hidingSelector);
+                        // A group that contains this atom cannot be drawn without it —
+                        // the hide and the group cannot both be satisfied. Only members
+                        // count: a binary group's key is not inside the hull (hiding keys
+                        // while keeping the group is a sanctioned pattern; see the
+                        // inferred-edge draw tests), and negated groups assert
+                        // non-containment, so a hidden member does not contradict them.
+                        for (const group of groups) {
+                            if (group.negated) continue;
+                            if (group.nodeIds.includes(node)) {
+                                this.recordHiddenGroupMemberConflict(group, node);
+                            }
+                        }
                     }
                 }
 
@@ -1538,7 +1572,7 @@ export class LayoutInstance {
         // like plain inferred edges — so they can reconnect built-in atoms).
         this.addDrawInferredEdges(g, groups);
 
-        this.ensureNoExtraNodes(g, a);
+        this.ensureNoExtraNodes(g, a, groups);
 
         // Recompute visual maps after graph mutations (inferred edges / node removal)
         let nodeIconMap = this.getNodeIconMap(g);

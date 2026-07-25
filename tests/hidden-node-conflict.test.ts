@@ -437,6 +437,75 @@ directives:
     });
   });
 
+  describe('Group constraints', () => {
+    // group over `edge` (binary selector): key = tuple[0], member = tuple[1]
+    // → bucket[A] contains B, bucket[B] contains C, bucket[C] contains D.
+
+    it('reports a hidden-node conflict when a hidden atom is a group member', () => {
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: edge
+      name: bucket
+directives:
+  - hideAtom:
+      selector: D
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      // The counterfactual shows D inside its group despite the hide.
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).toContain('D');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('D');
+      expect(result.layout.groups.some(gr => gr.nodeIds.includes('D'))).toBe(true);
+    });
+
+    it('does NOT report a conflict when the hidden atom is only a group key', () => {
+      // Hiding a binary group's key while keeping the group is a sanctioned
+      // pattern (the key is not inside the hull; see inferred-edge draw tests).
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: edge
+      name: bucket
+directives:
+  - hideAtom:
+      selector: A
+`);
+
+      // A is only ever a key (bucket[A]), never a member: no conflict, A stays hidden.
+      expect(result.error).toBeNull();
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).not.toContain('A');
+      // The group A keyed still exists, containing its member B.
+      expect(result.layout.groups.some(gr => gr.nodeIds.includes('B'))).toBe(true);
+    });
+
+    it('produces no error when the hidden atom is in no group', () => {
+      const dataWithExtra = {
+        ...testData,
+        atoms: [...testData.atoms, { id: 'E', type: 'Other', label: 'E' }]
+      };
+
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: edge
+      name: bucket
+directives:
+  - hideAtom:
+      selector: Other
+`, dataWithExtra);
+
+      expect(result.error).toBeNull();
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).not.toContain('E');
+    });
+  });
+
   describe('Multiple hidden nodes and constraints', () => {
     it('handles multiple hidden nodes referenced by the same constraint', () => {
       const result = createLayout(`
