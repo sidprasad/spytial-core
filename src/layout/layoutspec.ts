@@ -204,11 +204,16 @@ export class GroupBySelector extends ConstraintOperation{
 }
 
 
-/*
-
-    TODO: Deprecate.
-
-*/
+/**
+ * Grouping by a relational field: `groupOn` and `addToGroup` index into each
+ * tuple of `field` to pick the group key and its members.
+ *
+ * @deprecated Use {@link GroupBySelector} instead — a binary selector whose
+ * first column is the key and whose second is the members says the same thing
+ * without the tuple indices. Retained for backwards compatibility: it still
+ * parses and groups exactly as before, behind a deprecation warning raised by
+ * {@link parseLayoutSpec}.
+ */
 export class GroupByField  {
     // And applies to selects the thing to group ON
     field : string;
