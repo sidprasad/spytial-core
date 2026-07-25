@@ -1960,10 +1960,21 @@ export class LayoutInstance {
                 let sourceNodeId = tuple[0];
                 let targetNodeId = tuple[1];
 
+                // Skip tuples referencing hidden nodes; record the conflict for error reporting
+                // (the atom cannot be both hidden and placed on the cycle)
+                const sourceHidden = this.isNodeHiddenByDirective(sourceNodeId);
+                const targetHidden = this.isNodeHiddenByDirective(targetNodeId);
+                if (sourceHidden || targetHidden) {
+                    const description = `${sourceNodeId} is followed by ${targetNodeId} in a ${c.direction} cycle`;
+                    this.recordHiddenNodeConflict(c, description, sourceNodeId, targetNodeId, sourceHidden, targetHidden);
+                    return; // Skip this tuple
+                }
+
                 let srcN = layoutNodes.find((node) => node.id === sourceNodeId);
                 let tgtN = layoutNodes.find((node) => node.id === targetNodeId);
 
-                // Skip if either node is not found
+                // Skip if either node is not found (hidden for a non-directive reason,
+                // e.g. legacy disconnected-node hiding)
                 if (!srcN || !tgtN) {
                     return;
                 }

@@ -371,6 +371,72 @@ directives:
     });
   });
 
+  describe('Cyclic constraints', () => {
+    const ringData = {
+      atoms: [
+        { id: 'X', type: 'Node', label: 'X' },
+        { id: 'Y', type: 'Node', label: 'Y' },
+        { id: 'Z', type: 'Node', label: 'Z' },
+      ],
+      relations: [
+        {
+          id: 'next',
+          name: 'next',
+          types: ['Node', 'Node'],
+          tuples: [
+            { atoms: ['X', 'Y'], types: ['Node', 'Node'] },
+            { atoms: ['Y', 'Z'], types: ['Node', 'Node'] },
+            { atoms: ['Z', 'X'], types: ['Node', 'Node'] },
+          ]
+        }
+      ]
+    };
+
+    it('reports a hidden-node conflict when a cyclic constraint references a hidden atom', () => {
+      const result = createLayout(`
+constraints:
+  - cyclic:
+      selector: next
+      direction: clockwise
+directives:
+  - hideAtom:
+      selector: Y
+`, ringData);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      // The counterfactual shows Y on the cycle despite the hide.
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).toContain('Y');
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toContain('Y');
+      expect(reintroduced).not.toContain('X');
+      expect(reintroduced).not.toContain('Z');
+    });
+
+    it('produces no error when the hidden atom is not on the cycle', () => {
+      const dataWithExtra = {
+        ...ringData,
+        atoms: [...ringData.atoms, { id: 'W', type: 'Other', label: 'W' }]
+      };
+
+      const result = createLayout(`
+constraints:
+  - cyclic:
+      selector: next
+      direction: clockwise
+directives:
+  - hideAtom:
+      selector: Other
+`, dataWithExtra);
+
+      expect(result.error).toBeNull();
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).not.toContain('W');
+    });
+  });
+
   describe('Multiple hidden nodes and constraints', () => {
     it('handles multiple hidden nodes referenced by the same constraint', () => {
       const result = createLayout(`
