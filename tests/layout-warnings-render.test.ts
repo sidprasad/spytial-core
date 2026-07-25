@@ -144,6 +144,20 @@ describe('renderLayoutWarnings', () => {
       expect((root.querySelector('#layout-warnings') as HTMLElement).hidden).toBe(true);
     });
 
+    it('holds when the same warnings arrive in a different order', () => {
+      // The key is the set, not the arrival order: warnings are collected as the
+      // render walks the instance, and two frames carrying the same warnings can
+      // collect them in a different order. That must not read as a change and
+      // undo the dismissal.
+      const { root, fakeThis } = fixture();
+      render(fakeThis, [deprecation, unresolved]);
+      fakeThis.dismissedWarningSignature = fakeThis.currentWarningSignature;
+
+      render(fakeThis, [unresolved, deprecation]);
+
+      expect((root.querySelector('#layout-warnings') as HTMLElement).hidden).toBe(true);
+    });
+
     it('tells two selectorless warnings apart, so a new one still shows', () => {
       // Both are deprecations of the same form with no selector and no name —
       // the fields the signature normally keys on. Only the message separates

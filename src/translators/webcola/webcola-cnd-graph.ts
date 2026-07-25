@@ -10720,8 +10720,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Re-showing an identical set every frame of a trace would make the dismiss
     // button useless; staying hidden after the warnings *change* would hide new
     // information. Keying on the set itself gets both.
+    //
+    // Sorted, so the key is genuinely the set and not the order it arrived in:
+    // warnings are collected as the render walks the instance, and two frames
+    // holding the same warnings can collect them in a different order. Without
+    // the sort, that reads as a change and the badge reappears after dismissal.
     const signature = warnings
       .map(w => `${w.code}|${w.specType ?? ''}|${w.specIndex ?? ''}|${w.name ?? w.selector ?? w.message}`)
+      .sort()
       .join('\n');
     if (this.dismissedWarningSignature === signature) {
       container.hidden = true;
