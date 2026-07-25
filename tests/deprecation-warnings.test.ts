@@ -4,6 +4,7 @@ import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import { validateItem, newId, type SpecItem } from '../src/spec-editor';
+import { validateSpytialSpec } from '../src/components/NoCodeView';
 
 /**
  * Tests that using a deprecated spec form is *visible* — on the diagram, the
@@ -185,6 +186,31 @@ describe('Deprecation warnings', () => {
                 "directives:\n  - atomStyle: { selector: Node, fillStyle: { color: '#ff0000' } }",
             );
             expect(warnings).toEqual([]);
+        });
+    });
+
+    // ── Spec validation API ────────────────────────────────────────
+
+    describe('validateSpytialSpec', () => {
+        it('reports a deprecated form among its warnings, without failing', () => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const result = validateSpytialSpec(
+                "directives:\n  - atomColor: { selector: Node, value: '#ff0000' }",
+            );
+            warn.mockRestore();
+
+            expect(result.isValid).toBe(true);
+            expect(result.error).toBe(null);
+            expect(result.warnings).toContainEqual(expect.stringContaining('atomColor'));
+            // The console prefix is not part of a returned message.
+            expect(result.warnings.some((w) => w.startsWith('[spytial]'))).toBe(false);
+        });
+
+        it('stays quiet for a spec on the supported forms', () => {
+            const result = validateSpytialSpec(
+                "directives:\n  - atomStyle: { selector: Node, fillStyle: { color: '#ff0000' } }",
+            );
+            expect(result.warnings).toHaveLength(0);
         });
     });
 
