@@ -19,8 +19,8 @@
  * labelled with their YAML key and a "preserved as written" note — they survive
  * round-trips untouched.
  *
- * Diagnostics that belong to the item rather than to one of its fields — a
- * deprecated type (`atomColor`) or a deprecated key (`inferredEdge`'s inline
+ * Diagnostics that belong to a registered item rather than to one of its fields
+ * — a deprecated type (`atomColor`) or a deprecated key (`inferredEdge`'s inline
  * `color`) — are listed at the top of the expanded panel, since the per-field
  * renderer has nowhere to put them.
  *
@@ -371,10 +371,11 @@ const Row: React.FC<RowProps> = ({
   );
   const severity = topSeverity(itemDiagnostics);
 
-  // Diagnostics about the item as a whole rather than one of its fields —
-  // a deprecated type or key, an unknown type, a `def.validate()` result.
-  // `FieldRenderer` buckets by `fieldKey` and so cannot show these; without
-  // this list they were a severity dot with no readable message anywhere.
+  // Diagnostics about the item as a whole rather than one of its fields — a
+  // deprecated type or key, a `def.validate()` result. `FieldRenderer` buckets
+  // by `fieldKey` and so cannot show these; without this list they were a
+  // severity dot with no readable message anywhere. (Unknown *types* are not
+  // among them: those items return above, before this panel exists.)
   const itemLevelDiagnostics = useMemo(
     () => itemDiagnostics.filter((d) => d.fieldKey === undefined),
     [itemDiagnostics],

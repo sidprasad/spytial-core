@@ -226,6 +226,19 @@ describe('Deprecation warnings', () => {
             expect(diags.filter((d) => d.code === 'deprecated')).toHaveLength(3);
         });
 
+        it('does not mistake a prototype member for a deprecated key', () => {
+            // The deprecated-key table is looked up with a key straight out of
+            // the spec. Backed by an object literal, `table['toString']` answers
+            // with something off Object.prototype — so a spec key named after
+            // any prototype member drew a nonsense deprecation naming a native
+            // function, and swallowed the unknown-key warning it should have got.
+            const diags = validateItem(
+                item('orientation', { selector: 'p', directions: ['left'], toString: 'x' }, 'constraint'),
+            );
+            expect(diags.filter((d) => d.code === 'deprecated')).toHaveLength(0);
+            expect(diags.filter((d) => d.code === 'unknown-key')).toHaveLength(1);
+        });
+
         it('leaves the supported form of the same directive clean', () => {
             const diags = validateItem(
                 item(

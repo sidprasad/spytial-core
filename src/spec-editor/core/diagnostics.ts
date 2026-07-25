@@ -79,15 +79,20 @@ const EXTRA_ACCEPTED_KEYS_BY_TYPE: Readonly<Record<string, readonly string[]>> =
  *
  * Mirrors the engine's own parse-time deprecations in `layoutspec.ts`, which
  * warn about the same keys on the diagram surface. Keep the two in step.
+ *
+ * A Map, not an object literal, because both levels are keyed by strings that
+ * come from the spec: an object literal would answer `deprecatedKeys['toString']`
+ * with something inherited from `Object.prototype`, and a spec key named after
+ * any prototype member would draw a nonsense deprecation.
  */
-const DEPRECATED_KEYS_BY_TYPE: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-  inferredEdge: {
-    color: 'lineStyle.color',
-    style: 'lineStyle.pattern',
-    weight: 'lineStyle.weight',
-    highlight: 'lineStyle.highlight',
-  },
-};
+const DEPRECATED_KEYS_BY_TYPE: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map([
+  ['inferredEdge', new Map([
+    ['color', 'lineStyle.color'],
+    ['style', 'lineStyle.pattern'],
+    ['weight', 'lineStyle.weight'],
+    ['highlight', 'lineStyle.highlight'],
+  ])],
+]);
 
 /** Levenshtein edit distance (case-insensitive at the call site). */
 function editDistance(a: string, b: string): number {
@@ -171,8 +176,8 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
     for (const k of CONSTRAINT_STRUCTURAL_KEYS) allowed.add(k);
   }
   for (const k of EXTRA_ACCEPTED_KEYS_BY_TYPE[item.type] ?? []) allowed.add(k);
-  const deprecatedKeys = DEPRECATED_KEYS_BY_TYPE[item.type] ?? {};
-  for (const k of Object.keys(deprecatedKeys)) allowed.add(k);
+  // Not added to `allowed`: the loop below reports them before it consults it.
+  const deprecatedKeys = DEPRECATED_KEYS_BY_TYPE.get(item.type);
 
   // Prefer the raw parsed body when present: a custom `fromYamlNode` (group /
   // flag) copies only recognized keys into `params`, so a typo like `naem` would
@@ -181,7 +186,7 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
   // items (which only ever hold known fields).
   const topLevel = isRecord(item.sourceBody) ? item.sourceBody : item.params;
   for (const key of Object.keys(topLevel)) {
-    const replacement = deprecatedKeys[key];
+    const replacement = deprecatedKeys?.get(key);
     if (replacement !== undefined) {
       out.push({
         severity: 'warning',
