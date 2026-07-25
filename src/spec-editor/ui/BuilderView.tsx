@@ -1,9 +1,11 @@
 /**
  * {@link BuilderView} — the compact, schema-driven row list of the spec editor.
  *
- * Each constraint/directive is a single compact row: a kind badge, the type
- * label, a live `summary(params)`, a diagnostic dot when the item has issues,
- * and an overflow menu (duplicate · delete · move up/down · add comment).
+ * Each constraint/directive is a single compact row: the type label, a live
+ * `summary(params)`, a diagnostic dot when the item has issues, and an overflow
+ * menu (duplicate · delete · move up/down · add comment). No per-row kind badge
+ * — the rows already sit under a "Constraints" or "Directives" heading, so a
+ * C/D stamp on every one of them only repeated it.
  * Clicking a row expands it inline (accordion: exactly one open at a time, Esc
  * collapses) into the generated form rendered by {@link FieldRenderer} from the
  * registry definition, plus a "negate" toggle for types that support `hold` and
@@ -16,6 +18,11 @@
  * Unknown-type items (those carrying `SpecItem.raw`) render as a read-only row
  * labelled with their YAML key and a "preserved as written" note — they survive
  * round-trips untouched.
+ *
+ * Diagnostics that belong to a registered item rather than to one of its fields
+ * — a deprecated type (`atomColor`) or a deprecated key (`inferredEdge`'s inline
+ * `color`) — are listed at the top of the expanded panel, since the per-field
+ * renderer has nowhere to put them.
  *
  * This component is domain-blind about completion/synthesis: the parent passes a
  * `selectorProps(item, field)` callback that composes the real sources.
@@ -364,14 +371,21 @@ const Row: React.FC<RowProps> = ({
   );
   const severity = topSeverity(itemDiagnostics);
 
+  // Diagnostics about the item as a whole rather than one of its fields — a
+  // deprecated type or key, a `def.validate()` result. `FieldRenderer` buckets
+  // by `fieldKey` and so cannot show these; without this list they were a
+  // severity dot with no readable message anywhere. (Unknown *types* are not
+  // among them: those items return above, before this panel exists.)
+  const itemLevelDiagnostics = useMemo(
+    () => itemDiagnostics.filter((d) => d.fieldKey === undefined),
+    [itemDiagnostics],
+  );
+
   // Unknown / unregistered types render read-only ("preserved as written").
   if (!def) {
     return (
       <li className="spytial-ed-row spytial-ed-row--unknown">
         <div className="spytial-ed-row-main">
-          <span className="spytial-ed-badge spytial-ed-badge--unknown">
-            {item.kind === 'constraint' ? 'C' : 'D'}
-          </span>
           <span className="spytial-ed-row-type">{item.type}</span>
           <span className="spytial-ed-row-summary spytial-ed-row-summary--muted">
             preserved as written
@@ -408,12 +422,6 @@ const Row: React.FC<RowProps> = ({
           disabled={disabled}
           onClick={() => onToggleExpand(item.id)}
         >
-          <span
-            className={`spytial-ed-badge spytial-ed-badge--${item.kind}`}
-            aria-hidden="true"
-          >
-            {item.kind === 'constraint' ? 'C' : 'D'}
-          </span>
           <span className="spytial-ed-row-type">{def.label}</span>
           {negated ? (
             <span
@@ -462,6 +470,20 @@ const Row: React.FC<RowProps> = ({
             }
           }}
         >
+          {itemLevelDiagnostics.length > 0 ? (
+            <ul className="spytial-ed-diagnostics spytial-ed-diagnostics--item">
+              {itemLevelDiagnostics.map((d, i) => (
+                <li
+                  key={i}
+                  className={`spytial-ed-diagnostic spytial-ed-diagnostic--${d.severity}`}
+                >
+                  <span className="spytial-ed-diagnostic-dot" aria-hidden="true" />
+                  <span className="spytial-ed-diagnostic-msg">{d.message}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
           <FieldRenderer
             fields={visibleFields(def.fields)}
             values={item.params}

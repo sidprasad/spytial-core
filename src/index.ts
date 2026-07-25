@@ -180,7 +180,12 @@ export const version = '1.0.0';
 // (npm) or load dist/components/react-component-integration.global.js (CDN),
 // which also exposes the window.mount* API.
 export { ErrorStateManager } from './layout/error-state';
-export type { SystemError, SelectorErrorDetail } from './layout/error-state';
+// LayoutWarning is exported because consumers *receive* it — it rides on
+// `InstanceLayout.warnings` and on the `layout-warnings` event — and until now
+// there was no name to import for it. The exports map blocks a deep import of
+// the declaration, so the only way to annotate one was an indexed access into
+// InstanceLayout.
+export type { SystemError, SelectorErrorDetail, LayoutWarning } from './layout/error-state';
 
 // REPL expression parser (React-free; kept for Pyret hosts using the global)
 export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';

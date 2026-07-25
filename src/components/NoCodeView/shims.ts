@@ -177,7 +177,8 @@ const KNOWN_TOP_LEVEL_KEYS = ['constraints', 'directives'];
  * Validate a Spytial spec YAML string and return detailed results: YAML syntax
  * is checked first, then unrecognized top-level keys and constraint/directive
  * types are flagged as warnings, then the spec is parsed with the authoritative
- * `parseLayoutSpec` to surface structural errors.
+ * `parseLayoutSpec` to surface structural errors — and its own warnings about
+ * deprecated forms, which join the ones found here.
  *
  * @param yamlString - YAML to validate
  * @public
@@ -249,7 +250,15 @@ export function validateSpytialSpec(yamlString: string): SpytialValidationResult
   }
 
   try {
-    parseLayoutSpec(yamlString);
+    // The parse is authoritative for errors, and it also reports the spec's use
+    // of deprecated forms (atomColor, edgeColor, group-by-field, inferredEdge's
+    // inline line styling). Those are warnings in exactly this sense — the spec
+    // parses and renders, but rests on something that is going away — so they
+    // join the ones collected above rather than being dropped on the floor.
+    const spec = parseLayoutSpec(yamlString);
+    for (const warning of spec.warnings ?? []) {
+      result.warnings.push(warning.message.replace(/^\[spytial\]\s*/, ''));
+    }
   } catch (error) {
     result.isValid = false;
     result.error = `Spytial spec error: ${(error as Error).message}`;

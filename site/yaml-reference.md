@@ -34,8 +34,8 @@ Both sections are optional. An empty specification is valid.
 
 | Directive | Purpose | Required Fields |
 |-----------|---------|-----------------|
-| [`atomColor`](directives.md#atom-color) | Color nodes | `selector`, `value` |
-| [`edgeColor`](directives.md#edge-styling) | Style edges | `field`, `value` |
+| [`atomStyle`](directives.md#atom-styling) | Style nodes (fill, border, label) | `selector` |
+| [`edgeStyle`](directives.md#edge-styling) | Style edges (line, label) | `field` |
 | [`icon`](directives.md#icons) | Assign icons to nodes | `selector`, `path` |
 | [`size`](directives.md#size-directive) | Set node dimensions | `selector` |
 | [`projection`](directives.md#projection) | Project over a type | `sig` |
@@ -52,7 +52,7 @@ Both sections are optional. An empty specification is valid.
 
 Selectors use [Forge](https://forge-fm.org/docs/building-models/constraints/formulas-and-expressions/) relational syntax. [AlaSQL](https://alasql.org/) is also supported as an alternative. See the full [Selector Syntax](selectors.md) guide.
 
-**Unary selectors** return a set of atoms — used by `atomColor`, `align`, `hideAtom`, `icon`, `group`, `size`:
+**Unary selectors** return a set of atoms — used by `atomStyle`, `align`, `hideAtom`, `icon`, `group`, `size`:
 
 ```yaml
 selector: Node                        # All Node atoms
@@ -96,14 +96,13 @@ constraints:
 
 directives:
   # Visual styling
-  - atomColor:
+  - atomStyle:
       selector: Person
-      value: "#4a90d9"
+      borderStyle: { color: "#4a90d9" }
 
-  - edgeColor:
+  - edgeStyle:
       field: error
-      value: red
-      style: dashed
+      lineStyle: { color: red, pattern: dashed }
 
   - attribute:
       field: age

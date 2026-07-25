@@ -389,12 +389,43 @@ export class LayoutInstance {
      * per evaluation.
      */
     private recordWarning(warning: LayoutWarning): void {
-        const key = `${warning.code}|${warning.specType ?? ''}|${warning.specIndex ?? ''}|${warning.name ?? warning.selector}`;
+        const key = `${warning.code}|${warning.specType ?? ''}|${warning.specIndex ?? ''}|${warning.name ?? warning.selector ?? warning.message}`;
         if (this.warningKeys.has(key)) {
             return;
         }
         this.warningKeys.add(key);
         this.warnings.push(warning);
+    }
+
+    /**
+     * Forwards the warnings `parseLayoutSpec` raised about the spec itself —
+     * today, use of a deprecated form — onto this render's warning list.
+     *
+     * They are the same kind of thing the selector warnings are: the diagram
+     * drew, nothing failed, but something in the spec deserves the author's
+     * attention. The parse writes them to `console.warn` as well, which reaches
+     * whoever opens devtools and nobody else; riding on the layout puts them on
+     * the same badge as everything else, in front of the person editing the spec.
+     *
+     * Re-run per `generateLayout` call rather than once in the constructor, since
+     * `this.warnings` is cleared each render (an animated trace reports its own
+     * frame). The spec does not change between frames, so this replays the same
+     * list — which is what should happen: the deprecation is still true.
+     */
+    private recordSpecParseWarnings(): void {
+        for (const w of this._layoutSpec.warnings ?? []) {
+            this.recordWarning({
+                severity: 'warning',
+                code: w.code,
+                // The `[spytial]` prefix marks the source in a console shared with
+                // the host page. On our own badge it is noise.
+                message: w.message.replace(/^\[spytial\]\s*/, ''),
+                // Where it came from: the spec text, not any one evaluation.
+                context: 'spec',
+                specType: w.specType,
+                label: w.specType ?? 'spec'
+            });
+        }
     }
 
     /**
@@ -1383,6 +1414,9 @@ export class LayoutInstance {
         this.selectorErrors = [];
         this.warnings = [];
         this.warningKeys.clear();
+        // Spec-level warnings (deprecated forms) first, so they read before the
+        // per-item selector warnings this render is about to collect.
+        this.recordSpecParseWarnings();
         // Reset hidden-node tracking at the start of each layout generation
         this.hiddenNodeSelectors = new Map();
         this.hiddenNodeConflicts = new Map();

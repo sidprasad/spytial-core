@@ -703,19 +703,29 @@ Creates edges that don't exist in your data but are **computed from a selector e
     name: <edge-label>           # Required
     selector: <binary-selector>  # Required
     draw: <end> -> <end>         # Optional: what each end attaches to
-    color: <color>               # Optional (default: #000000)
-    style: <line-style>          # Optional (default: solid)
-    weight: <number>             # Optional
+    lineStyle:                   # Optional: the drawn line
+      color: <color>
+      pattern: <solid|dashed|dotted>
+      weight: <number>
+      highlight: <color>
+    textStyle:                   # Optional: the edge label
+      size: <small|normal|large>
+      color: <color>
 ```
+
+> **The flat inline `color` / `style` / `weight` / `highlight` are the legacy form** and still parse (`style`→`pattern`), with a deprecation warning. Use the `lineStyle` block — the same one `edgeStyle` and group connectors take.
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
 | `name` | Yes | string | — | Label displayed on the edge |
 | `selector` | Yes | string | — | Binary selector returning (source, target) pairs (unary allowed with `draw`) |
 | `draw` | No | string | — | `<end> -> <end>`, each end `_` (the atom, the default) or a group-constraint name (attach to the hull of that constraint's group keyed by this end's atom) |
-| `color` | No | string | `#000000` | CSS color |
-| `style` | No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | No | number | — | Line thickness in pixels |
+| `lineStyle.color` | No | string | `#000000` | CSS color of the line |
+| `lineStyle.pattern` | No | string | `solid` | `solid`, `dashed`, or `dotted` |
+| `lineStyle.weight` | No | number | — | Line thickness in pixels |
+| `lineStyle.highlight` | No | string | — | CSS color drawn as a wider, translucent underlay beneath the line |
+| `textStyle.size` | No | string | — | `small`, `normal`, or `large` |
+| `textStyle.color` | No | string | — | CSS color of the edge label |
 
 ### Group endpoints (`draw`)
 
@@ -734,16 +744,13 @@ The group name must match a `group` constraint (checked at parse time). A keyed 
 - inferredEdge:
     name: "reachable"
     selector: "^parent"
-    color: gray
-    style: dotted
+    lineStyle: { color: gray, pattern: dotted }
 
 # Highlight computed relationships
 - inferredEdge:
     name: "sibling"
     selector: "~parent.parent - iden"
-    color: purple
-    style: dashed
-    weight: 2
+    lineStyle: { color: purple, pattern: dashed, weight: 2 }
 
 # Group-to-group: one dashed edge per `connected` pair, drawn hull to hull
 # (assumes a group constraint named regions keyed by Region atoms)
@@ -777,7 +784,7 @@ The group name must match a `group` constraint (checked at parse time). A keyed 
 constraints:
   - orientation: { selector: parent, directions: [above] }
 directives:
-  - inferredEdge: { name: "reachable", selector: "^parent", color: gray, style: dotted }
+  - inferredEdge: { name: "reachable", selector: "^parent", lineStyle: { color: gray, pattern: dotted } }
 </template>
 </div>
 

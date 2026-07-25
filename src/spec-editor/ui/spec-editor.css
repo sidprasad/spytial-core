@@ -740,6 +740,23 @@
   text-overflow: ellipsis;
 }
 
+/* Item-level diagnostics (deprecated type/key, unknown type, validate()) sit at
+   the top of an expanded row rather than under a control. They get the full
+   panel width, so — unlike the one-line field diagnostics — they wrap instead
+   of truncating: the message names the replacement to move to, which is the
+   part that would be cut off. */
+.spytial-ed-diagnostics--item {
+  gap: 0.2em;
+}
+.spytial-ed-diagnostics--item .spytial-ed-diagnostic {
+  white-space: normal;
+  overflow: visible;
+}
+.spytial-ed-diagnostics--item .spytial-ed-diagnostic-msg {
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .spytial-ed-diagnostic-dot {
   flex: 0 0 auto;
   inline-size: 0.5em;
@@ -1166,34 +1183,6 @@
 .spytial-ed--compact .spytial-ed-row-toggle {
   padding: calc(var(--spytial-ed-gap, 8px) * 0.4)
     calc(var(--spytial-ed-gap, 8px) * 0.75);
-}
-
-/* kind badge as an inked stamp: outlined, mono, square */
-.spytial-ed-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  inline-size: 1.5em;
-  block-size: 1.5em;
-  flex: 0 0 auto;
-  font-family: var(--spytial-ed-chrome-font);
-  font-size: 0.72em;
-  font-weight: 700;
-  border-radius: var(--spytial-ed-radius-sm, 2px);
-  background: transparent;
-}
-
-.spytial-ed-badge--constraint {
-  color: var(--spytial-ed-accent, #b5431a);
-  border: 1px solid var(--spytial-ed-accent, #b5431a);
-}
-.spytial-ed-badge--directive {
-  color: var(--spytial-ed-syn-type, #0e6b6b);
-  border: 1px solid var(--spytial-ed-syn-type, #0e6b6b);
-}
-.spytial-ed-badge--unknown {
-  color: var(--spytial-ed-text-muted, #6e6553);
-  border: 1px dashed var(--spytial-ed-text-muted, #6e6553);
 }
 
 .spytial-ed-row-type {

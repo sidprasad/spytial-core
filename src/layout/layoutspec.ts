@@ -204,11 +204,16 @@ export class GroupBySelector extends ConstraintOperation{
 }
 
 
-/*
-
-    TODO: Deprecate.
-
-*/
+/**
+ * Grouping by a relational field: `groupOn` and `addToGroup` index into each
+ * tuple of `field` to pick the group key and its members.
+ *
+ * @deprecated Use {@link GroupBySelector} instead — a binary selector whose
+ * first column is the key and whose second is the members says the same thing
+ * without the tuple indices. Retained for backwards compatibility: it still
+ * parses and groups exactly as before, behind a deprecation warning raised by
+ * {@link parseLayoutSpec}.
+ */
 export class GroupByField  {
     // And applies to selects the thing to group ON
     field : string;
@@ -477,6 +482,13 @@ function assertValidSizeParams(size: Record<string, unknown>, context: string): 
 export interface ParseWarning {
     code: 'deprecated' | (string & {});
     message: string;
+    /**
+     * The spec form the warning is about, named as the YAML key an author would
+     * recognise (`'atomColor'`, `'edgeColor'`, `'inferredEdge'`, `'group'`).
+     * Lets a consumer label the warning without parsing the prose — `LayoutInstance`
+     * uses it to attribute the deprecation when it forwards these onto the layout.
+     */
+    specType?: string;
 }
 
 export interface LayoutSpec {
@@ -578,7 +590,7 @@ export function parseLayoutSpec(s: string): LayoutSpec {
 
     if (constraints && Array.isArray(constraints)) {
         try {
-          let constraintsParsed = parseConstraints(constraints);
+          let constraintsParsed = parseConstraints(constraints, warnings);
           layoutSpec.constraints = constraintsParsed;
           
           // Also extract size and hideAtom from constraints
@@ -756,10 +768,17 @@ function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): Gr
  * @returns List of CnD constraints
  * @throws Error if there are inconsistencies in the constraints.
  */
-function parseConstraints(constraints: unknown[]):   ConstraintsBlock
+function parseConstraints(constraints: unknown[], warnings: ParseWarning[] = []):   ConstraintsBlock
 {
     // Type assertion since we expect specific structure from YAML
     const rawConstraints = constraints as Record<string, any>[];
+
+    // Same dual emission as parseDirectives: console for back-compat, and the
+    // consumable accumulator that rides out on the spec.
+    const deprecate = (specType: string, message: string): void => {
+        console.warn(message);
+        warnings.push({ code: 'deprecated', message, specType });
+    };
 
     // Pre-process: determine negation from "hold: never" field
     const typedConstraints = rawConstraints.map((c): Record<string, any> & { _negated: boolean } => {
@@ -836,8 +855,19 @@ function parseConstraints(constraints: unknown[]):   ConstraintsBlock
     relativeOrientationConstraints = removeDuplicateRelativeOrientationConstraints(relativeOrientationConstraints);
 
 
-    let byfield: GroupByField[] = typedConstraints.filter(c => c.group)
-        .filter(c => c.group.field)
+    // group-by-field (`field` + `groupOn` + `addToGroup`) is the deprecated flat
+    // form of grouping. It still parses and groups exactly as before; the
+    // supported form is a group-by-selector over a binary relation.
+    const rawByField = typedConstraints.filter(c => c.group).filter(c => c.group.field);
+    if (rawByField.length > 0) {
+        deprecate(
+            'group',
+            "[spytial] group's 'field'/'groupOn'/'addToGroup' are deprecated and will be " +
+            "removed in a future major; use a group with a binary 'selector' instead — " +
+            "its first column is the group key, its second the members."
+        );
+    }
+    let byfield: GroupByField[] = rawByField
         .map(c => {
 
             // If not, we parse from the CORE constraint
@@ -953,9 +983,9 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
 
     // Emit a deprecation both to the console (back-compat: several tests assert
     // this) and to the consumable `warnings` accumulator (rides out on the spec).
-    const deprecate = (message: string): void => {
+    const deprecate = (specType: string, message: string): void => {
         console.warn(message);
-        warnings.push({ code: 'deprecated', message });
+        warnings.push({ code: 'deprecated', message, specType });
     };
 
     // CURRENTLY NO SUGAR HERE!
@@ -979,6 +1009,7 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
     const rawAtomColors = typedDirectives.filter(d => d.atomColor);
     if (rawAtomColors.length > 0) {
         deprecate(
+            'atomColor',
             "[spytial] 'atomColor' is deprecated and will be removed in a future major; " +
             "use 'atomStyle' with a 'borderStyle' block (value→borderStyle.color), " +
             "or a 'fillStyle' block for a real interior fill."
@@ -1009,6 +1040,7 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
     const rawEdgeColors = typedDirectives.filter(d => d.edgeColor);
     if (rawEdgeColors.length > 0) {
         deprecate(
+            'edgeColor',
             "[spytial] 'edgeColor' is deprecated and will be removed in a future major; " +
             "use 'edgeStyle' with a 'lineStyle' block " +
             "(value→lineStyle.color, style→lineStyle.pattern, weight→lineStyle.weight, highlight→lineStyle.highlight)."
@@ -1061,6 +1093,7 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
     });
     if (usedLegacyInferredInline) {
         deprecate(
+            'inferredEdge',
             "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' are deprecated; " +
             "use a 'lineStyle' block (color, pattern, weight, highlight) instead."
         );

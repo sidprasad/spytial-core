@@ -1423,9 +1423,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
             <span id="layout-warnings-count"></span>
             <span id="layout-warnings-caret" aria-hidden="true">&#9656;</span>
           </button>
-          <button id="layout-warnings-dismiss" type="button" title="Dismiss" aria-label="Dismiss selector warnings">&#215;</button>
+          <button id="layout-warnings-dismiss" type="button" title="Dismiss" aria-label="Dismiss spec warnings">&#215;</button>
         </div>
-        <div id="layout-warnings-panel" role="region" aria-label="Selector warnings" hidden></div>
+        <div id="layout-warnings-panel" role="region" aria-label="Spec warnings" hidden></div>
       </div>
       <svg id="svg">
         <defs>
@@ -10693,6 +10693,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
    *
    * The badge is rebuilt per render, so on an animated trace it reflects the
    * current frame instead of accumulating across frames.
+   *
+   * The list mixes two kinds: per-item selector diagnostics, and deprecation
+   * notices `parseLayoutSpec` raised about the spec's own forms. A deprecation
+   * carries no selector, so its detail row is the label and message only.
    */
   private renderLayoutWarnings(warnings: LayoutWarning[]): void {
     const container = this.root.querySelector('#layout-warnings') as HTMLElement | null;
@@ -10716,8 +10720,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Re-showing an identical set every frame of a trace would make the dismiss
     // button useless; staying hidden after the warnings *change* would hide new
     // information. Keying on the set itself gets both.
+    //
+    // Sorted, so the key is genuinely the set and not the order it arrived in:
+    // warnings are collected as the render walks the instance, and two frames
+    // holding the same warnings can collect them in a different order. Without
+    // the sort, that reads as a change and the badge reappears after dismissal.
     const signature = warnings
-      .map(w => `${w.code}|${w.specType ?? ''}|${w.specIndex ?? ''}|${w.name ?? w.selector}`)
+      .map(w => `${w.code}|${w.specType ?? ''}|${w.specIndex ?? ''}|${w.name ?? w.selector ?? w.message}`)
+      .sort()
       .join('\n');
     if (this.dismissedWarningSignature === signature) {
       container.hidden = true;
@@ -10725,7 +10735,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     }
     this.dismissedWarningSignature = null;
 
-    count.textContent = `${warnings.length} selector ${warnings.length === 1 ? 'warning' : 'warnings'}`;
+    // "spec", not "selector": the list now mixes selector diagnostics with
+    // deprecation notices raised while parsing the spec.
+    count.textContent = `${warnings.length} spec ${warnings.length === 1 ? 'warning' : 'warnings'}`;
     badge.setAttribute('title', 'Click for detail');
     this.currentWarningSignature = signature;
 
@@ -10755,13 +10767,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
         item.title = `Did you mean '${w.suggestion}'?`;
       }
 
-      const where = document.createElement('div');
-      where.className = 'layout-warning-message';
-      where.append(`${w.context}: `);
-      const selector = document.createElement('code');
-      selector.textContent = w.selector;
-      where.appendChild(selector);
-      item.appendChild(where);
+      // Where it came from — only for warnings that are about a selector. A
+      // deprecation has none (it is raised at parse time), and the label already
+      // names the directive, so the row would be an empty `<code>`.
+      if (w.selector) {
+        const where = document.createElement('div');
+        where.className = 'layout-warning-message';
+        where.append(`${w.context}: `);
+        const selector = document.createElement('code');
+        selector.textContent = w.selector;
+        where.appendChild(selector);
+        item.appendChild(where);
+      }
 
       return item;
     }));

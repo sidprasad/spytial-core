@@ -59,19 +59,40 @@ const CONSTRAINT_STRUCTURAL_KEYS: readonly string[] = ['hold'];
 /**
  * Per-type keys the engine accepts but the registry does not expose as builder
  * fields, so the unknown-key check must not report them as typos:
- *  - `inferredEdge` still parses the deprecated flat `color`/`style`/`weight`/
- *    `highlight` (its own deprecation warning covers them).
  *  - `edgeColor` is the deprecated flat form; `edgeColorToEdgeStyleRule` reads
- *    these extras beyond the fields the registry lists.
+ *    these extras beyond the fields the registry lists. The type itself is
+ *    marked deprecated, so its own diagnostic already covers them.
  *
  * NOTE: this mirrors the engine parser (`layoutspec.ts` + the style-spec
  * parsers). If a directive gains an inner key there, add it here (or as a real
  * registry field) or valid specs will draw a spurious warning.
  */
 const EXTRA_ACCEPTED_KEYS_BY_TYPE: Readonly<Record<string, readonly string[]>> = {
-  inferredEdge: ['color', 'style', 'weight', 'highlight'],
   edgeColor: ['highlight', 'showLabel', 'hidden', 'filter'],
 };
+
+/**
+ * Per-type keys the engine still parses but has deprecated, mapped to what
+ * replaces each. These are neither unknown (the diagram honours them) nor fine
+ * (they are going away), so they get their own `'deprecated'` diagnostic rather
+ * than an "unknown field" warning or — as before — silence.
+ *
+ * Mirrors the engine's own parse-time deprecations in `layoutspec.ts`, which
+ * warn about the same keys on the diagram surface. Keep the two in step.
+ *
+ * A Map, not an object literal, because both levels are keyed by strings that
+ * come from the spec: an object literal would answer `deprecatedKeys['toString']`
+ * with something inherited from `Object.prototype`, and a spec key named after
+ * any prototype member would draw a nonsense deprecation.
+ */
+const DEPRECATED_KEYS_BY_TYPE: ReadonlyMap<string, ReadonlyMap<string, string>> = new Map([
+  ['inferredEdge', new Map([
+    ['color', 'lineStyle.color'],
+    ['style', 'lineStyle.pattern'],
+    ['weight', 'lineStyle.weight'],
+    ['highlight', 'lineStyle.highlight'],
+  ])],
+]);
 
 /** Levenshtein edit distance (case-insensitive at the call site). */
 function editDistance(a: string, b: string): number {
@@ -155,6 +176,8 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
     for (const k of CONSTRAINT_STRUCTURAL_KEYS) allowed.add(k);
   }
   for (const k of EXTRA_ACCEPTED_KEYS_BY_TYPE[item.type] ?? []) allowed.add(k);
+  // Not added to `allowed`: the loop below reports them before it consults it.
+  const deprecatedKeys = DEPRECATED_KEYS_BY_TYPE.get(item.type);
 
   // Prefer the raw parsed body when present: a custom `fromYamlNode` (group /
   // flag) copies only recognized keys into `params`, so a typo like `naem` would
@@ -163,6 +186,17 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
   // items (which only ever hold known fields).
   const topLevel = isRecord(item.sourceBody) ? item.sourceBody : item.params;
   for (const key of Object.keys(topLevel)) {
+    const replacement = deprecatedKeys?.get(key);
+    if (replacement !== undefined) {
+      out.push({
+        severity: 'warning',
+        code: 'deprecated',
+        message: `"${key}" on ${def.label} is deprecated. Use "${replacement}" instead.`,
+        itemId: item.id,
+        source: 'structure',
+      });
+      continue;
+    }
     if (allowed.has(key)) continue;
     out.push(unknownKeyDiagnostic(key, fieldKeys, def.label, item.id));
   }
