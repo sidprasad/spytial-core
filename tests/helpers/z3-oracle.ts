@@ -33,7 +33,81 @@ const MIN_PADDING = 15;
 let Z3Context: any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let z3Ctx: any;
+// Full init() result ({ Context, Z3, em, ... }) — kept for diagnostics:
+// Z3.get_estimated_alloc_size() reports Z3's own allocator usage inside the
+// fixed-size Emscripten heap, which HEAPU8.length cannot show.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let z3Api: any;
 let z3Initialized = false;
+
+// ─── Diagnostics ─────────────────────────────────────────────────────────
+//
+// The WASM build of Z3 has a FIXED 2 GiB heap (no ALLOW_MEMORY_GROWTH).
+// When malloc exhausts it, Emscripten abort()s and the whole module is dead:
+// the in-flight solver.check() promise never settles (the pthread dies
+// without rejecting it) and every later call into Z3 — including AST
+// construction in buildModel — throws RuntimeError immediately. Without the
+// bookkeeping below, that surfaces as one 120s test timeout followed by a
+// cascade of instant, meaningless "disagreements" on trivially-SAT inputs
+// (observed in CI run 30188347391 attempt 1). Track allocator growth and
+// mark the runtime as dead on the first abort so every subsequent failure
+// names the real cause instead of fabricating counterexamples.
+
+export class Z3OracleError extends Error {}
+
+let solveCount = 0;
+let lastSolveMs = -1;
+let poisonedBy: string | null = null;
+
+export interface OracleStats {
+    /** Total solver.check() calls since the module was (re)initialized. */
+    solveCount: number;
+    /** Wall time of the most recent completed check, in ms (-1 if none). */
+    lastSolveMs: number;
+    /** Z3's estimate of its allocated bytes (-1 if unavailable/dead). */
+    estimatedAllocBytes: number;
+    /** Total Emscripten heap size in bytes (-1 if unavailable/dead). */
+    heapBytes: number;
+    /** Set once the WASM runtime aborts; all results after this are garbage. */
+    poisonedBy: string | null;
+}
+
+export function oracleStats(): OracleStats {
+    let estimatedAllocBytes = -1;
+    let heapBytes = -1;
+    try {
+        estimatedAllocBytes = Number(z3Api.Z3.get_estimated_alloc_size());
+        heapBytes = z3Api.em.HEAPU8.length;
+    } catch {
+        // Runtime dead or not initialized — stats stay at -1.
+    }
+    return { solveCount, lastSolveMs, estimatedAllocBytes, heapBytes, poisonedBy };
+}
+
+export function describeOracleStats(): string {
+    const s = oracleStats();
+    const mb = (b: number) => b < 0 ? '?' : (b / (1024 * 1024)).toFixed(1);
+    return `solve #${s.solveCount}, z3 alloc ≈ ${mb(s.estimatedAllocBytes)} MB / heap ${mb(s.heapBytes)} MB`;
+}
+
+function assertNotPoisoned(): void {
+    if (poisonedBy) {
+        throw new Z3OracleError(
+            `Z3 WASM runtime is dead; this and every later oracle result is meaningless. ` +
+            `Root cause: ${poisonedBy}`
+        );
+    }
+}
+
+function poison(context: string, e: unknown): void {
+    poisonedBy = `${context}: ${e} (${describeOracleStats()})`;
+    // eslint-disable-next-line no-console
+    console.error(`[z3-oracle] RUNTIME DEAD — ${poisonedBy}`);
+}
+
+function looksLikeRuntimeDeath(e: unknown): boolean {
+    return e instanceof WebAssembly.RuntimeError || /Aborted|abort\(|OOM|unreachable/i.test(String(e));
+}
 
 // ─── Initialization ──────────────────────────────────────────────────────
 
@@ -48,23 +122,32 @@ export async function isZ3Available(): Promise<boolean> {
 
 export async function initZ3(): Promise<void> {
     if (z3Initialized) return;
-    const { Context } = await init();
-    Z3Context = Context;
+    z3Api = await init();
+    Z3Context = z3Api.Context;
     z3Ctx = new Z3Context('oracle');
     z3Initialized = true;
+    // A fresh init() instantiates a new WASM module, so prior death is cured.
+    solveCount = 0;
+    lastSolveMs = -1;
+    poisonedBy = null;
 }
 
 export function shutdownZ3(): void {
     z3Initialized = false;
     z3Ctx = null;
     Z3Context = null;
+    z3Api = null;
 }
 
 /** Create a fresh Z3 context, discarding accumulated WASM memory from prior solves. */
 export async function resetZ3(): Promise<void> {
     if (!Z3Context) {
-        const { Context } = await init();
-        Z3Context = Context;
+        z3Api = await init();
+        Z3Context = z3Api.Context;
+        // Fresh WASM module (see initZ3).
+        solveCount = 0;
+        lastSolveMs = -1;
+        poisonedBy = null;
     }
     z3Ctx = new Z3Context('oracle');
     z3Initialized = true;
@@ -384,14 +467,65 @@ function compileDisjunction(disj: DisjunctiveConstraint, vars: VarMap, ctx: any)
 
 // ─── Solving ────────────────────────────────────────────────────────────
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function checkedSolve(solver: any, what: string): Promise<boolean> {
+    solveCount++;
+    const solveNo = solveCount;
+    const started = Date.now();
+    let result: string;
+    try {
+        result = await solver.check();
+    } catch (e) {
+        if (looksLikeRuntimeDeath(e)) {
+            poison(`${what} solve #${solveNo} threw after ${Date.now() - started}ms`, e);
+        }
+        throw new Z3OracleError(`Z3 ${what} solve #${solveNo} threw after ${Date.now() - started}ms: ${e}`);
+    }
+    lastSolveMs = Date.now() - started;
+    if (result !== 'sat' && result !== 'unsat') {
+        // NEVER map 'unknown' to UNSAT: that fabricates validator/oracle
+        // disagreements out of solver limitations (timeout, interrupt, memout).
+        let reason = 'reason unavailable';
+        try {
+            reason = solver.reasonUnknown();
+        } catch {
+            // Runtime may be dead; keep the placeholder.
+        }
+        const detail = `Z3 ${what} solve #${solveNo} returned '${result}' (${reason}) after ${lastSolveMs}ms — ${describeOracleStats()}`;
+        // eslint-disable-next-line no-console
+        console.error(`[z3-oracle] ${detail}`);
+        throw new Z3OracleError(detail);
+    }
+    return result === 'sat';
+}
+
+function buildModelChecked(
+    layout: InstanceLayout,
+    what: string,
+    constraintOverride?: LayoutConstraint[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): { solver: any; vars: VarMap } {
+    try {
+        return buildModel(layout, constraintOverride);
+    } catch (e) {
+        // Once the runtime has aborted, even AST construction throws — this is
+        // the path that produced instant bogus "counterexamples" in CI.
+        if (looksLikeRuntimeDeath(e)) {
+            poison(`${what} buildModel threw`, e);
+        }
+        throw e;
+    }
+}
+
 /**
  * Solve an InstanceLayout using Z3.
- * Returns true if SAT, false if UNSAT.
+ * Returns true if SAT, false if UNSAT; throws Z3OracleError on 'unknown'
+ * or when the WASM runtime has died (never a silent wrong answer).
  */
 export async function solveZ3(layout: InstanceLayout): Promise<boolean> {
-    const { solver } = buildModel(layout);
-    const result = await solver.check();
-    return result === 'sat';
+    assertNotPoisoned();
+    const { solver } = buildModelChecked(layout, 'solveZ3');
+    return checkedSolve(solver, 'solveZ3');
 }
 
 /**
@@ -402,7 +536,7 @@ export async function verifyFeasibleSubset(
     layout: InstanceLayout,
     subset: LayoutConstraint[],
 ): Promise<boolean> {
-    const { solver } = buildModel(layout, subset);
-    const result = await solver.check();
-    return result === 'sat';
+    assertNotPoisoned();
+    const { solver } = buildModelChecked(layout, 'verifyFeasibleSubset', subset);
+    return checkedSolve(solver, 'verifyFeasibleSubset');
 }

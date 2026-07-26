@@ -8,7 +8,7 @@
  * Z3 runs as a WASM module — no system binary required.
  */
 
-import { describe, it, expect, afterAll, vi } from 'vitest';
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 120_000 });
 import * as fc from 'fast-check';
@@ -25,6 +25,8 @@ import {
     shutdownZ3,
     solveZ3,
     verifyFeasibleSubset,
+    oracleStats,
+    describeOracleStats,
 } from './helpers/z3-oracle';
 import {
     cloneLayout,
@@ -60,7 +62,19 @@ async function checkAgainstOracle(layout: InstanceLayout): Promise<{
     const validator = new QualitativeConstraintValidator(layoutV);
     const error = validator.validateConstraints();
     const validatorSat = error === null;
-    const oracleSat = await solveZ3(layout);
+    let oracleSat: boolean;
+    try {
+        oracleSat = await solveZ3(layout);
+    } catch (e) {
+        // Log the real cause directly: fast-check wraps predicate errors and
+        // the reporter can drop the cause chain, leaving only a meaningless
+        // shrunk counterexample in CI output (see run 30188347391 attempt 1).
+        console.error(
+            `[z3-oracle] oracle threw (validator said ${validatorSat ? 'SAT' : 'UNSAT'}): ${e}\n` +
+            `  ${describeLayout(layout)}`
+        );
+        throw e;
+    }
     return { validatorSat, oracleSat };
 }
 
@@ -70,10 +84,14 @@ function assertAgreement(
     oracleSat: boolean,
 ): void {
     if (validatorSat !== oracleSat) {
-        throw new Error(
+        const detail =
             `Disagreement! Validator=${validatorSat ? 'SAT' : 'UNSAT'}, ` +
-            `Z3=${oracleSat ? 'SAT' : 'UNSAT'}\n  ${describeLayout(layout)}`
-        );
+            `Z3=${oracleSat ? 'SAT' : 'UNSAT'} ` +
+            `(z3 solve took ${oracleStats().lastSolveMs}ms; ${describeOracleStats()})\n` +
+            `  ${describeLayout(layout)}`;
+        // Also log directly — see checkAgainstOracle for why.
+        console.error(`[z3-oracle] ${detail}`);
+        throw new Error(detail);
     }
 }
 
@@ -83,6 +101,15 @@ const available = await isZ3Available();
 
 afterAll(() => {
     if (available) shutdownZ3();
+});
+
+// One line per test tracking Z3's allocator inside its FIXED 2 GiB WASM heap.
+// Cleanup of Z3 ASTs is FinalizationRegistry-driven (JS GC), so allocation
+// can ratchet up across the suite; when it crosses 2 GiB the runtime aborts
+// and poisons everything after it. This log turns "flaky OOM" into a curve.
+afterEach((ctx) => {
+    if (!available) return;
+    console.log(`[z3-oracle] after "${ctx.task.name}": ${describeOracleStats()}`);
 });
 
 describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
@@ -675,10 +702,18 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                     const error = validator.validateConstraints();
 
                     if (error && isPositionalConstraintError(error) && error.maximalFeasibleSubset) {
-                        const mfsFeasible = await verifyFeasibleSubset(
-                            layout,
-                            error.maximalFeasibleSubset,
-                        );
+                        let mfsFeasible: boolean;
+                        try {
+                            mfsFeasible = await verifyFeasibleSubset(
+                                layout,
+                                error.maximalFeasibleSubset,
+                            );
+                        } catch (e) {
+                            console.error(
+                                `[z3-oracle] MFS verification threw: ${e}\n  ${describeLayout(layout)}`
+                            );
+                            throw e;
+                        }
                         if (!mfsFeasible) {
                             throw new Error(
                                 `MFS is NOT feasible according to Z3!\n` +
