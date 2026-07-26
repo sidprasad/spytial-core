@@ -386,6 +386,8 @@ Hides atoms matching a selector from the visualization. (Can also be used as a d
     selector: InternalNode
 ```
 
+**Conflicts with layout constraints:** an atom cannot be both hidden and placed. If a layout constraint (`orientation`, `align`, `cyclic`) or a `group` contains a hidden atom as a member, the spec is unsatisfiable: the layout reports a hidden-node conflict error, and the diagram shown is a counterfactual in which the conflicting atoms are drawn anyway, outlined with a dashed border. Hiding a keyed group's *key* is fine — the key is not inside the group.
+
 ---
 
 ## Directives
@@ -851,6 +853,8 @@ Hides atoms matching a selector from the visualization.
 - hideAtom:
     selector: HelperNode
 ```
+
+Hiding an atom that a layout constraint references (or that a group contains) makes the spec unsatisfiable — see [Hide Atom Constraint](#hide-atom-constraint) for how the conflict is reported and drawn.
 
 ---
 

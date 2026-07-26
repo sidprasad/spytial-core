@@ -277,6 +277,13 @@ export interface InstanceLayout {
      */
     warnings?: LayoutWarning[];
     /**
+     * Atoms hidden by a hideAtom directive that a layout constraint references. The hide
+     * and the constraint cannot both be satisfied (the layout is reported unsat via
+     * HiddenNodeConflictError); this counterfactual diagram shows the atoms anyway, and
+     * the renderer marks them distinctly (dashed outline) as hidden-but-shown.
+     */
+    reintroducedNodes?: LayoutNode[];
+    /**
      * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
      * These are separate from conjunctive constraints for clearer solver integration.
      */

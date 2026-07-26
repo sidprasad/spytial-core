@@ -994,6 +994,19 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
+   * Determines if a node is hidden-but-shown — hidden by a hideAtom directive that a layout
+   * constraint conflicts with, so the counterfactual diagram draws it anyway. These are
+   * marked distinctly (dashed outline) so the user can see which atom caused the conflict.
+   * @param node - Node object to check
+   * @returns True if the node is in the layout's set of re-introduced nodes
+   */
+  private isReintroducedNode(node: { id: string }): boolean {
+    const reintroduced = this.currentLayout?.reintroducedNodes;
+    if (!reintroduced || reintroduced.length === 0) return false;
+    return reintroduced.some((n: LayoutNode) => n.id === node.id);
+  }
+
+  /**
    * Check if a node is considered "small" and needs enhanced visibility
    * Accounts for current zoom level to determine visual size on screen
    * @param node - Node object with dimensions
@@ -4031,9 +4044,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .enter()
       .append("g")
       .attr("class", (d: any) => {
-        const baseClass = this.isErrorNode(d) ? "error-node" : "node";
+        let baseClass = this.isErrorNode(d) ? "error-node" : "node";
         if (this.isErrorNode(d) && this.isSmallNode(d)) {
-          return baseClass + " small-error-node";
+          baseClass += " small-error-node";
+        }
+        if (this.isReintroducedNode(d)) {
+          baseClass += " reintroduced-node";
         }
         return baseClass;
       })
@@ -10134,6 +10150,16 @@ export class WebColaCnDGraph extends HTMLElementBase {
         stroke-width: 2px;
         stroke-dasharray: 5 5;
         animation: dash 1s linear infinite;
+      }
+
+      /* Atoms re-introduced because a constraint references them despite a hideAtom
+         directive. Distinct from error nodes: a calmer dashed purple outline + faded
+         fill that reads as "shown because needed, but you meant to hide it". */
+      .reintroduced-node rect {
+        stroke: var(--cnd-reintroduced-stroke, #8e44ad);
+        stroke-width: 2px;
+        stroke-dasharray: 3 3;
+        fill-opacity: 0.55;
       }
 
       /* Enhanced visibility for small error nodes */
