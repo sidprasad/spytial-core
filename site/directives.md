@@ -650,7 +650,7 @@ directives:
 
 ## Hiding Atoms (Directive)
 
-Hides atoms matching a selector. Identical to the [hideAtom constraint](constraints.md#hiding-atoms).
+Hides atoms matching a selector. Identical to the [hideAtom constraint](constraints.md#hiding-atoms) — including the conflict rule: hiding an atom that a layout constraint references (or that a group contains) makes the spec unsatisfiable, and the diagram draws the atom anyway with a dashed outline alongside the error.
 
 ```yaml
 - hideAtom:

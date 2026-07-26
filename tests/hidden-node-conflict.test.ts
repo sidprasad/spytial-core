@@ -81,7 +81,7 @@ directives:
       expect(isHiddenNodeConflictError(result.error)).toBe(true);
     });
 
-    it('returns no error when hidden nodes are not referenced by any constraint', () => {
+    it('reports a conflict when the hidden atom appears only as a tuple target', () => {
       const result = createLayout(`
 constraints:
   - orientation:
@@ -92,13 +92,32 @@ directives:
       selector: D
 `);
 
-      // D is only referenced by C->D, and D is hidden.
-      // C->D tuple will be skipped, A->B and B->C are valid.
-      // This produces a conflict because D is referenced in edge tuples.
-      // Wait — D is in the tuple (C, D), so the orientation constraint
-      // DOES reference D as targetNodeId. So there IS a conflict.
+      // D appears only as the target of the (C, D) tuple — target references
+      // conflict just like source references do.
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
+    });
+
+    it('returns no error when the hidden atom is not referenced by any constraint', () => {
+      const dataWithExtra = {
+        ...testData,
+        atoms: [...testData.atoms, { id: 'E', type: 'Isolated', label: 'E' }]
+      };
+
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: Isolated
+`, dataWithExtra);
+
+      // E is in no edge tuple, so the hide simply applies.
+      expect(result.error).toBeNull();
+      expect(result.layout.nodes.map(n => n.id)).not.toContain('E');
+      expect(result.layout.reintroducedNodes).toBeUndefined();
     });
 
     it('returns no error when no hideAtom directive is present', () => {
@@ -890,6 +909,138 @@ directives:
       const warnings = result.layout.warnings ?? [];
       expect(warnings.length).toBeGreaterThan(0);
       expect(result.warnings?.length).toBe(warnings.length);
+    });
+  });
+
+  describe('Overlapping hides and shared members', () => {
+    it('handles the same atom hidden by two hideAtom directives', () => {
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: edge
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+  - hideAtom:
+      selector: A + B
+`);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      // B is marked exactly once no matter how many selectors hid it.
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced.filter(id => id === 'B')).toEqual(['B']);
+
+      // The table attributes B to the first matching selector.
+      const error = result.error as HiddenNodeConflictError;
+      const entries = [...error.errorMessages.minimalConflictingConstraints.entries()];
+      const hideRows = entries.filter(([key]) => key.includes('hideAtom'));
+      expect(hideRows.some(([, descs]) => descs.includes('B is hidden'))).toBe(true);
+    });
+
+    it('reintroduces a member shared by two keyed groups into both groups', () => {
+      const sharedData = {
+        atoms: [
+          { id: 'A', type: 'Node', label: 'A' },
+          { id: 'B', type: 'Node', label: 'B' },
+          { id: 'C', type: 'Node', label: 'C' },
+        ],
+        relations: [
+          {
+            id: 'edge',
+            name: 'edge',
+            types: ['Node', 'Node'],
+            tuples: [
+              { atoms: ['A', 'C'], types: ['Node', 'Node'] },
+              { atoms: ['B', 'C'], types: ['Node', 'Node'] },
+            ]
+          }
+        ]
+      };
+
+      const result = createLayout(`
+constraints:
+  - group:
+      selector: edge
+      name: bucket
+directives:
+  - hideAtom:
+      selector: C
+`, sharedData);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id);
+      expect(reintroduced).toEqual(['C']);
+      // C is a member of both bucket[A] and bucket[B] in the counterfactual.
+      const groupsWithC = result.layout.groups.filter(gr => gr.nodeIds.includes('C'));
+      expect(groupsWithC.length).toBe(2);
+    });
+  });
+
+  describe('Multi-pass convergence (conflicts revealed by re-introduction)', () => {
+    it('accumulates conflicts across passes when an aborted first pass hid some of them', () => {
+      // Pass 1: hiding B disconnects M, which hideDisconnected then legacy-hides.
+      // The r1.r2 orientation references the missing M and aborts constraint
+      // generation before the r3 constraint is processed — so Y's conflict is
+      // invisible in pass 1. Re-introducing B reconnects M; the next pass reaches
+      // r3, finds Y hidden, and the orchestrator must fold that new conflict in.
+      const chainData = {
+        atoms: [
+          { id: 'A', type: 'Node', label: 'A' },
+          { id: 'B', type: 'Node', label: 'B' },
+          { id: 'M', type: 'Node', label: 'M' },
+          { id: 'P', type: 'Node', label: 'P' },
+          { id: 'Y', type: 'Node', label: 'Y' },
+        ],
+        relations: [
+          { id: 'r1', name: 'r1', types: ['Node', 'Node'], tuples: [{ atoms: ['A', 'B'], types: ['Node', 'Node'] }] },
+          { id: 'r2', name: 'r2', types: ['Node', 'Node'], tuples: [{ atoms: ['B', 'M'], types: ['Node', 'Node'] }] },
+          { id: 'r3', name: 'r3', types: ['Node', 'Node'], tuples: [{ atoms: ['P', 'Y'], types: ['Node', 'Node'] }] },
+        ]
+      };
+
+      const result = createLayout(`
+constraints:
+  - orientation:
+      selector: r1
+      directions: [right]
+  - orientation:
+      selector: r1.r2
+      directions: [right]
+  - orientation:
+      selector: r3
+      directions: [right]
+directives:
+  - hideAtom:
+      selector: B
+  - hideAtom:
+      selector: Y
+  - flag: hideDisconnected
+`, chainData);
+
+      expect(result.error).not.toBeNull();
+      expect(result.error!.type).toBe('hidden-node-conflict');
+
+      // The merged explanation names both conflicting atoms...
+      expect(result.error!.message).toContain('B');
+      expect(result.error!.message).toContain('Y');
+
+      // ...and the counterfactual shows everything the error talks about.
+      const nodeIds = result.layout.nodes.map(n => n.id);
+      expect(nodeIds).toEqual(expect.arrayContaining(['A', 'B', 'M', 'P', 'Y']));
+      const reintroduced = (result.layout.reintroducedNodes ?? []).map(n => n.id).sort();
+      expect(reintroduced).toEqual(['B', 'Y']);
+      const error = result.error as HiddenNodeConflictError;
+      expect((error.reintroducedNodeIds ?? []).slice().sort()).toEqual(['B', 'Y']);
+
+      // The IIS table covers conflicts from both passes.
+      const sourceKeys = [...error.errorMessages.minimalConflictingConstraints.keys()];
+      expect(sourceKeys.some(k => k.includes('r1') && !k.includes('r1.r2'))).toBe(true);
+      expect(sourceKeys.some(k => k.includes('r3'))).toBe(true);
     });
   });
 

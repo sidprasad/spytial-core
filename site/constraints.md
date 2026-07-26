@@ -313,6 +313,8 @@ Removes atoms from the visualization entirely. The atom and all its edges disapp
 
 > **Note:** `hideAtom` can appear in either the `constraints` or `directives` section.
 
+> **Conflicts:** an atom cannot be both hidden and placed. If an `orientation`, `align`, or `cyclic` constraint references a hidden atom, or a `group` contains one as a member, the spec is unsatisfiable — the layout reports a hidden-node conflict error, and the diagram shows a counterfactual in which the conflicting atoms are drawn anyway with a dashed outline. Hiding a keyed group's *key* is fine: the key is not inside the group.
+
 ```yaml
 - hideAtom:
     selector: <unary-selector>   # Required
