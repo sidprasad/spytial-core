@@ -17,8 +17,8 @@ import { makeNode, leftOf, aboveOf, alignOnX, alignOnY, negativeLeftOf, negative
 
 // ─── Node pool ──────────────────────────────────────────────────────────────
 
-/** Generate a pool of N nodes with random dimensions. */
-export function arbNodePool(n: number): fc.Arbitrary<LayoutNode[]> {
+/** Pool of N independently-sized nodes. */
+function arbVariedNodePool(n: number): fc.Arbitrary<LayoutNode[]> {
     return fc.tuple(
         ...Array.from({ length: n }, (_, i) =>
             fc.record({
@@ -26,6 +26,33 @@ export function arbNodePool(n: number): fc.Arbitrary<LayoutNode[]> {
                 h: fc.integer({ min: 20, max: 120 }),
             }).map(({ w, h }) => makeNode(`N${i}`, w, h))
         )
+    );
+}
+
+/** Pool of N nodes that all share one size. */
+function arbUniformNodePool(n: number): fc.Arbitrary<LayoutNode[]> {
+    return fc.record({
+        w: fc.integer({ min: 20, max: 200 }),
+        h: fc.integer({ min: 20, max: 120 }),
+    }).map(({ w, h }) =>
+        Array.from({ length: n }, (_, i) => makeNode(`N${i}`, w, h))
+    );
+}
+
+/**
+ * Generate a pool of N nodes.
+ *
+ * Mostly varied sizes, which is what real diagrams have (box width comes from
+ * label text) and what separates the "starts before" and "clears" readings of
+ * an ordering. A minority are UNIFORM: drawing independently from 20..200 makes
+ * an all-equal pool vanishingly unlikely, yet that is the degenerate case where
+ * the two readings coincide, so it needs to be hit on purpose rather than left
+ * to chance.
+ */
+export function arbNodePool(n: number): fc.Arbitrary<LayoutNode[]> {
+    return fc.oneof(
+        { arbitrary: arbVariedNodePool(n), weight: 4 },
+        { arbitrary: arbUniformNodePool(n), weight: 1 },
     );
 }
 
@@ -43,15 +70,32 @@ export function arbPair(n: number): fc.Arbitrary<[number, number]> {
 
 // ─── Atomic constraint generators ───────────────────────────────────────────
 
+/**
+ * Random separation gap.
+ *
+ * The DSL builders default to 15 and `negativeLeftOf` hard-codes 0, so before
+ * this the whole generated suite used exactly two gap values. That matters most
+ * for the modal queries: `isProperlyBefore` compares a summed path weight
+ * against a single node size, so it is the gap-to-size ratio that decides the
+ * answer, and node sizes range over 20..200. 0 is included deliberately — it is
+ * the boundary where the forced separation is exactly one box, so the pair
+ * touches and is NOT "before" under the strict mechanized definition.
+ */
+export const arbGap: fc.Arbitrary<number> = fc.oneof(
+    { arbitrary: fc.constant(0), weight: 1 },   // touching: the strictness boundary
+    { arbitrary: fc.constant(15), weight: 2 },  // the historical default
+    { arbitrary: fc.integer({ min: 1, max: 40 }), weight: 3 },
+);
+
 /** Random ordering constraint: A <x B, B <x A, A <y B, or B <y A. */
 export function arbOrdering(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint> {
-    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 0, max: 3 })).map(([[i, j], type]) => {
+    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 0, max: 3 }), arbGap).map(([[i, j], type, gap]) => {
         switch (type) {
-            case 0: return leftOf(nodes[i], nodes[j]);
-            case 1: return leftOf(nodes[j], nodes[i]);
-            case 2: return aboveOf(nodes[i], nodes[j]);
-            case 3: return aboveOf(nodes[j], nodes[i]);
-            default: return leftOf(nodes[i], nodes[j]);
+            case 0: return leftOf(nodes[i], nodes[j], gap);
+            case 1: return leftOf(nodes[j], nodes[i], gap);
+            case 2: return aboveOf(nodes[i], nodes[j], gap);
+            case 3: return aboveOf(nodes[j], nodes[i], gap);
+            default: return leftOf(nodes[i], nodes[j], gap);
         }
     });
 }
@@ -85,13 +129,13 @@ export function arbAlignment(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint
 
 /** Random conjunctive constraint (ordering or alignment). */
 export function arbConjunctive(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstraint> {
-    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 0, max: 3 })).map(([[i, j], type]) => {
+    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 0, max: 3 }), arbGap).map(([[i, j], type, gap]) => {
         switch (type) {
-            case 0: return leftOf(nodes[i], nodes[j]);
-            case 1: return aboveOf(nodes[i], nodes[j]);
+            case 0: return leftOf(nodes[i], nodes[j], gap);
+            case 1: return aboveOf(nodes[i], nodes[j], gap);
             case 2: return alignOnX(nodes[i], nodes[j]);
             case 3: return alignOnY(nodes[i], nodes[j]);
-            default: return leftOf(nodes[i], nodes[j]);
+            default: return leftOf(nodes[i], nodes[j], gap);
         }
     });
 }
@@ -100,12 +144,12 @@ export function arbConjunctive(nodes: LayoutNode[]): fc.Arbitrary<LayoutConstrai
 
 /** Random disjunction with 2–4 ordering alternatives between a pair. */
 export function arbDisjunction(nodes: LayoutNode[]): fc.Arbitrary<DisjunctiveConstraint> {
-    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 2, max: 4 })).map(([[i, j], numAlts]) => {
+    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 2, max: 4 }), arbGap).map(([[i, j], numAlts, gap]) => {
         const allAlts: LayoutConstraint[][] = [
-            [leftOf(nodes[i], nodes[j])],
-            [leftOf(nodes[j], nodes[i])],
-            [aboveOf(nodes[i], nodes[j])],
-            [aboveOf(nodes[j], nodes[i])],
+            [leftOf(nodes[i], nodes[j], gap)],
+            [leftOf(nodes[j], nodes[i], gap)],
+            [aboveOf(nodes[i], nodes[j], gap)],
+            [aboveOf(nodes[j], nodes[i], gap)],
         ];
         return new DisjunctiveConstraint(SRC, allAlts.slice(0, numAlts));
     });
@@ -113,13 +157,46 @@ export function arbDisjunction(nodes: LayoutNode[]): fc.Arbitrary<DisjunctiveCon
 
 /** Random disjunction that may include alignment alternatives. */
 export function arbRichDisjunction(nodes: LayoutNode[]): fc.Arbitrary<DisjunctiveConstraint> {
-    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 2, max: 5 })).map(([[i, j], numAlts]) => {
+    return fc.tuple(arbPair(nodes.length), fc.integer({ min: 2, max: 5 }), arbGap).map(([[i, j], numAlts, gap]) => {
         const allAlts: LayoutConstraint[][] = [
-            [leftOf(nodes[i], nodes[j])],
-            [leftOf(nodes[j], nodes[i])],
-            [aboveOf(nodes[i], nodes[j])],
-            [aboveOf(nodes[j], nodes[i])],
+            [leftOf(nodes[i], nodes[j], gap)],
+            [leftOf(nodes[j], nodes[i], gap)],
+            [aboveOf(nodes[i], nodes[j], gap)],
+            [aboveOf(nodes[j], nodes[i], gap)],
             [alignOnX(nodes[i], nodes[j])],
+        ];
+        return new DisjunctiveConstraint(SRC, allAlts.slice(0, numAlts));
+    });
+}
+
+/**
+ * Random disjunction whose alternatives are CONJUNCTIONS of two orderings over
+ * two different pairs.
+ *
+ * arbDisjunction and arbRichDisjunction both emit singleton alternatives over a
+ * single pair, so no generated disjunction could ever fail partway through an
+ * alternative: the first constraint either went in or it did not. Multi-
+ * constraint alternatives are what reach the partial-assignment undo path —
+ * add constraint 1, reject constraint 2, roll back constraint 1 — which is
+ * where #520's edge-deletion bug lived. Only a hand-written generator covered
+ * it before.
+ *
+ * Alternatives deliberately reuse the same pairs in different directions, so
+ * some rollbacks release an edge another alternative or the base set still
+ * claims.
+ */
+export function arbCompoundDisjunction(nodes: LayoutNode[]): fc.Arbitrary<DisjunctiveConstraint> {
+    return fc.tuple(
+        arbPair(nodes.length),
+        arbPair(nodes.length),
+        fc.integer({ min: 2, max: 3 }),
+        arbGap,
+        arbGap,
+    ).map(([[i, j], [k, l], numAlts, gap1, gap2]) => {
+        const allAlts: LayoutConstraint[][] = [
+            [leftOf(nodes[i], nodes[j], gap1), aboveOf(nodes[k], nodes[l], gap2)],
+            [leftOf(nodes[j], nodes[i], gap1), aboveOf(nodes[l], nodes[k], gap2)],
+            [aboveOf(nodes[i], nodes[j], gap2), leftOf(nodes[l], nodes[k], gap1)],
         ];
         return new DisjunctiveConstraint(SRC, allAlts.slice(0, numAlts));
     });

@@ -626,7 +626,7 @@ async function checkedSolve(solver: any, what: string): Promise<boolean> {
 export type OracleProp =
     | { kind: 'coordLt'; axis: 'x' | 'y'; a: string; b: string }      // coord_a < coord_b
     | { kind: 'coordGe'; axis: 'x' | 'y'; a: string; b: string }      // coord_a ≥ coord_b
-    | { kind: 'properBefore'; axis: 'x' | 'y'; a: string; b: string } // coord_a + size_a ≤ coord_b
+    | { kind: 'properBefore'; axis: 'x' | 'y'; a: string; b: string } // coord_a + size_a < coord_b
     | { kind: 'coordEq'; axis: 'x' | 'y'; a: string; b: string }      // coord_a = coord_b
     | { kind: 'coordNeq'; axis: 'x' | 'y'; a: string; b: string }     // coord_a ≠ coord_b
     | { kind: 'notProperBefore'; axis: 'x' | 'y'; a: string; b: string }; // coord_a + size_a ≥ coord_b
@@ -649,7 +649,16 @@ function compileProp(p: OracleProp, layout: InstanceLayout, vars: VarMap): Bool 
     switch (p.kind) {
         case 'coordLt': return coord(p.a).lt(coord(p.b));
         case 'coordGe': return coord(p.a).ge(coord(p.b));
-        case 'properBefore': return coord(p.a).add(size(p.a)).le(coord(p.b));
+        // Strict, matching the mechanized definition
+        //   leftOf b₁ b₂ := b₁.x_tl + b₁.width < b₂.x_tl
+        // and making this the exact complement of notProperBefore below.
+        // A non-strict `le` here would let a TOUCHING pair (coord_a + size_a =
+        // coord_b) satisfy both props at once, so a cannot-claim could be
+        // "refuted" by a model that does not actually place a before b, and the
+        // can-side exactness check would test a weaker relation than it claims.
+        // Reachable only via zero-gap orderings, where the forced separation is
+        // exactly one box — see the negative-orientation modal tests.
+        case 'properBefore': return coord(p.a).add(size(p.a)).lt(coord(p.b));
         case 'coordEq': return coord(p.a).eq(coord(p.b));
         case 'coordNeq': return ctx.Not(coord(p.a).eq(coord(p.b)));
         // Negation of properBefore — the refutation probe for a must-claim.

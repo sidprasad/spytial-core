@@ -52,12 +52,15 @@ function makeNode(id: string, width: number, height: number): LayoutNode {
     };
 }
 
-function leftOf(a: LayoutNode, b: LayoutNode): LeftConstraint {
-    return { left: a, right: b, minDistance: 15, sourceConstraint: SRC };
+/** Default gap. Kept as the default so existing fixtures are unchanged. */
+const DEFAULT_GAP = 15;
+
+function leftOf(a: LayoutNode, b: LayoutNode, minDistance = DEFAULT_GAP): LeftConstraint {
+    return { left: a, right: b, minDistance, sourceConstraint: SRC };
 }
 
-function aboveOf(a: LayoutNode, b: LayoutNode): TopConstraint {
-    return { top: a, bottom: b, minDistance: 15, sourceConstraint: SRC };
+function aboveOf(a: LayoutNode, b: LayoutNode, minDistance = DEFAULT_GAP): TopConstraint {
+    return { top: a, bottom: b, minDistance, sourceConstraint: SRC };
 }
 
 function alignOnX(a: LayoutNode, b: LayoutNode): AlignmentConstraint {
