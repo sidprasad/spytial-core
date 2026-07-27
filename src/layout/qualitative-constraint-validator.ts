@@ -158,6 +158,15 @@ class DifferenceConstraintGraph {
 
     /** Per-source reachability memo: src → (target → some path has a positive edge). */
     private reachMemo: Map<string, Map<string, boolean>> = new Map();
+    /** Per-source longest-path memo: src → (target → max total edge weight). */
+    private maxWeightMemo: Map<string, Map<string, number>> = new Map();
+    /** Source-independent contraction backing maxWeightMemo (see contractedDag). */
+    private contractedMemo: {
+        rep: Map<string, string>;
+        adj: Map<string, Map<string, number>>;
+        order: string[];
+        members: Map<string, string[]>;
+    } | null = null;
     /** Memoized Tarjan SCC components. */
     private sccMemo: string[][] | null = null;
     private memoAddV = -1;
@@ -232,6 +241,8 @@ class DifferenceConstraintGraph {
     private validateMemo(): void {
         if (this.memoAddV !== this.addVersion || this.memoRemV !== this.removeVersion) {
             this.reachMemo.clear();
+            this.maxWeightMemo.clear();
+            this.contractedMemo = null;
             this.sccMemo = null;
             this.memoAddV = this.addVersion;
             this.memoRemV = this.removeVersion;
@@ -739,6 +750,147 @@ class DifferenceConstraintGraph {
     isStrictlyOrdered(a: string, b: string): boolean {
         if (a === b) return false;
         return this.reachFrom(a).get(b) === true;
+    }
+
+    /**
+     * Check if a sits entirely before b on this axis: coord_a + size_a < coord_b.
+     *
+     * This is the spatial relation the query language means by "left of" /
+     * "above" — a is clear of b, not merely starting earlier. isStrictlyOrdered
+     * is the weaker "coord_a < coord_b"; use that one for questions about
+     * ordering or alignment feasibility, and this one for questions about where
+     * a box actually sits relative to another.
+     *
+     * The two coincide when every box has the same size on this axis, because
+     * any forced separation is then at least one box plus its padding. They
+     * come apart as soon as sizes differ: with A aligned to a narrow N and
+     * N before B, the forced separation is N's width, which says nothing about
+     * whether the much wider A clears B.
+     *
+     * Sound but not complete: maxWeightFrom is the separation this graph
+     * entails, and non-overlap and unresolved disjunctions can force more.
+     * Claiming less than is true is the safe direction for a must-fact.
+     */
+    isProperlyBefore(a: string, b: string): boolean {
+        if (a === b) return false;
+        const w = this.maxWeightFrom(a).get(b);
+        return w !== undefined && w > (this.nodeSize.get(a) ?? 0);
+    }
+
+    /**
+     * Memoized per-source longest-path weight. reachFrom answers "is there a
+     * path with any separation at all", which entails only coord_a < coord_b.
+     * Deciding whether a box CLEARS another needs the total separation the
+     * constraints force — coord_target ≥ coord_src + maxWeightFrom(src, target)
+     * — and that is the maximum over paths, not the existence of one.
+     *
+     * Alignment classes are contracted first: their members share a coordinate,
+     * so every edge inside a class weighs 0 and contributes nothing to a path.
+     * What remains is a DAG (positive-weight cycles are rejected at insertion),
+     * so the longest path is a single topological relaxation pass.
+     */
+    private maxWeightFrom(src: string): Map<string, number> {
+        this.validateMemo();
+        const cached = this.maxWeightMemo.get(src);
+        if (cached) return cached;
+
+        const { rep, adj, order, members } = this.contractedDag();
+        const srcRep = rep.get(src) ?? src;
+
+        const dist = new Map<string, number>();
+        dist.set(srcRep, 0);
+        for (const n of order) {
+            const base = dist.get(n);
+            if (base === undefined) continue; // not downstream of src
+            for (const [s, w] of adj.get(n)!) {
+                const cand = base + w;
+                const cur = dist.get(s);
+                if (cur === undefined || cand > cur) dist.set(s, cand);
+            }
+        }
+
+        // Expand super-nodes back to members. Walking `dist` rather than every
+        // node keeps this proportional to what src actually reaches, matching
+        // reachFrom — expanding over all nodes instead made each source O(V)
+        // even when it reaches nothing.
+        const result = new Map<string, number>();
+        for (const [r, d] of dist) {
+            const ms = members.get(r);
+            if (ms === undefined) { result.set(r, d); continue; }
+            for (const m of ms) result.set(m, d);
+        }
+        this.maxWeightMemo.set(src, result);
+        return result;
+    }
+
+    /**
+     * The alignment-contracted DAG plus a topological order, shared by every
+     * maxWeightFrom source. Building it is O(V + E) and it does not depend on
+     * the source, so it is computed once per graph version — rebuilding it per
+     * source made the lazy modal build ~3-5x slower on chains.
+     *
+     * Members of an alignment class share a coordinate, so intra-class edges
+     * (necessarily zero-weight) are dropped and the class collapses to one
+     * super-node. Between super-nodes only the heaviest edge matters, since a
+     * longest-path relaxation would pick it anyway.
+     */
+    private contractedDag(): {
+        rep: Map<string, string>;
+        adj: Map<string, Map<string, number>>;
+        order: string[];
+        members: Map<string, string[]>;
+    } {
+        if (this.contractedMemo) return this.contractedMemo;
+
+        const rep = new Map<string, string>();
+        const members = this.getAlignmentClasses();
+        for (const [r, ms] of members) {
+            for (const m of ms) rep.set(m, r);
+        }
+        const repOf = (id: string): string => rep.get(id) ?? id;
+
+        const adj = new Map<string, Map<string, number>>();
+        const indeg = new Map<string, number>();
+        for (const n of this.nodes) {
+            const r = repOf(n);
+            if (!adj.has(r)) { adj.set(r, new Map()); indeg.set(r, 0); }
+        }
+        for (const [u, succs] of this.adj) {
+            const ru = repOf(u);
+            const out = adj.get(ru);
+            if (!out) continue;
+            for (const [v, w] of succs) {
+                const rv = repOf(v);
+                if (ru === rv) continue;
+                const cur = out.get(rv);
+                if (cur === undefined) {
+                    out.set(rv, w);
+                    indeg.set(rv, (indeg.get(rv) ?? 0) + 1);
+                } else if (w > cur) {
+                    out.set(rv, w);
+                }
+            }
+        }
+
+        // Kahn order. Anything left unordered would sit on a surviving cycle,
+        // which after contraction means a positive-weight cycle — rejected at
+        // insertion, so unreachable in practice. Such nodes simply never get a
+        // distance, which reads as "no entailed separation": conservative.
+        const order: string[] = [];
+        const queue: string[] = [];
+        for (const [n, d] of indeg) if (d === 0) queue.push(n);
+        for (let head = 0; head < queue.length; head++) {
+            const n = queue[head];
+            order.push(n);
+            for (const [s] of adj.get(n)!) {
+                const d = (indeg.get(s) ?? 1) - 1;
+                indeg.set(s, d);
+                if (d === 0) queue.push(s);
+            }
+        }
+
+        this.contractedMemo = { rep, adj, order, members };
+        return this.contractedMemo;
     }
 
     /**
@@ -3883,12 +4035,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.mustVAlignmentClasses = this.collectAlignmentClasses(this.mustVGraph, realNodeIds);
     }
 
-    /** Collect all strict ordering pairs from a graph. */
+    /**
+     * Collect the pairs this graph forces into a proper spatial relation:
+     * a sits entirely before b, which is what getMust reports as "a is left of
+     * / above b". Deliberately isProperlyBefore and not isStrictlyOrdered —
+     * the latter only entails coord_a < coord_b, which for a box wider than
+     * the forced separation still leaves a overlapping b's span.
+     */
     private collectStrictPairs(graph: DifferenceConstraintGraph, nodeIds: string[]): Set<string> {
         const pairs = new Set<string>();
         for (const a of nodeIds) {
             for (const b of nodeIds) {
-                if (a !== b && graph.isStrictlyOrdered(a, b)) {
+                if (a !== b && graph.isProperlyBefore(a, b)) {
                     pairs.add(`${a}\x00${b}`);
                 }
             }
@@ -4257,7 +4415,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Post-CDCL resolved model queries (what's true in THIS layout) ───
 
-    /** Get all nodes reachable from `nodeId` in the given direction (resolved model). */
+    /**
+     * Get all nodes reachable from `nodeId` in the given direction (resolved model).
+     *
+     * Uses isProperlyBefore for the same reason getMust does: the question is
+     * which boxes actually sit to the given side, not which ones merely start
+     * earlier on the axis.
+     */
     public getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
         const realNodeIds = new Set(this.nodes.map(n => n.id));
         const result = new Set<string>();
@@ -4265,25 +4429,25 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         switch (relation) {
             case 'rightOf': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                    if (n !== nodeId && this.hGraph.isProperlyBefore(nodeId, n)) result.add(n);
                 }
                 break;
             }
             case 'leftOf': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                    if (n !== nodeId && this.hGraph.isProperlyBefore(n, nodeId)) result.add(n);
                 }
                 break;
             }
             case 'below': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                    if (n !== nodeId && this.vGraph.isProperlyBefore(nodeId, n)) result.add(n);
                 }
                 break;
             }
             case 'above': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                    if (n !== nodeId && this.vGraph.isProperlyBefore(n, nodeId)) result.add(n);
                 }
                 break;
             }

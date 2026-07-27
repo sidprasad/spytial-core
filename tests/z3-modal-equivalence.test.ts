@@ -13,8 +13,12 @@
  *   cannot P  ⟺  UNSAT(model ∧ P)
  *
  * Propositions:
- *   - must "Y left of X" is probed with its weakest sound reading,
- *     coord entailment: UNSAT(x_Y ≥ x_X).
+ *   - must "Y left of X" is probed at full strength, as proper placement:
+ *     UNSAT(x_Y + w_Y ≥ x_X). The weaker coord reading UNSAT(x_Y ≥ x_X) is
+ *     NOT enough — it accepts a Y that starts before X while still spanning
+ *     across it, which is not "left of" in any sense the query language means.
+ *     The two readings agree only when every node is the same size on the
+ *     axis, so a uniform-size fixture cannot tell them apart.
  *   - cannot/can "Y left of X" is probed as proper placement:
  *     x_Y + w_Y ≤ x_X. The system is pure difference bounds (no upper
  *     bounds), so a model with x_Y < x_X can always be stretched into one
@@ -114,10 +118,10 @@ async function checkModalAgainstOracle(
                 if (Y === X) continue;
 
                 if (must.has(Y)) {
-                    // Claim: Y strictly before X on this axis in ALL models.
-                    const refuted: OracleProp = { kind: 'coordGe', axis, a: Y, b: X };
+                    // Claim: Y sits entirely before X on this axis in ALL models.
+                    const refuted: OracleProp = { kind: 'notProperBefore', axis, a: Y, b: X };
                     if (await solveZ3With(layout, [refuted])) {
-                        fail(layout, `getMust(${X}, ${rel}) claims ${Y}, but Z3 found a model with ${axis}_${Y} ≥ ${axis}_${X}`);
+                        fail(layout, `getMust(${X}, ${rel}) claims ${Y}, but Z3 found a model where ${Y} does not clear ${X} on ${axis}`);
                     }
                 }
 
@@ -225,6 +229,29 @@ describe.runIf(available)('Modal query entailment vs Z3', () => {
     it('group bounding-box disjunctions leave modal claims exact', async () => {
         const layout = parseConstraintSpec('x <x a1, x <x a2, {A: a1, a2}');
         expect(await checkModalAgainstOracle(layout, { canExactOrdering: true, canExactAlignment: true })).toBe(true);
+    });
+
+    it('non-uniform sizes: sharing a column with a narrow node is not "left of"', async () => {
+        // W shares a column with the narrow N, and N is left of X. That forces
+        // only N's own width of separation, which says nothing about whether
+        // the far wider W clears X — and it does not: W spans right across it.
+        // getMust used to claim it, because reachability alone establishes only
+        // x_W < x_X. Sizes must differ to expose this: at equal widths any
+        // forced separation already exceeds a box, so the readings coincide.
+        const dims = {
+            W: [300, 60] as [number, number],
+            N: [20, 60] as [number, number],
+            X: [100, 60] as [number, number],
+        };
+        const layout = parseConstraintSpec('W =x N, N <x X', dims);
+        expect(await checkModalAgainstOracle(layout, { canExactOrdering: true, canExactAlignment: true })).toBe(true);
+
+        const v = new QualitativeConstraintValidator(cloneLayout(layout));
+        expect(v.validateConstraints()).toBeNull();
+        expect(v.getMust('X', 'leftOf').has('N')).toBe(true);  // N (20 wide) clears X
+        expect(v.getMust('X', 'leftOf').has('W')).toBe(false); // W (300 wide) does not
+        // The weaker reading still holds for W — that is exactly the gap.
+        expect(await solveZ3With(layout, [{ kind: 'coordGe', axis: 'x', a: 'W', b: 'X' }])).toBe(false);
     });
 
     // ─── Randomized (fixed seed → deterministic in CI) ──────────────────
