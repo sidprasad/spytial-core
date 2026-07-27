@@ -148,6 +148,13 @@ class DifferenceConstraintGraph {
     addVersion: number = nextGraphStamp++;
     removeVersion: number = nextGraphStamp++;
     /**
+     * Bumped by every change to an edge's WEIGHT, including the
+     * positive→positive tightenings that deliberately leave
+     * addVersion/removeVersion alone. Distances depend on weights, so the
+     * longest-path caches key on this instead (see validateMemo).
+     */
+    private weightVersion: number = nextGraphStamp++;
+    /**
      * Set if any non-alignment edge was ever inserted with weight ≤ 0. Such
      * edges break the invariant "zero-weight edges occur only in symmetric
      * alignment pairs", which the validator's cross-version feasibility-verdict
@@ -171,6 +178,7 @@ class DifferenceConstraintGraph {
     private sccMemo: string[][] | null = null;
     private memoAddV = -1;
     private memoRemV = -1;
+    private memoWeightV = -1;
 
     /**
      * Reachability deltas accumulated since the last consumeReachDeltas():
@@ -237,15 +245,35 @@ class DifferenceConstraintGraph {
         return g;
     }
 
-    /** Drop memoized reachability/SCC state if the graph mutated since it was built. */
+    /**
+     * Drop memoized state the graph has outgrown. Two tiers, because the
+     * reachability caches and the longest-path caches depend on different
+     * things:
+     *
+     *  - reachMemo / sccMemo depend on the edge SET, tracked by
+     *    addVersion/removeVersion. A positive→positive tightening leaves both
+     *    untouched, which is why it deliberately does not bump them.
+     *  - maxWeightMemo / contractedMemo depend on edge WEIGHTS, tracked by
+     *    weightVersion. Tightening an edge changes distances without changing
+     *    reachability, and the incremental-closure path in addEdge keeps
+     *    reachMemo alive across an insert without recomputing distances — so
+     *    without this second tier both would stay stale while looking valid.
+     */
     private validateMemo(): void {
         if (this.memoAddV !== this.addVersion || this.memoRemV !== this.removeVersion) {
             this.reachMemo.clear();
+            this.sccMemo = null;
             this.maxWeightMemo.clear();
             this.contractedMemo = null;
-            this.sccMemo = null;
             this.memoAddV = this.addVersion;
             this.memoRemV = this.removeVersion;
+            this.memoWeightV = this.weightVersion;
+            return;
+        }
+        if (this.memoWeightV !== this.weightVersion) {
+            this.maxWeightMemo.clear();
+            this.contractedMemo = null;
+            this.memoWeightV = this.weightVersion;
         }
     }
 
@@ -312,6 +340,7 @@ class DifferenceConstraintGraph {
                 && this.memoRemV === this.removeVersion;
             this.adj.get(a)!.set(b, w);
             this.radj.get(b)!.set(a, w);
+            this.weightVersion = nextGraphStamp++;
             if (incremental) {
                 // Patch BEFORE bumping the stamp: reachFrom inside the patch
                 // must see matching stamps, or validateMemo would wipe the
@@ -327,8 +356,11 @@ class DifferenceConstraintGraph {
                 this.markDeltasUnknown();
             }
         } else {
+            // Tightening only: reachability and strict-orderedness are
+            // unchanged (so no add/removeVersion bump), but distances are not.
             this.adj.get(a)!.set(b, w);
             this.radj.get(b)!.set(a, w);
+            this.weightVersion = nextGraphStamp++;
         }
         this.registerClaim(a, b, w, constraint);
         return true;
@@ -417,6 +449,7 @@ class DifferenceConstraintGraph {
             if (this.adj.get(a)?.delete(b)) {
                 this.radj.get(b)?.delete(a);
                 this.removeVersion = nextGraphStamp++;
+                this.weightVersion = nextGraphStamp++;
                 this.markDeltasUnknown();
             }
             this.edgeProvenance.delete(key);
@@ -429,6 +462,7 @@ class DifferenceConstraintGraph {
         if (cur !== undefined && newW < cur) {
             this.adj.get(a)!.set(b, newW);
             this.radj.get(b)!.set(a, newW);
+            this.weightVersion = nextGraphStamp++;
             if (cur > 0 && newW <= 0) {
                 // Strict-orderedness may have shrunk — removal-like event for
                 // the reachability caches. (Positive→positive decreases change
@@ -685,6 +719,7 @@ class DifferenceConstraintGraph {
             this.radj.get(b)!.set(a, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
             this.addVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
             this.markDeltasUnknown();
         }
         if (!this.adj.get(b)!.has(a)) {
@@ -692,6 +727,7 @@ class DifferenceConstraintGraph {
             this.radj.get(a)!.set(b, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(b, a), constraint);
             this.addVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
             this.markDeltasUnknown();
         }
 
@@ -720,6 +756,7 @@ class DifferenceConstraintGraph {
             this.radj.get(b)!.delete(a);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
             this.removeVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
             this.markDeltasUnknown();
         }
         if (this.adj.get(b)?.get(a) === 0) {
@@ -727,6 +764,7 @@ class DifferenceConstraintGraph {
             this.radj.get(a)!.delete(b);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(b, a));
             this.removeVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
             this.markDeltasUnknown();
         }
     }
@@ -775,6 +813,22 @@ class DifferenceConstraintGraph {
         if (a === b) return false;
         const w = this.maxWeightFrom(a).get(b);
         return w !== undefined && w > (this.nodeSize.get(a) ?? 0);
+    }
+
+    /**
+     * Does the graph already force at least the separation an edge (a → b) with
+     * this raw minDistance would add? Converts the same way addEdge does
+     * (minDistance + source size) and compares against the entailed longest
+     * path, so an identical existing edge qualifies but a weaker one does not.
+     *
+     * "Ordered" is not enough to call such a constraint implied: a path merely
+     * proves SOME separation, while the constraint demands a specific amount.
+     */
+    entailsSeparation(a: string, b: string, weight?: number): boolean {
+        if (a === b) return false;
+        const required = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
+        const w = this.maxWeightFrom(a).get(b);
+        return w !== undefined && w >= required;
     }
 
     /**
@@ -2002,8 +2056,20 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
                 const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                // Must be actually ordered in the forward direction
-                if (!graph.isOrdered(edge.from, edge.to)) { allImplied = false; break; }
+                // Must be ordered in the forward direction AND already forced
+                // to at least this constraint's separation. Ordering alone let
+                // a stronger constraint on an already-ordered pair count as
+                // implied, so it was committed without tightening the graph and
+                // the graph then under-entailed what the committed set requires
+                // (visible through getReachable / the must-queries). Both
+                // checks are kept: the conjunction can only ever shrink the
+                // implied set relative to the old behaviour, never grow it.
+                const minDistance = (constraint as { minDistance?: number }).minDistance;
+                if (!graph.isOrdered(edge.from, edge.to)
+                    || !graph.entailsSeparation(edge.from, edge.to, minDistance)) {
+                    allImplied = false;
+                    break;
+                }
             }
             if (allImplied) return i;
         }

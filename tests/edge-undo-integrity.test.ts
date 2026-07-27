@@ -261,4 +261,95 @@ describe('Edge undo integrity (claim-based add/remove)', () => {
             }
         });
     });
+
+    describe('weight-dependent caches and implied alternatives', () => {
+        // Zero-size nodes so an edge weight equals its minDistance exactly.
+        const zn = (id: string): LayoutNode => node(id, 0, 0);
+        const entailed = (v: any, a: string, b: string): number | undefined =>
+            v.hGraph.maxWeightFrom(a).get(b);
+
+        it('tightening a positive edge invalidates the longest-path memo', () => {
+            // A positive→positive tightening deliberately does not bump the
+            // reachability stamps (reachability and strict-orderedness are
+            // unchanged), so the distance caches need their own weight stamp or
+            // they stay stale while looking valid.
+            const A = zn('A'), B = zn('B'), C = zn('C');
+            const first = leftOf(A, B, 1);
+            const constraints = [first, leftOf(B, C, 1)];
+            const v = rig({ nodes: [A, B, C], edges: [], constraints, groups: [] });
+            expect(v.validateConstraints()).toBeNull();
+            expect(entailed(v, 'A', 'C')).toBe(2); // warms the memo
+
+            (first as { minDistance: number }).minDistance = 10;
+            expect(v.validateConstraints()).toBeNull();
+
+            expect(entailed(v, 'A', 'C')).toBe(11);
+        });
+
+        it('an insert invalidates the longest-path memo despite the incremental closure', () => {
+            // The incremental-closure path keeps the reachability memo warm
+            // across an insert by syncing its stamp; distances are not patched,
+            // so they must still be dropped.
+            const A = zn('A'), B = zn('B'), C = zn('C');
+            const constraints = [leftOf(A, B, 3)];
+            const v = rig({ nodes: [A, B, C], edges: [], constraints, groups: [] });
+            expect(v.validateConstraints()).toBeNull();
+            expect(entailed(v, 'A', 'B')).toBe(3);
+            expect(entailed(v, 'A', 'C')).toBeUndefined();
+
+            constraints.push(leftOf(B, C, 4));
+            expect(v.validateConstraints()).toBeNull();
+
+            expect(entailed(v, 'A', 'C')).toBe(7);
+        });
+
+        it('an alternative demanding more separation than is entailed is not treated as implied', () => {
+            // isOrdered proves only that SOME separation is forced; committing a
+            // stronger constraint on that basis left the graph under-entailing
+            // what the committed set requires.
+            const A = zn('A'), B = zn('B'), C = zn('C');
+            const layout: InstanceLayout = {
+                nodes: [A, B, C], edges: [],
+                constraints: [leftOf(A, B, 1)],
+                groups: [],
+                disjunctiveConstraints: [
+                    new DisjunctiveConstraint(SRC, [
+                        [leftOf(A, B, 50)],
+                        [leftOf(A, C, 1)],
+                    ]),
+                ],
+            };
+            const v = rig(layout);
+            expect(v.validateConstraints()).toBeNull();
+
+            const committedAB = layout.constraints.some(
+                (c: any) => c.left?.id === 'A' && c.right?.id === 'B' && c.minDistance === 50,
+            );
+            if (committedAB) {
+                // If it was committed, the graph must actually force it.
+                expect(entailed(v, 'A', 'B')).toBeGreaterThanOrEqual(50);
+            }
+        });
+
+        it('an alternative already entailed at its own distance still counts as implied', () => {
+            // The check must not over-tighten into rejecting genuine
+            // implications: an identical existing edge qualifies.
+            const A = zn('A'), B = zn('B'), C = zn('C');
+            const layout: InstanceLayout = {
+                nodes: [A, B, C], edges: [],
+                constraints: [leftOf(A, B, 20)],
+                groups: [],
+                disjunctiveConstraints: [
+                    new DisjunctiveConstraint(SRC, [
+                        [leftOf(A, B, 20)],
+                        [leftOf(B, A, 5)],
+                    ]),
+                ],
+            };
+            const v = rig(layout);
+            expect(v.validateConstraints()).toBeNull();
+            expect(entailed(v, 'A', 'B')).toBe(20);
+            expect(v.hGraph.hasEdge('B', 'A')).toBe(false); // the reverse was not taken
+        });
+    });
 });
