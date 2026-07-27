@@ -52,6 +52,7 @@ import {
     arbNegativeOrdering,
     arbMixedOrdering,
     arbGroup,
+    arbCompoundDisjunction,
 } from './helpers/constraint-arbitraries';
 import type { LayoutGroup, LayoutNode } from '../src/layout/interfaces';
 
@@ -375,6 +376,47 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                         return new DisjunctiveConstraint(SRC, [altA, altB]);
                     });
                     const layout = buildLayout(nodes, base, disjs);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: 30, timeout: TIMEOUT });
+        });
+
+        // ── Multi-constraint alternatives (partial-assignment undo) ────
+        // Every other generator emits SINGLETON alternatives, so an
+        // alternative could never fail halfway: constraint 1 either went in or
+        // it did not. These carry two constraints over two pairs, so the
+        // solver regularly adds the first, rejects the second, and must roll
+        // the first back cleanly — the path #520's blind edge-delete corrupted.
+
+        it('random compound (2-constraint) alternatives on 4 nodes (Z3 cross-check)', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(4).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 3 }),
+                        fc.array(arbCompoundDisjunction(nodes), { minLength: 1, maxLength: 3 }),
+                    )
+                ),
+                async ([nodes, constraints, disjs]) => {
+                    const layout = buildLayout(nodes, constraints, disjs);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        it('random compound alternatives on 5 nodes, denser (Z3 cross-check)', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(5).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 1, maxLength: 4 }),
+                        fc.array(arbCompoundDisjunction(nodes), { minLength: 2, maxLength: 4 }),
+                    )
+                ),
+                async ([nodes, constraints, disjs]) => {
+                    const layout = buildLayout(nodes, constraints, disjs);
                     const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
                     assertAgreement(layout, validatorSat, oracleSat);
                 }
