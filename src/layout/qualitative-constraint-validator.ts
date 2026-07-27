@@ -432,71 +432,90 @@ class DifferenceConstraintGraph {
     }
 
     /**
+     * All strongly connected components of the graph (any-weight edges).
+     * In a consistent graph, mutual reachability is only possible through
+     * zero-weight alignment cycles (positive-weight cycles are rejected at
+     * insertion), so SCCs are exactly the alignment classes.
+     *
+     * Iterative Tarjan, O(V + E) — replaces the old per-node nested-BFS
+     * approach, which was O(V·(V+E)) and dominated computeAlignmentOrders
+     * (87ms of a 200-node chain's validation, with zero alignments present).
+     */
+    private tarjanSCCs(): string[][] {
+        const index = new Map<string, number>();
+        const lowlink = new Map<string, number>();
+        const onStack = new Set<string>();
+        const stack: string[] = [];
+        const components: string[][] = [];
+        let next = 0;
+
+        interface Frame { node: string; succs: string[]; i: number }
+
+        for (const root of this.nodes) {
+            if (index.has(root)) continue;
+            const frames: Frame[] = [];
+            const open = (n: string): void => {
+                index.set(n, next);
+                lowlink.set(n, next);
+                next++;
+                stack.push(n);
+                onStack.add(n);
+                frames.push({ node: n, succs: [...(this.adj.get(n)?.keys() ?? [])], i: 0 });
+            };
+            open(root);
+            while (frames.length > 0) {
+                const f = frames[frames.length - 1];
+                if (f.i < f.succs.length) {
+                    const s = f.succs[f.i++];
+                    if (!index.has(s)) {
+                        open(s);
+                    } else if (onStack.has(s)) {
+                        lowlink.set(f.node, Math.min(lowlink.get(f.node)!, index.get(s)!));
+                    }
+                } else {
+                    frames.pop();
+                    if (lowlink.get(f.node) === index.get(f.node)) {
+                        const comp: string[] = [];
+                        let m: string;
+                        do {
+                            m = stack.pop()!;
+                            onStack.delete(m);
+                            comp.push(m);
+                        } while (m !== f.node);
+                        components.push(comp);
+                    }
+                    const parent = frames[frames.length - 1];
+                    if (parent) {
+                        lowlink.set(parent.node, Math.min(lowlink.get(parent.node)!, lowlink.get(f.node)!));
+                    }
+                }
+            }
+        }
+        return components;
+    }
+
+    /**
      * Get alignment classes: groups of nodes connected by mutual zero-weight paths.
      * Returns a map from canonical representative to list of class members.
      * Classes with only one member are omitted.
      */
     getAlignmentClasses(): Map<string, string[]> {
-        // Find SCCs using Tarjan's or simpler approach: for each node, find its
-        // SCC by checking mutual reachability. For small graphs, nested BFS is fine.
         const classes = new Map<string, string[]>();
-        const assigned = new Set<string>();
-
-        for (const node of this.nodes) {
-            if (assigned.has(node)) continue;
-
-            // Find all nodes mutually reachable from this node (same SCC)
-            const forwardReachable = this.reachableSet(node);
-            const classMembers: string[] = [];
-
-            for (const candidate of forwardReachable) {
-                if (this.canReach(candidate, node)) {
-                    classMembers.push(candidate);
-                }
-            }
-
-            if (classMembers.length > 1) {
-                classMembers.sort(); // deterministic
-                const representative = classMembers[0];
-                classes.set(representative, classMembers);
-                for (const m of classMembers) assigned.add(m);
-            } else {
-                assigned.add(node);
+        for (const comp of this.tarjanSCCs()) {
+            if (comp.length > 1) {
+                comp.sort(); // deterministic
+                classes.set(comp[0], comp);
             }
         }
-
         return classes;
     }
 
     /** Get the alignment class (SCC) containing the given node. */
     getAlignmentClassOf(nodeId: string): string[] {
-        const forward = this.reachableSet(nodeId);
-        const members: string[] = [];
-        for (const candidate of forward) {
-            if (this.canReach(candidate, nodeId)) {
-                members.push(candidate);
-            }
+        for (const comp of this.tarjanSCCs()) {
+            if (comp.includes(nodeId)) return comp;
         }
-        return members;
-    }
-
-    /** Get all nodes reachable from `start` via any edges. */
-    private reachableSet(start: string): Set<string> {
-        const visited = new Set<string>();
-        const queue: string[] = [start];
-        visited.add(start);
-        while (queue.length > 0) {
-            const cur = queue.shift()!;
-            const succs = this.adj.get(cur);
-            if (!succs) continue;
-            for (const s of succs.keys()) {
-                if (!visited.has(s)) {
-                    visited.add(s);
-                    queue.push(s);
-                }
-            }
-        }
-        return visited;
+        return [nodeId];
     }
 
     /**
@@ -727,8 +746,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
-        // Phase 5b: Build modal query state (must/can/cannot)
-        this.buildModalQueryState();
+        // Phase 5b: Modal query state (must/can/cannot) is built LAZILY on the
+        // first modal query (ensureModalQueryState). It is pure post-solve
+        // analysis over the must-graph snapshots and this.allDisjunctions —
+        // both frozen from here on — and profiling showed it dominating
+        // validation wall time (e.g. 78% on a 200-node conjunctive chain)
+        // while its only consumers (layout-evaluator, spytial-explorer) query
+        // interactively after render, and often never.
 
         // Phase 6: Alignment orders
         const implicitConstraints = this.computeAlignmentOrders();
@@ -3073,12 +3097,28 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Modal query computation ────────────────────────────────────────────
 
     /**
+     * Build modal state on first use. Safe to defer past validation because
+     * buildModalQueryState reads only the must-graph snapshots (taken before
+     * CDCL) and this.allDisjunctions (final after solveCDCL) — neither
+     * changes after validatePositionalConstraints returns. If validation
+     * failed (or never ran), the snapshots are null and modal queries keep
+     * their pre-existing behavior of returning empty/reflexive sets.
+     */
+    private modalStateBuilt = false;
+
+    private ensureModalQueryState(): void {
+        if (this.modalStateBuilt || !this.mustHGraph || !this.mustVGraph) return;
+        this.modalStateBuilt = true;
+        this.buildModalQueryState();
+    }
+
+    /**
      * Build the precomputed must-ordering pairs by:
      * 1. Starting with the conjunctive base (post-presolve snapshot)
      * 2. Strengthening via disjunction intersection: for each remaining disjunction,
      *    compute which orderings ALL alternatives agree on
      *
-     * Called once after successful validation (feasible layout).
+     * Called once, lazily, via ensureModalQueryState.
      */
     private buildModalQueryState(): void {
         if (!this.mustHGraph || !this.mustVGraph) return;
@@ -3115,17 +3155,20 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return pairs;
     }
 
-    /** Collect alignment equivalence classes from a graph. */
+    /** Collect alignment equivalence classes from a graph (one SCC pass). */
     private collectAlignmentClasses(graph: DifferenceConstraintGraph, nodeIds: string[]): Map<string, Set<string>> {
         const classes = new Map<string, Set<string>>();
         const realSet = new Set(nodeIds);
-        for (const id of nodeIds) {
-            const members = graph.getAlignmentClassOf(id);
-            const filtered = new Set<string>();
-            for (const m of members) {
-                if (m !== id && realSet.has(m)) filtered.add(m);
+        for (const id of nodeIds) classes.set(id, new Set());
+        for (const [, members] of graph.getAlignmentClasses()) {
+            const real = members.filter(m => realSet.has(m));
+            for (const m of real) {
+                const set = classes.get(m);
+                if (!set) continue;
+                for (const other of real) {
+                    if (other !== m) set.add(other);
+                }
             }
-            classes.set(id, filtered);
         }
         return classes;
     }
@@ -3278,6 +3321,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Derived from conjunctive entailment + disjunction intersection.
      */
     public getMust(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        this.ensureModalQueryState();
         const realNodeIds = new Set(this.nodes.map(n => n.id));
         const result = new Set<string>();
         if (!this.mustHPairs || !this.mustVPairs) return result;
@@ -3307,6 +3351,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * because it also catches infeasibility via zero-weight path chains.
      */
     public getCannot(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        this.ensureModalQueryState();
         const result = new Set<string>();
         result.add(nodeId); // reflexive exclusion
 
@@ -3353,6 +3398,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     /** Alignment equivalence class — nodes that MUST be aligned with nodeId. */
     public getMustAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        this.ensureModalQueryState();
         const classes = axis === 'x' ? this.mustHAlignmentClasses : this.mustVAlignmentClasses;
         return classes?.get(nodeId) ?? new Set();
     }
@@ -3373,6 +3419,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      *    e.g. "A =x B" alone would report that A and B can also be y-aligned.
      */
     public getCannotAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        this.ensureModalQueryState();
         const result = new Set<string>();
         result.add(nodeId); // X is not "aligned with itself" in the query sense
         const graph = axis === 'x' ? this.mustHGraph : this.mustVGraph;
