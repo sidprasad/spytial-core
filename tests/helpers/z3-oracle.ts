@@ -613,14 +613,53 @@ async function checkedSolve(solver: any, what: string): Promise<boolean> {
     return result === 'sat';
 }
 
+// ─── Modal propositions ─────────────────────────────────────────────────
+//
+// Atomic geometric propositions that can be conjoined onto the full model.
+// These are the building blocks for entailment cross-checks of the
+// validator's modal query API (getMust / getCannot / getCan / *Aligned):
+//   must P    ⟺  UNSAT(model ∧ ¬P)
+//   cannot P  ⟺  UNSAT(model ∧ P)
+//   can P     ⟺  SAT(model ∧ P)
+// `axis: 'x'` reads coordinates from the x vars and sizes from widths;
+// `axis: 'y'` from y vars and heights.
+export type OracleProp =
+    | { kind: 'coordLt'; axis: 'x' | 'y'; a: string; b: string }      // coord_a < coord_b
+    | { kind: 'coordGe'; axis: 'x' | 'y'; a: string; b: string }      // coord_a ≥ coord_b
+    | { kind: 'properBefore'; axis: 'x' | 'y'; a: string; b: string } // coord_a + size_a ≤ coord_b
+    | { kind: 'coordEq'; axis: 'x' | 'y'; a: string; b: string }      // coord_a = coord_b
+    | { kind: 'coordNeq'; axis: 'x' | 'y'; a: string; b: string };    // coord_a ≠ coord_b
+
+function compileProp(p: OracleProp, layout: InstanceLayout, vars: VarMap): Bool {
+    const ctx = z3Ctx;
+    const coord = (id: string) => vars.get(varName(id, p.axis));
+    const size = (id: string): number => {
+        const n = layout.nodes.find(node => node.id === id);
+        if (!n) throw new Z3OracleError(`Unknown node in oracle proposition: ${id}`);
+        return p.axis === 'x' ? n.width : n.height;
+    };
+    switch (p.kind) {
+        case 'coordLt': return coord(p.a).lt(coord(p.b));
+        case 'coordGe': return coord(p.a).ge(coord(p.b));
+        case 'properBefore': return coord(p.a).add(size(p.a)).le(coord(p.b));
+        case 'coordEq': return coord(p.a).eq(coord(p.b));
+        case 'coordNeq': return ctx.Not(coord(p.a).eq(coord(p.b)));
+    }
+}
+
 function buildModelChecked(
     layout: InstanceLayout,
     what: string,
     constraintOverride?: LayoutConstraint[],
+    extraProps?: OracleProp[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): { solver: any; vars: VarMap } {
     try {
-        return buildModel(layout, constraintOverride);
+        const built = buildModel(layout, constraintOverride);
+        for (const p of extraProps ?? []) {
+            built.solver.add(compileProp(p, layout, built.vars));
+        }
+        return built;
     } catch (e) {
         // Once the runtime has aborted, even AST construction throws — this is
         // the path that produced instant bogus "counterexamples" in CI.
@@ -635,8 +674,9 @@ async function attemptSolve(
     layout: InstanceLayout,
     what: string,
     constraintOverride?: LayoutConstraint[],
+    extraProps?: OracleProp[],
 ): Promise<boolean> {
-    const { solver } = buildModelChecked(layout, what, constraintOverride);
+    const { solver } = buildModelChecked(layout, what, constraintOverride, extraProps);
     return checkedSolve(solver, what);
 }
 
@@ -644,11 +684,12 @@ async function runSolve(
     layout: InstanceLayout,
     what: string,
     constraintOverride?: LayoutConstraint[],
+    extraProps?: OracleProp[],
 ): Promise<boolean> {
     assertNotPoisoned();
     await maybeRecycle();
     try {
-        return await attemptSolve(layout, what, constraintOverride);
+        return await attemptSolve(layout, what, constraintOverride, extraProps);
     } catch (e) {
         if (!(e instanceof Z3UnknownError) || poisonedBy) throw e;
         // A clean 'unknown' (memory ceiling, timeout) from a part-filled heap
@@ -660,7 +701,7 @@ async function runSolve(
         // eslint-disable-next-line no-console
         console.error(`[z3-oracle] retrying ${what} on a fresh module after: ${e}`);
         await recycleZ3(`'unknown' during ${what}`);
-        return attemptSolve(layout, what, constraintOverride);
+        return attemptSolve(layout, what, constraintOverride, extraProps);
     }
 }
 
@@ -683,4 +724,17 @@ export async function verifyFeasibleSubset(
     subset: LayoutConstraint[],
 ): Promise<boolean> {
     return runSolve(layout, 'verifyFeasibleSubset', subset);
+}
+
+/**
+ * Solve the FULL model (constraints, disjunctions, groups, non-overlap)
+ * conjoined with extra atomic propositions. This is the entailment probe
+ * for modal queries: `must P` holds iff solveZ3With(layout, [¬P]) is false;
+ * `can P` holds iff solveZ3With(layout, [P]) is true.
+ */
+export async function solveZ3With(
+    layout: InstanceLayout,
+    props: OracleProp[],
+): Promise<boolean> {
+    return runSolve(layout, 'solveZ3With', undefined, props);
 }

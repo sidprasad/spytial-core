@@ -65,8 +65,19 @@ async function checkAgainstOracle(layout: InstanceLayout): Promise<{
     const error = validator.validateConstraints();
     const validatorSat = error === null;
     let oracleSat: boolean;
+    let committedSat = true;
     try {
         oracleSat = await solveZ3(layout);
+
+        // On SAT the validator has committed its chosen disjunct alternatives
+        // plus implicit alignment orders into layoutV.constraints. Boolean
+        // agreement alone would miss a solver that answers SAT while committing
+        // an inconsistent set — so verify the committed conjunctive system too.
+        // (Group bbox variables are unconstrained in this relaxed check, so it
+        // can only under-report inconsistency, never false-alarm.)
+        if (validatorSat) {
+            committedSat = await verifyFeasibleSubset(layoutV, layoutV.constraints);
+        }
     } catch (e) {
         // Log the real cause directly: fast-check wraps predicate errors and
         // the reporter can drop the cause chain, leaving only a meaningless
@@ -76,6 +87,13 @@ async function checkAgainstOracle(layout: InstanceLayout): Promise<{
             `  ${describeLayout(layout)}`
         );
         throw e;
+    }
+    if (!committedSat) {
+        const detail =
+            `Validator said SAT but its committed constraint set is UNSAT per Z3 ` +
+            `(${layoutV.constraints.length} constraints)\n  ${describeLayout(layout)}`;
+        console.error(`[z3-oracle] ${detail}`);
+        throw new Error(detail);
     }
     return { validatorSat, oracleSat };
 }

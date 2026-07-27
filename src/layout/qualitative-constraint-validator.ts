@@ -903,18 +903,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const remaining: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            const regionPair = this.getDisjunctionRegionPair(disj);
-
-            // Already separated?
-            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
-                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
-                if (satisfyingAlt !== null) {
-                    for (const constraint of disj.alternatives[satisfyingAlt]) {
-                        this.addedConstraints.push(constraint);
-                    }
-                    this.prunedByTransitivity++;
-                    continue;
+            // Already satisfied? An alternative fully implied by the current
+            // graphs can be committed without adding edges (already entailed).
+            const impliedAlt = this.findImpliedAlternative(disj);
+            if (impliedAlt !== null) {
+                for (const constraint of disj.alternatives[impliedAlt]) {
+                    this.addedConstraints.push(constraint);
                 }
+                this.prunedByTransitivity++;
+                continue;
             }
 
             // Prune infeasible alternatives
@@ -1287,13 +1284,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // Geometric pruning helpers
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private areSeparated(idA: string, idB: string): boolean {
-        return (
-            this.hGraph.isOrdered(idA, idB) || this.hGraph.isOrdered(idB, idA) ||
-            this.vGraph.isOrdered(idA, idB) || this.vGraph.isOrdered(idB, idA)
-        );
-    }
-
     /**
      * Check if an alternative is feasible:
      * 1. No cycle (transitivity check)
@@ -1397,20 +1387,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // alignment conflicts are caught automatically by DifferenceConstraintGraph.addEdge
     // (which checks canReach for cycles through zero-weight alignment edges).
 
-    private getDisjunctionRegionPair(disj: DisjunctiveConstraint): [string, string] | null {
-        if (disj.alternatives.length === 0) return null;
-        const first = disj.alternatives[0][0];
-        if (isBoundingBoxConstraint(first)) return [first.node.id, `_group_${first.group.name}`];
-        if (isGroupBoundaryConstraint(first)) return [`_group_${first.groupA.name}`, `_group_${first.groupB.name}`];
-        if (isLeftConstraint(first)) return [first.left.id, first.right.id];
-        if (isTopConstraint(first)) return [first.top.id, first.bottom.id];
-        return null;
-    }
-
-    private findSatisfyingAlternative(disj: DisjunctiveConstraint, pair: [string, string]): number | null {
-        // Find an alternative whose constraints are all actually implied by
-        // the current ordering graphs (forward direction is ordered or alignment
-        // already holds).
+    /**
+     * Find an alternative whose constraints are ALL already implied by the
+     * current ordering graphs (forward direction is ordered or the alignment
+     * already holds). Only such an alternative may be committed WITHOUT adding
+     * its edges to the graphs — the facts are already entailed, so nothing can
+     * later contradict them undetected.
+     *
+     * There is deliberately NO "merely not contradicted" fallback here. The
+     * old fallback checked each constraint of an alternative against the
+     * graphs individually and committed the alternative without edges; the
+     * constraints could then contradict each other JOINTLY with the base
+     * (e.g. a negated-group tuple N1 <x N2 <x N0 against base N0 <x N1),
+     * producing a SAT verdict with an unsatisfiable committed constraint set.
+     * Caught by the Z3 committed-model cross-check in z3-equivalence.test.ts.
+     * Non-implied alternatives must go through the normal path, where commits
+     * add graph edges (addConjunctiveConstraint / tryAssign).
+     */
+    private findImpliedAlternative(disj: DisjunctiveConstraint): number | null {
         for (let i = 0; i < disj.alternatives.length; i++) {
             let allImplied = true;
             for (const constraint of disj.alternatives[i]) {
@@ -1427,32 +1421,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 if (!graph.isOrdered(edge.from, edge.to)) { allImplied = false; break; }
             }
             if (allImplied) return i;
-        }
-        // Fallback: if no alternative is fully implied, find one that's at least
-        // not contradicted. Must also check alignment conflicts — an ordering
-        // between aligned nodes is contradicted even if no reverse edge exists.
-        // With zero-weight alignment edges, isStrictlyOrdered catches this:
-        // ordering aligned nodes would create a negative cycle through the
-        // zero-weight alignment path.
-        for (let i = 0; i < disj.alternatives.length; i++) {
-            let feasible = true;
-            for (const constraint of disj.alternatives[i]) {
-                if (isAlignmentConstraint(constraint)) {
-                    const ac = constraint as AlignmentConstraint;
-                    const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-                    // Alignment is contradicted if the nodes are strictly ordered
-                    if (graph.isStrictlyOrdered(ac.node1.id, ac.node2.id) || graph.isStrictlyOrdered(ac.node2.id, ac.node1.id)) {
-                        feasible = false; break;
-                    }
-                    continue;
-                }
-                const edge = this.constraintToEdge(constraint);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                // Contradicted by reverse ordering (including through alignment paths)?
-                if (graph.canReach(edge.to, edge.from)) { feasible = false; break; }
-            }
-            if (feasible) return i;
         }
         return null;
     }
@@ -2108,13 +2076,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const pruned: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            const regionPair = this.getDisjunctionRegionPair(disj);
-            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
-                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
-                if (satisfyingAlt !== null) {
-                    for (const c of disj.alternatives[satisfyingAlt]) this.addedConstraints.push(c);
-                    continue;
-                }
+            const impliedAlt = this.findImpliedAlternative(disj);
+            if (impliedAlt !== null) {
+                for (const c of disj.alternatives[impliedAlt]) this.addedConstraints.push(c);
+                continue;
             }
 
             const validAlternatives: LayoutConstraint[][] = [];
@@ -3396,19 +3361,33 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Nodes that CANNOT be aligned with nodeId on the given axis.
      *
      * Feasibility check: adding alignment(X, Y) means zero-weight edges in both
-     * directions. This is infeasible if there's a strict ordering between them
-     * (isStrictlyOrdered in either direction), because the zero-weight cycle
-     * would contradict the positive-weight edge.
+     * directions. This is infeasible if:
+     * 1. There's a strict ordering between them (isStrictlyOrdered in either
+     *    direction) — the zero-weight cycle would contradict the positive-weight
+     *    edge; or
+     * 2. Merging their alignment classes on this axis would put two distinct
+     *    nodes that are aligned on the OTHER axis into the same class —
+     *    dual-axis alignment forces identical positions, i.e. node overlap.
+     *    This is the same rule the solver applies in isAlternativeFeasible
+     *    (classHasDualAxisOverlap); without it getCanAligned over-claims,
+     *    e.g. "A =x B" alone would report that A and B can also be y-aligned.
      */
     public getCannotAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
         const result = new Set<string>();
         result.add(nodeId); // X is not "aligned with itself" in the query sense
         const graph = axis === 'x' ? this.mustHGraph : this.mustVGraph;
+        const otherGraph = axis === 'x' ? this.mustVGraph : this.mustHGraph;
         if (!graph) return result;
 
         for (const n of this.nodes) {
             if (n.id === nodeId) continue;
             if (graph.isStrictlyOrdered(nodeId, n.id) || graph.isStrictlyOrdered(n.id, nodeId)) {
+                result.add(n.id);
+                continue;
+            }
+            if (otherGraph && QualitativeConstraintValidator.classHasDualAxisOverlap(
+                graph, otherGraph, nodeId, n.id, false,
+            )) {
                 result.add(n.id);
             }
         }
