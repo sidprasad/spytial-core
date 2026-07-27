@@ -970,6 +970,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * two value domains never mix.
      */
     private altVerdictCache: Map<DisjunctiveConstraint, AltVerdictEntry> = new Map();
+    /**
+     * Positional memo of altVerdictCache for the graphPropagate scan, which
+     * revisits every unassigned disjunction each pass (~300k Map probes on the
+     * 10-group benchmark). verdictEntryDisj holds the disjunction the slot was
+     * filled from, and the scan only trusts a slot when that object is still
+     * identical — so a reshaped allDisjunctions can never alias the wrong
+     * entry, independent of the explicit clears.
+     */
+    private verdictEntryByIndex: (AltVerdictEntry | null)[] = [];
+    private verdictEntryDisj: (DisjunctiveConstraint | null)[] = [];
     /** (axis, from, to) probe → verdicts whose feasibility it supports. */
     private probeIndex: Map<string, { entry: AltVerdictEntry; aIdx: number }[]> = new Map();
     /** Bumped whenever a graph reports unknown reachability deltas. */
@@ -1986,16 +1996,46 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // (and stale-FEASIBLE verdicts can only over-count, never force a
             // wrong alternative or fabricate a conflict).
             this.consumeGraphDeltas();
+
             for (let d = 0; d < this.allDisjunctions.length; d++) {
                 if (assigned[d] !== -1) continue;
 
                 const disj = this.allDisjunctions[d];
+                // Re-read per disjunction, not per pass: a tryAssign below can
+                // both add and REMOVE edges (a partially-applied alternative is
+                // rolled back), and a stale remove-stamp would keep an
+                // INFEASIBLE verdict alive across a removal — under-counting
+                // feasible alternatives, which could fabricate a conflict.
+                // Alternatives of one disjunction are only read, never mutated
+                // between, so this granularity is exactly right.
+                //
+                // Zero-weight ordering edges break the monotonicity invariants
+                // the cache relies on — bypass it entirely then (the memoized
+                // reachability inside isAlternativeFeasible is still
+                // exact-version-safe, so results stay correct, just slower).
+                const bypassCache = this.hGraph.hasZeroWeightOrderingEdge
+                    || this.vGraph.hasZeroWeightOrderingEdge;
+                const curAdd = this.hGraph.addVersion + this.vGraph.addVersion;
+                const curRem = this.hGraph.removeVersion + this.vGraph.removeVersion;
+                let entry: AltVerdictEntry | null = null;
+                if (!bypassCache) {
+                    if (this.verdictEntryDisj[d] === disj) {
+                        entry = this.verdictEntryByIndex[d];
+                    } else {
+                        entry = this.verdictEntryFor(disj);
+                        this.verdictEntryDisj[d] = disj;
+                        this.verdictEntryByIndex[d] = entry;
+                    }
+                }
 
                 let feasibleCount = 0;
                 let lastFeasibleIdx = -1;
 
                 for (let a = 0; a < disj.alternatives.length; a++) {
-                    if (this.isAlternativeFeasibleCached(disj, a)) {
+                    const feasible = entry === null
+                        ? this.isAlternativeFeasible(disj.alternatives[a])
+                        : this.altFeasibleCached(disj, entry, a, curAdd, curRem);
+                    if (feasible) {
                         feasibleCount++;
                         lastFeasibleIdx = a;
                     }
@@ -2088,15 +2128,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return hasAlignment;
     }
 
-    /** Cached isAlternativeFeasible — validity rules documented at altVerdictCache. */
-    private isAlternativeFeasibleCached(disj: DisjunctiveConstraint, aIdx: number): boolean {
-        // Zero-weight ordering edges break the monotonicity invariants the
-        // cache relies on — bypass it entirely (memoized reachability inside
-        // isAlternativeFeasible remains exact-version-safe).
-        if (this.hGraph.hasZeroWeightOrderingEdge || this.vGraph.hasZeroWeightOrderingEdge) {
-            return this.isAlternativeFeasible(disj.alternatives[aIdx]);
-        }
-
+    /** Fetch the verdict-cache entry for a disjunction, creating and registering its probes on first use. */
+    private verdictEntryFor(disj: DisjunctiveConstraint): AltVerdictEntry {
         let entry = this.altVerdictCache.get(disj);
         if (!entry) {
             const n = disj.alternatives.length;
@@ -2111,10 +2144,23 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             }
             this.altVerdictCache.set(disj, entry);
         }
-        const curRem = this.hGraph.removeVersion + this.vGraph.removeVersion;
-        const addKey = entry.hasAlignment[aIdx]
-            ? this.hGraph.addVersion + this.vGraph.addVersion
-            : this.additionEpoch;
+        return entry;
+    }
+
+    /**
+     * Cached isAlternativeFeasible for one alternative of an already-fetched
+     * entry — validity rules documented at altVerdictCache. Split from the
+     * entry lookup so the scan in graphPropagate pays one Map probe per
+     * disjunction instead of one per alternative.
+     */
+    private altFeasibleCached(
+        disj: DisjunctiveConstraint,
+        entry: AltVerdictEntry,
+        aIdx: number,
+        curAdd: number,
+        curRem: number,
+    ): boolean {
+        const addKey = entry.hasAlignment[aIdx] ? curAdd : this.additionEpoch;
 
         const v = entry.verdict[aIdx];
         // Feasible: stable under removals; add-side staleness is handled by
@@ -2719,6 +2765,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // edge that an undo path had over-eagerly removed.
         this.altVerdictCache.clear();
         this.probeIndex.clear();
+        this.verdictEntryByIndex.length = 0;
+        this.verdictEntryDisj.length = 0;
         this.additionEpoch++;
     }
 
@@ -3657,6 +3705,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.assignmentTrail = [];
         this.altVerdictCache.clear();
         this.probeIndex.clear();
+        this.verdictEntryByIndex.length = 0;
+        this.verdictEntryDisj.length = 0;
         this.lastPropagateOkStamp = -1;
     }
 
