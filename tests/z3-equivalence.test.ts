@@ -36,6 +36,7 @@ import {
     aboveOf,
     alignOnX,
     alignOnY,
+    makeNode,
     parseConstraintSpec,
     SRC,
 } from './helpers/constraint-dsl';
@@ -52,7 +53,7 @@ import {
     arbMixedOrdering,
     arbGroup,
 } from './helpers/constraint-arbitraries';
-import type { LayoutGroup } from '../src/layout/interfaces';
+import type { LayoutGroup, LayoutNode } from '../src/layout/interfaces';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,76 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                         }
                     }
                     const layout = buildLayout(nodes, [], disjs);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: 30, timeout: TIMEOUT });
+        });
+
+        // ── Duplicate-pair alternatives (edge undo integrity) ──────────
+        // Alternatives that DUPLICATE a base constraint's pair (with an equal
+        // or smaller distance) exercise addEdge's redundant path; combined
+        // with a cycle-closing reversal in the same alternative, the undo of
+        // the failed tryAssign used to blind-delete the shared base edge,
+        // corrupting the graph mid-search (SAT verdicts with cyclic committed
+        // sets). The plain generators above never emit duplicate pairs, which
+        // is how this survived them.
+
+        it('duplicate + cycle-closer alternative deletes no base edge — UNSAT (Z3 cross-check)', async () => {
+            const N0 = makeNode('N0', 52, 89), N3 = makeNode('N3', 89, 85);
+            const N1 = makeNode('N1', 60, 40), N2 = makeNode('N2', 60, 40);
+            const dup = (a: LayoutNode, b: LayoutNode, d: number): LayoutConstraint =>
+                ({ left: a, right: b, minDistance: d, sourceConstraint: SRC });
+            const layout = buildLayout(
+                [N0, N1, N2, N3],
+                [dup(N0, N3, 20)],
+                [new DisjunctiveConstraint(SRC, [
+                    [dup(N0, N3, 13), dup(N3, N0, 5)],
+                    [dup(N3, N0, 5), dup(N1, N2, 5)],
+                ])],
+            );
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('random duplicate-pair and reversed-pair alternatives (Z3 cross-check)', async () => {
+            const dupOf = (c: LayoutConstraint, delta: number): LayoutConstraint => {
+                const anyC = c as any;
+                return anyC.left
+                    ? { left: anyC.left, right: anyC.right, minDistance: Math.max(0, anyC.minDistance - delta), sourceConstraint: SRC }
+                    : { top: anyC.top, bottom: anyC.bottom, minDistance: Math.max(0, anyC.minDistance - delta), sourceConstraint: SRC };
+            };
+            const revOf = (c: LayoutConstraint, d: number): LayoutConstraint => {
+                const anyC = c as any;
+                return anyC.left
+                    ? { left: anyC.right, right: anyC.left, minDistance: d, sourceConstraint: SRC }
+                    : { top: anyC.bottom, bottom: anyC.top, minDistance: d, sourceConstraint: SRC };
+            };
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(4).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 1, maxLength: 2 }),
+                        fc.array(fc.record({
+                            baseIdx: fc.nat(3),
+                            dupDelta: fc.nat(15),
+                            revDist: fc.nat(20),
+                            benign: arbOrdering(nodes),
+                            benignOnlySecond: fc.boolean(),
+                        }), { minLength: 1, maxLength: 3 }),
+                    )
+                ),
+                async ([nodes, base, specs]) => {
+                    const disjs = specs.map(spec => {
+                        const target = base[spec.baseIdx % base.length];
+                        const altA = [dupOf(target, spec.dupDelta), revOf(target, spec.revDist)];
+                        const altB = spec.benignOnlySecond
+                            ? [spec.benign, dupOf(target, spec.dupDelta)]
+                            : [revOf(target, spec.revDist), spec.benign];
+                        return new DisjunctiveConstraint(SRC, [altA, altB]);
+                    });
+                    const layout = buildLayout(nodes, base, disjs);
                     const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
                     assertAgreement(layout, validatorSat, oracleSat);
                 }

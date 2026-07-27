@@ -124,6 +124,18 @@ class DifferenceConstraintGraph {
     private edgeProvenance: Map<string, LayoutConstraint> = new Map();
     /** Reference count for alignment edge pairs (key: "a\x00b" with a < b lexicographically). */
     private alignmentRefCount: Map<string, number> = new Map();
+    /**
+     * Multiset of active claim weights per directed edge (key: "a\x00b").
+     * Every successful addEdge registers a claim — including the redundant
+     * path (an equal-or-tighter edge already exists) and the tightening path
+     * (which displaces a smaller weight). The stored edge weight is always the
+     * max of its claims. removeEdgeClaim releases one claim and restores the
+     * edge to the strongest remaining claim (or deletes it when none remain).
+     * Without this, undoing an assignment whose constraint duplicated an
+     * existing pair blindly deleted the shared edge — dropping a base
+     * constraint or another assigned alternative's edge from the graph.
+     */
+    private edgeClaims: Map<string, number[]> = new Map();
     private gap: number;
 
     /**
@@ -205,6 +217,7 @@ class DifferenceConstraintGraph {
         g.nodeSize = new Map(this.nodeSize);
         g.edgeProvenance = new Map(this.edgeProvenance);
         g.alignmentRefCount = new Map(this.alignmentRefCount);
+        for (const [k, ws] of this.edgeClaims) g.edgeClaims.set(k, [...ws]);
         g.hasZeroWeightOrderingEdge = this.hasZeroWeightOrderingEdge;
         // Fresh stamps (from the constructor) — the clone is a new object with
         // an empty memo and no cached verdicts keyed on it, so it must not
@@ -257,7 +270,10 @@ class DifferenceConstraintGraph {
         if (a === b) return false;
         const existing = this.adj.get(a)!.get(b);
         if (existing !== undefined && w <= existing) {
-            // Edge exists with equal or tighter weight — redundant, no change needed
+            // Edge exists with equal or tighter weight — no graph change, but
+            // the claim must be registered so a later removeEdgeClaim releases
+            // THIS add instead of deleting the edge someone else still needs.
+            this.registerClaim(a, b, w);
             return true;
         }
         // For new edges or tightening: check if a return path b→...→a exists.
@@ -300,8 +316,66 @@ class DifferenceConstraintGraph {
             this.adj.get(a)!.set(b, w);
             this.radj.get(b)!.set(a, w);
         }
+        this.registerClaim(a, b, w);
         if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
         return true;
+    }
+
+    private registerClaim(a: string, b: string, w: number): void {
+        const key = DifferenceConstraintGraph.provenanceKey(a, b);
+        const claims = this.edgeClaims.get(key);
+        if (claims) claims.push(w);
+        else this.edgeClaims.set(key, [w]);
+    }
+
+    /**
+     * Release one claim on edge a → b, mirroring an earlier addEdge with the
+     * same raw weight (the stored claim is `(weight ?? gap) + size(a)`, the
+     * same formula addEdge applies). The edge survives at the strongest
+     * remaining claim's weight; it is physically deleted only when the last
+     * claim is released. A missing claim is a no-op — that add never took
+     * effect (e.g. a cycle-rejected member edge of a BoundingBox alternative).
+     *
+     * This replaces the old blind removeEdge, which deleted unconditionally
+     * and thereby destroyed edges still required by a base constraint or
+     * another assigned alternative whenever an undone constraint duplicated
+     * their pair (validator reported SAT with a cyclic committed set —
+     * caught by the Z3 committed-set cross-check).
+     */
+    removeEdgeClaim(a: string, b: string, weight?: number): void {
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
+        const key = DifferenceConstraintGraph.provenanceKey(a, b);
+        const claims = this.edgeClaims.get(key);
+        if (!claims) return;
+        const idx = claims.indexOf(w);
+        if (idx === -1) return;
+        claims.splice(idx, 1);
+
+        if (claims.length === 0) {
+            this.edgeClaims.delete(key);
+            if (this.adj.get(a)?.delete(b)) {
+                this.radj.get(b)?.delete(a);
+                this.removeVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+            this.edgeProvenance.delete(key);
+            return;
+        }
+
+        let newW = -Infinity;
+        for (const c of claims) { if (c > newW) newW = c; }
+        const cur = this.adj.get(a)?.get(b);
+        if (cur !== undefined && newW < cur) {
+            this.adj.get(a)!.set(b, newW);
+            this.radj.get(b)!.set(a, newW);
+            if (cur > 0 && newW <= 0) {
+                // Strict-orderedness may have shrunk — removal-like event for
+                // the reachability caches. (Positive→positive decreases change
+                // neither reachability nor strictness: no bump needed.)
+                this.removeVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+        }
     }
 
     /**
@@ -343,15 +417,6 @@ class DifferenceConstraintGraph {
                 }
             }
         }
-    }
-
-    removeEdge(a: string, b: string): void {
-        if (this.adj.get(a)?.delete(b)) {
-            this.radj.get(b)?.delete(a);
-            this.removeVersion = nextGraphStamp++;
-            this.markDeltasUnknown();
-        }
-        this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
     }
 
     hasEdge(a: string, b: string): boolean {
@@ -2183,29 +2248,49 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
     }
 
+    /**
+     * Undo of addQualitativeEdge, releasing exactly the claims that add took
+     * (claim-based so shared edges survive — see removeEdgeClaim). The
+     * BoundingBox case mirrors the add's Rule C loop: the add creates the
+     * node↔group edge AND per-member edges, so the undo must release the
+     * member claims too — the old code removed only the group edge, leaving
+     * the member edges behind after backtracking (over-constrained graph).
+     */
     private removeQualitativeEdge(constraint: LayoutConstraint): void {
         if (isLeftConstraint(constraint)) {
-            this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
+            this.hGraph.removeEdgeClaim(constraint.left.id, constraint.right.id, constraint.minDistance);
         } else if (isTopConstraint(constraint)) {
-            this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
+            this.vGraph.removeEdgeClaim(constraint.top.id, constraint.bottom.id, constraint.minDistance);
         } else if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const groupId = `_group_${bc.group.name}`;
             switch (bc.side) {
-                case 'left':   this.hGraph.removeEdge(bc.node.id, groupId); break;
-                case 'right':  this.hGraph.removeEdge(groupId, bc.node.id); break;
-                case 'top':    this.vGraph.removeEdge(bc.node.id, groupId); break;
-                case 'bottom': this.vGraph.removeEdge(groupId, bc.node.id); break;
+                case 'left':
+                    this.hGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance);
+                    break;
+                case 'right':
+                    this.hGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance);
+                    break;
+                case 'top':
+                    this.vGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance);
+                    break;
+                case 'bottom':
+                    this.vGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance);
+                    break;
             }
         } else if (isGroupBoundaryConstraint(constraint)) {
             const gc = constraint as GroupBoundaryConstraint;
             const gAId = `_group_${gc.groupA.name}`;
             const gBId = `_group_${gc.groupB.name}`;
             switch (gc.side) {
-                case 'left':   this.hGraph.removeEdge(gAId, gBId); break;
-                case 'right':  this.hGraph.removeEdge(gBId, gAId); break;
-                case 'top':    this.vGraph.removeEdge(gAId, gBId); break;
-                case 'bottom': this.vGraph.removeEdge(gBId, gAId); break;
+                case 'left':   this.hGraph.removeEdgeClaim(gAId, gBId, gc.minDistance); break;
+                case 'right':  this.hGraph.removeEdgeClaim(gBId, gAId, gc.minDistance); break;
+                case 'top':    this.vGraph.removeEdgeClaim(gAId, gBId, gc.minDistance); break;
+                case 'bottom': this.vGraph.removeEdgeClaim(gBId, gAId, gc.minDistance); break;
             }
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
