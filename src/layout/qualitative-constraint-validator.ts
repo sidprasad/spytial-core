@@ -913,7 +913,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private assignmentTrail: Assignment[] = [];
     private decisionLevel: number = 0;
     private learnedClauses: LearnedClause[] = [];
-    private activity: Map<string, number> = new Map();
+    /**
+     * VSIDS activity, indexed by `disjunctionIndex * branchStride +
+     * alternativeIndex` (replaces a `d${d}a${a}`-keyed Map: pickBranch built
+     * one string per alternative per call — ~1.2M allocations on the 10-group
+     * benchmark). The stride never shrinks, so an entry keeps its (d, a)
+     * identity across restarts exactly as the string keys did.
+     */
+    private activityFlat: Float64Array = new Float64Array(0);
+    /** Branching tiebreaker 1/(1 + altLength), same indexing as activityFlat. */
+    private simplicityFlat: Float64Array = new Float64Array(0);
+    /** Reusable scratch for pickBranch's learned-clause elimination bitmap. */
+    private elimScratch: Uint8Array = new Uint8Array(0);
+    private branchStride = 0;
     private activityDecay: number = 0.95;
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
@@ -1773,11 +1785,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
 
-        for (let d = 0; d < this.allDisjunctions.length; d++) {
-            for (let a = 0; a < this.allDisjunctions[d].alternatives.length; a++) {
-                this.activity.set(`d${d}a${a}`, 0);
-            }
-        }
+        this.rebuildBranchIndex(true);
 
         const initialCheckpoint = this.checkpoint();
         const initialAddedLength = this.addedConstraints.length;
@@ -1796,6 +1804,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 this.pruneDisjunctions();
                 if (this.allDisjunctions.length === 0) return { satisfiable: true };
                 assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
+                // Pruning reshapes allDisjunctions; refresh the simplicity terms
+                // for the new shape but keep accumulated activity (the old
+                // index-keyed Map behaved the same way).
+                this.rebuildBranchIndex(false);
             }
 
             const result = this.cdclSearchLoop(assigned);
@@ -2506,17 +2518,108 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Decision heuristic (VSIDS + simplicity, from V1) ───────────────────
 
+    /**
+     * (Re)build the flat branching arrays for the current allDisjunctions.
+     * `reset` zeroes activity (start of a solve); restarts keep it.
+     * The stride only ever grows, so an alternative's slot keeps its (d, a)
+     * identity — matching the old index-keyed activity Map.
+     */
+    private rebuildBranchIndex(reset: boolean): void {
+        const numD = this.allDisjunctions.length;
+        let maxAlts = 1;
+        for (const disj of this.allDisjunctions) {
+            if (disj.alternatives.length > maxAlts) maxAlts = disj.alternatives.length;
+        }
+
+        if (maxAlts > this.branchStride) {
+            const oldStride = this.branchStride;
+            const oldAct = this.activityFlat;
+            this.branchStride = maxAlts;
+            this.activityFlat = new Float64Array(Math.max(numD, 1) * maxAlts);
+            if (oldStride > 0 && !reset) {
+                const oldD = Math.floor(oldAct.length / oldStride);
+                for (let d = 0; d < oldD && d < numD; d++) {
+                    for (let a = 0; a < oldStride; a++) {
+                        this.activityFlat[d * maxAlts + a] = oldAct[d * oldStride + a];
+                    }
+                }
+            }
+        } else if (numD * this.branchStride > this.activityFlat.length) {
+            const grown = new Float64Array(numD * this.branchStride);
+            if (!reset) grown.set(this.activityFlat);
+            this.activityFlat = grown;
+        } else if (reset) {
+            this.activityFlat.fill(0);
+        }
+
+        const size = Math.max(numD, 1) * this.branchStride;
+        if (this.simplicityFlat.length < size) {
+            this.simplicityFlat = new Float64Array(size);
+            this.elimScratch = new Uint8Array(size);
+        }
+        this.simplicityFlat.fill(0);
+        for (let d = 0; d < numD; d++) {
+            const alts = this.allDisjunctions[d].alternatives;
+            const base = d * this.branchStride;
+            for (let a = 0; a < alts.length; a++) {
+                this.simplicityFlat[base + a] = 1.0 / (1 + alts[a].length);
+            }
+        }
+    }
+
+    /** Activity for (d, a), 0 when out of range — mirrors the old `?? 0`. */
+    private activityAt(d: number, a: number): number {
+        const i = d * this.branchStride + a;
+        return i >= 0 && i < this.activityFlat.length ? this.activityFlat[i] : 0;
+    }
+
+    /**
+     * Mark alternatives eliminated by learned clauses, for ALL disjunctions in
+     * one pass over the clause list. getRemainingAlternatives did this per
+     * disjunction — O(D · C · L) per pickBranch call, allocating a Set and an
+     * array each time; this is O(C · L) into a reused bitmap. Returns null
+     * when there are no learned clauses (nothing can be eliminated).
+     */
+    private computeEliminatedFlags(assigned: Int32Array): Uint8Array | null {
+        if (this.learnedClauses.length === 0) return null;
+        const elim = this.elimScratch;
+        elim.fill(0);
+        const stride = this.branchStride;
+        for (const clause of this.learnedClauses) {
+            for (const lit of clause) {
+                if (lit.sign) continue;
+                const idx = lit.disjunctionIndex * stride + lit.alternativeIndex;
+                // Stale index from a pre-restart clause, or already eliminated.
+                if (idx < 0 || idx >= elim.length || elim[idx] === 1) continue;
+                let allOthersFalse = true;
+                for (const l of clause) {
+                    if (l === lit) continue;
+                    const cur = assigned[l.disjunctionIndex];
+                    if (cur === -1
+                        || (l.sign ? cur === l.alternativeIndex : cur !== l.alternativeIndex)) {
+                        allOthersFalse = false;
+                        break;
+                    }
+                }
+                if (allOthersFalse) elim[idx] = 1;
+            }
+        }
+        return elim;
+    }
+
     private pickBranch(assigned: Int32Array): { dIdx: number; aIdx: number } {
         let bestDIdx = -1, bestAIdx = -1, bestScore = -1;
+        const elim = this.computeEliminatedFlags(assigned);
+        const stride = this.branchStride;
 
         for (let d = 0; d < this.allDisjunctions.length; d++) {
             if (assigned[d] !== -1) continue;
-            // Only consider alternatives not eliminated by learned clauses
-            const remaining = this.getRemainingAlternatives(d, assigned);
-            const disj = this.allDisjunctions[d];
-            for (const a of remaining) {
-                const score = (this.activity.get(`d${d}a${a}`) ?? 0)
-                    + 1.0 / (1 + disj.alternatives[a].length);
+            const alts = this.allDisjunctions[d].alternatives;
+            const base = d * stride;
+            for (let a = 0; a < alts.length; a++) {
+                // Only consider alternatives not eliminated by learned clauses
+                if (elim !== null && elim[base + a] === 1) continue;
+                const score = this.activityFlat[base + a] + this.simplicityFlat[base + a];
                 if (score > bestScore) {
                     bestScore = score;
                     bestDIdx = d;
@@ -2531,13 +2634,17 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private bumpActivity(clause: LearnedClause): void {
         for (const lit of clause) {
-            const key = `d${lit.disjunctionIndex}a${lit.alternativeIndex}`;
-            this.activity.set(key, (this.activity.get(key) ?? 0) + 1);
+            const i = lit.disjunctionIndex * this.branchStride + lit.alternativeIndex;
+            if (i >= 0 && i < this.activityFlat.length) this.activityFlat[i] += 1;
         }
     }
 
     private decayActivity(): void {
-        for (const [key, val] of this.activity) this.activity.set(key, val * this.activityDecay);
+        // Multiply-all, same as the old Map sweep (zero slots are unaffected),
+        // so branching order is bit-for-bit what it was.
+        const act = this.activityFlat;
+        const decay = this.activityDecay;
+        for (let i = 0; i < act.length; i++) act[i] *= decay;
     }
 
     // ─── Restart management ──────────────────────────────────────────────────
@@ -2837,8 +2944,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const sortedDisjunctions = [...disjSource].sort((a, b) => {
             const aIdx = disjSource.indexOf(a);
             const bIdx = disjSource.indexOf(b);
-            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activity.get(`d${aIdx}a${ai}`) ?? 0));
-            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activity.get(`d${bIdx}a${bi}`) ?? 0));
+            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activityAt(aIdx, ai)));
+            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activityAt(bIdx, bi)));
             // Stable tiebreaker: use original index when activity scores are equal
             return aMax - bMax || aIdx - bIdx;
         });
@@ -3543,7 +3650,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.hGraph = new DifferenceConstraintGraph(this.minPadding);
         this.vGraph = new DifferenceConstraintGraph(this.minPadding);
         this.learnedClauses = [];
-        this.activity.clear();
+        this.activityFlat = new Float64Array(0);
+        this.simplicityFlat = new Float64Array(0);
+        this.elimScratch = new Uint8Array(0);
+        this.branchStride = 0;
         this.assignmentTrail = [];
         this.altVerdictCache.clear();
         this.probeIndex.clear();
