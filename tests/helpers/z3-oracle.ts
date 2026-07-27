@@ -628,7 +628,8 @@ export type OracleProp =
     | { kind: 'coordGe'; axis: 'x' | 'y'; a: string; b: string }      // coord_a ≥ coord_b
     | { kind: 'properBefore'; axis: 'x' | 'y'; a: string; b: string } // coord_a + size_a ≤ coord_b
     | { kind: 'coordEq'; axis: 'x' | 'y'; a: string; b: string }      // coord_a = coord_b
-    | { kind: 'coordNeq'; axis: 'x' | 'y'; a: string; b: string };    // coord_a ≠ coord_b
+    | { kind: 'coordNeq'; axis: 'x' | 'y'; a: string; b: string }     // coord_a ≠ coord_b
+    | { kind: 'notProperBefore'; axis: 'x' | 'y'; a: string; b: string }; // coord_a + size_a ≥ coord_b
 
 function compileProp(p: OracleProp, layout: InstanceLayout, vars: VarMap): Bool {
     const ctx = z3Ctx;
@@ -651,6 +652,8 @@ function compileProp(p: OracleProp, layout: InstanceLayout, vars: VarMap): Bool 
         case 'properBefore': return coord(p.a).add(size(p.a)).le(coord(p.b));
         case 'coordEq': return coord(p.a).eq(coord(p.b));
         case 'coordNeq': return ctx.Not(coord(p.a).eq(coord(p.b)));
+        // Negation of properBefore — the refutation probe for a must-claim.
+        case 'notProperBefore': return coord(p.a).add(size(p.a)).ge(coord(p.b));
     }
 }
 
