@@ -60,7 +60,7 @@ let lastSolveMs = -1;
 let poisonedBy: string | null = null;
 
 export interface OracleStats {
-    /** Total solver.check() calls since the module was (re)initialized. */
+    /** Total solver.check() calls since the suite started (survives recycles). */
     solveCount: number;
     /** Wall time of the most recent completed check, in ms (-1 if none). */
     lastSolveMs: number;
@@ -68,6 +68,8 @@ export interface OracleStats {
     estimatedAllocBytes: number;
     /** Total Emscripten heap size in bytes (-1 if unavailable/dead). */
     heapBytes: number;
+    /** How many times the WASM module was proactively recycled (see below). */
+    recycles: number;
     /** Set once the WASM runtime aborts; all results after this are garbage. */
     poisonedBy: string | null;
 }
@@ -81,13 +83,13 @@ export function oracleStats(): OracleStats {
     } catch {
         // Runtime dead or not initialized — stats stay at -1.
     }
-    return { solveCount, lastSolveMs, estimatedAllocBytes, heapBytes, poisonedBy };
+    return { solveCount, lastSolveMs, estimatedAllocBytes, heapBytes, recycles: recycleCount, poisonedBy };
 }
 
 export function describeOracleStats(): string {
     const s = oracleStats();
     const mb = (b: number) => b < 0 ? '?' : (b / (1024 * 1024)).toFixed(1);
-    return `solve #${s.solveCount}, z3 alloc ≈ ${mb(s.estimatedAllocBytes)} MB / heap ${mb(s.heapBytes)} MB`;
+    return `solve #${s.solveCount}, z3 alloc ≈ ${mb(s.estimatedAllocBytes)} MB / heap ${mb(s.heapBytes)} MB, recycles ${s.recycles}`;
 }
 
 function assertNotPoisoned(): void {
@@ -109,6 +111,51 @@ function looksLikeRuntimeDeath(e: unknown): boolean {
     return e instanceof WebAssembly.RuntimeError || /Aborted|abort\(|OOM|unreachable/i.test(String(e));
 }
 
+// ─── OOM prevention ──────────────────────────────────────────────────────
+//
+// z3-solver frees Z3 ASTs via FinalizationRegistry — i.e. only when the JS GC
+// happens to run finalizers. Across a long suite (~1,000 solves) Z3's allocator
+// ratchets up ~0.8 MB/solve inside the fixed heap; whether a run OOMs is a race
+// between GC timing and allocation rate. Passing runs were observed peaking at
+// ~450–490 MB *estimated* alloc while the failing run hit the 2 GiB cliff
+// (fragmentation makes the real arena several times the estimate). Rather than
+// gamble on the GC, replace the whole WASM module once the estimate crosses
+// RECYCLE_ALLOC_BYTES: a fresh module starts from an empty heap, and the ~1s
+// init cost is paid at most a few times per run.
+
+const RECYCLE_ALLOC_BYTES = 256 * 1024 * 1024;
+let recycleCount = 0;
+
+async function recycleZ3(reason: string): Promise<void> {
+    // eslint-disable-next-line no-console
+    console.log(`[z3-oracle] recycling WASM module: ${reason}`);
+    terminateThreads();
+    z3Api = null;
+    Z3Context = null;
+    z3Ctx = null;
+    z3Initialized = false;
+    recycleCount++;
+    await freshModule();
+}
+
+async function maybeRecycle(): Promise<void> {
+    if (!z3Initialized) return;
+    const alloc = oracleStats().estimatedAllocBytes;
+    if (alloc >= RECYCLE_ALLOC_BYTES) {
+        const mb = (b: number) => (b / (1024 * 1024)).toFixed(1);
+        await recycleZ3(`alloc ${mb(alloc)} MB ≥ ${mb(RECYCLE_ALLOC_BYTES)} MB after ${solveCount} solves`);
+    }
+}
+
+/** Terminate the old module's pthread workers so it can be garbage-collected. */
+function terminateThreads(): void {
+    try {
+        z3Api?.em?.PThread?.terminateAllThreads?.();
+    } catch {
+        // Best effort — a dead runtime may throw here.
+    }
+}
+
 // ─── Initialization ──────────────────────────────────────────────────────
 
 export async function isZ3Available(): Promise<boolean> {
@@ -120,37 +167,26 @@ export async function isZ3Available(): Promise<boolean> {
     }
 }
 
-export async function initZ3(): Promise<void> {
-    if (z3Initialized) return;
+async function freshModule(): Promise<void> {
     z3Api = await init();
     Z3Context = z3Api.Context;
     z3Ctx = new Z3Context('oracle');
     z3Initialized = true;
     // A fresh init() instantiates a new WASM module, so prior death is cured.
-    solveCount = 0;
-    lastSolveMs = -1;
     poisonedBy = null;
 }
 
+export async function initZ3(): Promise<void> {
+    if (z3Initialized) return;
+    await freshModule();
+}
+
 export function shutdownZ3(): void {
+    terminateThreads();
     z3Initialized = false;
     z3Ctx = null;
     Z3Context = null;
     z3Api = null;
-}
-
-/** Create a fresh Z3 context, discarding accumulated WASM memory from prior solves. */
-export async function resetZ3(): Promise<void> {
-    if (!Z3Context) {
-        z3Api = await init();
-        Z3Context = z3Api.Context;
-        // Fresh WASM module (see initZ3).
-        solveCount = 0;
-        lastSolveMs = -1;
-        poisonedBy = null;
-    }
-    z3Ctx = new Z3Context('oracle');
-    z3Initialized = true;
 }
 
 // ─── ID sanitization ────────────────────────────────────────────────────
@@ -524,6 +560,7 @@ function buildModelChecked(
  */
 export async function solveZ3(layout: InstanceLayout): Promise<boolean> {
     assertNotPoisoned();
+    await maybeRecycle();
     const { solver } = buildModelChecked(layout, 'solveZ3');
     return checkedSolve(solver, 'solveZ3');
 }
@@ -537,6 +574,7 @@ export async function verifyFeasibleSubset(
     subset: LayoutConstraint[],
 ): Promise<boolean> {
     assertNotPoisoned();
+    await maybeRecycle();
     const { solver } = buildModelChecked(layout, 'verifyFeasibleSubset', subset);
     return checkedSolve(solver, 'verifyFeasibleSubset');
 }
