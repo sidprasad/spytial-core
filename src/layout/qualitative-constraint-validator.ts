@@ -379,12 +379,25 @@ class DifferenceConstraintGraph {
      * their pair (validator reported SAT with a cyclic committed set —
      * caught by the Z3 committed-set cross-check).
      */
-    removeEdgeClaim(a: string, b: string, weight?: number): void {
+    removeEdgeClaim(a: string, b: string, weight?: number, constraint?: LayoutConstraint): void {
         const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
         const key = DifferenceConstraintGraph.provenanceKey(a, b);
         const claims = this.edgeClaims.get(key);
         if (!claims) return;
-        const idx = claims.findIndex(claim => claim.w === w);
+        // Match the RELEASING constraint's own claim, not just any claim of the
+        // same weight: two distinct constraints can claim one edge at the same
+        // weight (equal minDistance on the same pair), and dropping the wrong
+        // record leaves the released constraint's claim alive — so provenance
+        // then names a constraint that is off the trail while the still-active
+        // one goes unnamed, which is exactly the omitted-literal case that
+        // makes a learned clause stronger than its conflict.
+        //
+        // Identity matching also makes a missed claim a true no-op: a member
+        // edge whose add was cycle-rejected registers nothing, and weight-only
+        // matching could have released some other constraint's claim instead.
+        const idx = constraint !== undefined
+            ? claims.findIndex(claim => claim.w === w && claim.c === constraint)
+            : claims.findIndex(claim => claim.w === w);
         if (idx === -1) return;
         claims.splice(idx, 1);
 
@@ -2379,28 +2392,28 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      */
     private removeQualitativeEdge(constraint: LayoutConstraint): void {
         if (isLeftConstraint(constraint)) {
-            this.hGraph.removeEdgeClaim(constraint.left.id, constraint.right.id, constraint.minDistance);
+            this.hGraph.removeEdgeClaim(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
         } else if (isTopConstraint(constraint)) {
-            this.vGraph.removeEdgeClaim(constraint.top.id, constraint.bottom.id, constraint.minDistance);
+            this.vGraph.removeEdgeClaim(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
         } else if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const groupId = `_group_${bc.group.name}`;
             switch (bc.side) {
                 case 'left':
-                    this.hGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance);
-                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance);
+                    this.hGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance, constraint);
                     break;
                 case 'right':
-                    this.hGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance);
-                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance);
+                    this.hGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance, constraint);
                     break;
                 case 'top':
-                    this.vGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance);
-                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance);
+                    this.vGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance, constraint);
                     break;
                 case 'bottom':
-                    this.vGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance);
-                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance);
+                    this.vGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance, constraint);
                     break;
             }
         } else if (isGroupBoundaryConstraint(constraint)) {
@@ -2408,10 +2421,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const gAId = `_group_${gc.groupA.name}`;
             const gBId = `_group_${gc.groupB.name}`;
             switch (gc.side) {
-                case 'left':   this.hGraph.removeEdgeClaim(gAId, gBId, gc.minDistance); break;
-                case 'right':  this.hGraph.removeEdgeClaim(gBId, gAId, gc.minDistance); break;
-                case 'top':    this.vGraph.removeEdgeClaim(gAId, gBId, gc.minDistance); break;
-                case 'bottom': this.vGraph.removeEdgeClaim(gBId, gAId, gc.minDistance); break;
+                case 'left':   this.hGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
+                case 'right':  this.hGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
+                case 'top':    this.vGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
+                case 'bottom': this.vGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
             }
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;

@@ -113,6 +113,45 @@ describe('Edge undo integrity (claim-based add/remove)', () => {
             expect(v.hGraph.getEdgeProvenance('A', 'B')).toBeUndefined();
         });
 
+        it('releases the releasing constraint own claim when weights collide', () => {
+            // Two DISTINCT constraints on the same pair with the same
+            // minDistance produce claims of equal weight. Matching a release by
+            // weight alone drops the first record, leaving the just-released
+            // constraint's claim alive — so provenance names an off-trail
+            // constraint while the still-active one goes unnamed, and conflict
+            // analysis omits its literal.
+            const A = node('A'), B = node('B');
+            const v = rig({ nodes: [A, B], edges: [], constraints: [], groups: [] });
+
+            const first = leftOf(A, B, 15);
+            const second = leftOf(A, B, 15); // distinct object, identical weight
+            v.addQualitativeEdge(first);
+            v.addQualitativeEdge(second);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(first); // ties keep earliest
+
+            v.removeQualitativeEdge(second);
+            expect(v.hGraph.hasEdge('A', 'B')).toBe(true);
+            // Must name `first`, which still holds the edge — not `second`.
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(first);
+
+            v.removeQualitativeEdge(first);
+            expect(v.hGraph.hasEdge('A', 'B')).toBe(false);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBeUndefined();
+        });
+
+        it('releasing a constraint that never claimed the edge is a no-op', () => {
+            const A = node('A'), B = node('B');
+            const v = rig({ nodes: [A, B], edges: [], constraints: [], groups: [] });
+
+            const held = leftOf(A, B, 15);
+            const neverAdded = leftOf(A, B, 15); // same weight, never registered
+            v.addQualitativeEdge(held);
+
+            v.removeQualitativeEdge(neverAdded);
+            expect(v.hGraph.hasEdge('A', 'B')).toBe(true);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(held);
+        });
+
         it('a redundant add does not steal provenance from the stronger claim', () => {
             const A = node('A'), B = node('B');
             const v = rig({ nodes: [A, B], edges: [], constraints: [], groups: [] });
