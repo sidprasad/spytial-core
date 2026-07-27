@@ -585,6 +585,37 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
             ), { numRuns: 25, timeout: TIMEOUT });
         });
 
+        // ── Degenerate negated groups ──────────────────────────────────
+        // ¬group is false when the group has 0 non-members (a rectangle around
+        // everything always exists) or fewer than 2 members (non-overlap keeps
+        // every non-member out of a single member's box). The validator pushes
+        // the merged inclusion disjunction unconditionally, so an all-degenerate
+        // source yields an EMPTY disjunction → UNSAT; the oracle asserts false
+        // for the same case.
+
+        it('negated group covering all nodes — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('{!G: a1, a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('negated group with a single member — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x b, {!G: a1}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('degenerate group does not poison a same-source non-degenerate one — SAT (Z3 cross-check)', async () => {
+            // {!A} alone would be UNSAT, but same-source merging means only ONE
+            // group must be violated, and {!B} can be (a1 inside span(a2, a3)).
+            const layout = parseConstraintSpec('{!A: a1}, {!B: a2, a3}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
         it('groups + ordering disjunctions on 6 nodes', async () => {
             const gbf = new GroupByField('type', 0, 1, 'type');
             const arbLayout = arbNodePool(6).chain(nodes => {

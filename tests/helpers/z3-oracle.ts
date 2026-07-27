@@ -481,6 +481,14 @@ function buildModel(
 
         if (altExprs.length > 0) {
             solver.add(ctx.Or(...altExprs));
+        } else {
+            // Every group from this source is degenerate: with fewer than 2
+            // members or 0 non-members, ¬group is false (a rectangle around
+            // the members excluding all non-members always exists). The
+            // validator pushes the merged inclusion disjunction unconditionally,
+            // so these cases surface as an EMPTY disjunction → UNSAT. Mirror
+            // that here rather than silently dropping the constraint.
+            solver.add(ctx.Bool.val(false));
         }
     }
 
