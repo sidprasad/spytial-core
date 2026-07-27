@@ -435,6 +435,17 @@ function buildModel(
         negatedBySource.get(key)!.push(group);
     }
 
+    // "Some non-member sits inside the span of the members" is encoded as a
+    // conjunction of four independent member-way disjunctions per non-member
+    // (bounded on the left by SOME member, on the right by SOME member, …),
+    // NOT as the naive Or over all (mL,mR,mT,mB) member tuples. The two are
+    // equivalent whenever every member has positive width and height: the
+    // factored form distributes into the tuple form plus diagonal (mL = mR
+    // or mT = mB) combinations, each of which is unsatisfiable on its own
+    // (a node cannot be both right of m's right edge and left of m's left
+    // edge). The tuple form is O(M⁴) conjuncts and at M = 6 produced the
+    // largest formula in the suite — big enough to native-abort Z3's WASM
+    // runtime mid-solve on CI (runs 30227554187, 30227971929).
     for (const [, groups] of negatedBySource) {
         const altExprs: Bool[] = [];
         for (const group of groups) {
@@ -444,25 +455,27 @@ function buildModel(
                 .filter((n): n is LayoutNode => n !== undefined);
             const nonMembers = layout.nodes.filter(n => !memberIds.has(n.id));
 
-            for (const n of nonMembers) {
-                for (const mL of members) {
-                    for (const mR of members) {
-                        if (mL.id === mR.id) continue;
-                        for (const mT of members) {
-                            for (const mB of members) {
-                                if (mT.id === mB.id) continue;
-                                const nx = getOrCreate(varName(n.id, 'x'));
-                                const ny = getOrCreate(varName(n.id, 'y'));
-                                altExprs.push(ctx.And(
-                                    getOrCreate(varName(mL.id, 'x')).add(mL.width).le(nx),
-                                    nx.add(n.width).le(getOrCreate(varName(mR.id, 'x'))),
-                                    getOrCreate(varName(mT.id, 'y')).add(mT.height).le(ny),
-                                    ny.add(n.height).le(getOrCreate(varName(mB.id, 'y'))),
-                                ));
-                            }
-                        }
-                    }
+            for (const m of members) {
+                if (m.width <= 0 || m.height <= 0) {
+                    throw new Error(
+                        `Negated-group member ${m.id} has non-positive dimensions ` +
+                        `(${m.width}x${m.height}); the factored encoding requires positive sizes.`
+                    );
                 }
+            }
+            // Match the tuple form exactly: fewer than 2 members yields no
+            // alternatives (every tuple needs two distinct members per axis).
+            if (members.length < 2) continue;
+
+            for (const n of nonMembers) {
+                const nx = getOrCreate(varName(n.id, 'x'));
+                const ny = getOrCreate(varName(n.id, 'y'));
+                altExprs.push(ctx.And(
+                    ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'x')).add(m.width).le(nx))),
+                    ctx.Or(...members.map(m => nx.add(n.width).le(getOrCreate(varName(m.id, 'x'))))),
+                    ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'y')).add(m.height).le(ny))),
+                    ctx.Or(...members.map(m => ny.add(n.height).le(getOrCreate(varName(m.id, 'y'))))),
+                ));
             }
         }
 
@@ -527,6 +540,34 @@ function compileDisjunction(disj: DisjunctiveConstraint, vars: VarMap, ctx: any)
 
 // ─── Solving ────────────────────────────────────────────────────────────
 
+// Z3's own 45s 'timeout' returns a clean 'unknown' from any LIVE solver, so a
+// check() still unsettled at 60s means the solving pthread died without
+// rejecting the promise (native abort). Detect it instead of letting vitest's
+// 120s test timeout eat it. There is no recovery: z3-solver serializes every
+// check() through ONE module-level Mutex shared across init() calls, and an
+// abandoned check never releases it — all later solves would deadlock — so
+// the watchdog poisons the oracle rather than retrying.
+const WATCHDOG_MS = 60_000;
+
+function withWatchdog(p: Promise<string>, what: string, solveNo: number): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            p.catch(() => { /* swallow a late rejection of the abandoned solve */ });
+            poison(
+                `${what} solve #${solveNo} did not settle within ${WATCHDOG_MS}ms`,
+                'solving pthread presumed dead; z3-solver\'s shared check() mutex is now held forever'
+            );
+            reject(new Z3OracleError(
+                `Z3 ${what} solve #${solveNo} did not settle within ${WATCHDOG_MS}ms — ${describeOracleStats()}`
+            ));
+        }, WATCHDOG_MS);
+        p.then(
+            v => { clearTimeout(timer); resolve(v); },
+            e => { clearTimeout(timer); reject(e); },
+        );
+    });
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function checkedSolve(solver: any, what: string): Promise<boolean> {
     solveCount++;
@@ -534,8 +575,9 @@ async function checkedSolve(solver: any, what: string): Promise<boolean> {
     const started = Date.now();
     let result: string;
     try {
-        result = await solver.check();
+        result = await withWatchdog(solver.check(), what, solveNo);
     } catch (e) {
+        if (e instanceof Z3OracleError) throw e; // watchdog already diagnosed
         const detail = `Z3 ${what} solve #${solveNo} threw after ${Date.now() - started}ms: ${e}`;
         if (looksLikeRuntimeDeath(e)) {
             poison(`${what} solve #${solveNo} threw after ${Date.now() - started}ms`, e);
