@@ -125,17 +125,18 @@ class DifferenceConstraintGraph {
     /** Reference count for alignment edge pairs (key: "a\x00b" with a < b lexicographically). */
     private alignmentRefCount: Map<string, number> = new Map();
     /**
-     * Multiset of active claim weights per directed edge (key: "a\x00b").
-     * Every successful addEdge registers a claim — including the redundant
-     * path (an equal-or-tighter edge already exists) and the tightening path
-     * (which displaces a smaller weight). The stored edge weight is always the
-     * max of its claims. removeEdgeClaim releases one claim and restores the
-     * edge to the strongest remaining claim (or deletes it when none remain).
-     * Without this, undoing an assignment whose constraint duplicated an
-     * existing pair blindly deleted the shared edge — dropping a base
-     * constraint or another assigned alternative's edge from the graph.
+     * Active claims per directed edge (key: "a\x00b"), each the weight an
+     * addEdge asked for plus the constraint that asked. Every successful
+     * addEdge registers one — including the redundant path (an equal-or-tighter
+     * edge already exists) and the tightening path (which displaces a smaller
+     * weight). The stored edge weight is always the max of its claims, and
+     * edgeProvenance always names the strongest claim's constraint.
+     * removeEdgeClaim releases one claim and restores both (or deletes the
+     * edge when none remain). Without this, undoing an assignment whose
+     * constraint duplicated an existing pair blindly deleted the shared edge —
+     * dropping a base constraint or another assigned alternative's edge.
      */
-    private edgeClaims: Map<string, number[]> = new Map();
+    private edgeClaims: Map<string, { w: number; c?: LayoutConstraint }[]> = new Map();
     private gap: number;
 
     /**
@@ -217,7 +218,9 @@ class DifferenceConstraintGraph {
         g.nodeSize = new Map(this.nodeSize);
         g.edgeProvenance = new Map(this.edgeProvenance);
         g.alignmentRefCount = new Map(this.alignmentRefCount);
-        for (const [k, ws] of this.edgeClaims) g.edgeClaims.set(k, [...ws]);
+        // Claim records are never mutated in place (only pushed/spliced), so
+        // copying the arrays is enough — the entries can be shared.
+        for (const [k, claims] of this.edgeClaims) g.edgeClaims.set(k, [...claims]);
         g.hasZeroWeightOrderingEdge = this.hasZeroWeightOrderingEdge;
         // Fresh stamps (from the constructor) — the clone is a new object with
         // an empty memo and no cached verdicts keyed on it, so it must not
@@ -273,7 +276,7 @@ class DifferenceConstraintGraph {
             // Edge exists with equal or tighter weight — no graph change, but
             // the claim must be registered so a later removeEdgeClaim releases
             // THIS add instead of deleting the edge someone else still needs.
-            this.registerClaim(a, b, w);
+            this.registerClaim(a, b, w, constraint);
             return true;
         }
         // For new edges or tightening: check if a return path b→...→a exists.
@@ -316,16 +319,50 @@ class DifferenceConstraintGraph {
             this.adj.get(a)!.set(b, w);
             this.radj.get(b)!.set(a, w);
         }
-        this.registerClaim(a, b, w);
-        if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
+        this.registerClaim(a, b, w, constraint);
         return true;
     }
 
-    private registerClaim(a: string, b: string, w: number): void {
+    private registerClaim(a: string, b: string, w: number, constraint?: LayoutConstraint): void {
         const key = DifferenceConstraintGraph.provenanceKey(a, b);
         const claims = this.edgeClaims.get(key);
-        if (claims) claims.push(w);
-        else this.edgeClaims.set(key, [w]);
+        if (claims) claims.push({ w, c: constraint });
+        else this.edgeClaims.set(key, [{ w, c: constraint }]);
+        this.refreshProvenance(key);
+    }
+
+    /**
+     * Point edgeProvenance at the strongest remaining claim that carries a
+     * constraint, or drop it when no claim does. Provenance has to follow the
+     * claims because conflict analysis maps path edges back to trail entries
+     * through it (analyzeConflictForDecision / analyzeTheoryConflict): naming a
+     * constraint whose claim was already released finds no trail entry, which
+     * silently OMITS a literal and yields a learned clause stronger than the
+     * conflict justifies. Before claims existed this could not arise — an undo
+     * deleted the edge and its provenance together.
+     *
+     * Ties keep the earliest claim, and a claim without a constraint never
+     * displaces one that has it, so the add-side outcomes are exactly what the
+     * previous `if (constraint) set(...)` produced: a fresh edge takes its
+     * constraint, a redundant add leaves the stronger claim's constraint in
+     * place, and a tightening add takes over.
+     */
+    private refreshProvenance(key: string): void {
+        const claims = this.edgeClaims.get(key);
+        if (!claims || claims.length === 0) {
+            this.edgeProvenance.delete(key);
+            return;
+        }
+        let best: LayoutConstraint | undefined;
+        let bestW = -Infinity;
+        for (const claim of claims) {
+            if (claim.c !== undefined && claim.w > bestW) {
+                bestW = claim.w;
+                best = claim.c;
+            }
+        }
+        if (best !== undefined) this.edgeProvenance.set(key, best);
+        else this.edgeProvenance.delete(key);
     }
 
     /**
@@ -347,7 +384,7 @@ class DifferenceConstraintGraph {
         const key = DifferenceConstraintGraph.provenanceKey(a, b);
         const claims = this.edgeClaims.get(key);
         if (!claims) return;
-        const idx = claims.indexOf(w);
+        const idx = claims.findIndex(claim => claim.w === w);
         if (idx === -1) return;
         claims.splice(idx, 1);
 
@@ -363,7 +400,7 @@ class DifferenceConstraintGraph {
         }
 
         let newW = -Infinity;
-        for (const c of claims) { if (c > newW) newW = c; }
+        for (const claim of claims) { if (claim.w > newW) newW = claim.w; }
         const cur = this.adj.get(a)?.get(b);
         if (cur !== undefined && newW < cur) {
             this.adj.get(a)!.set(b, newW);
@@ -376,6 +413,8 @@ class DifferenceConstraintGraph {
                 this.markDeltasUnknown();
             }
         }
+        // The released claim may have been the one naming this edge.
+        this.refreshProvenance(key);
     }
 
     /**

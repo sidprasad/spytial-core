@@ -88,6 +88,45 @@ describe('Edge undo integrity (claim-based add/remove)', () => {
             expect(v.hGraph.getEdgeWeight('A', 'B')).toBe(w);
         });
 
+        it('provenance follows the strongest remaining claim across a release', () => {
+            // Conflict analysis maps path edges back to trail entries through
+            // provenance, so provenance naming a released constraint finds no
+            // trail entry — silently dropping a literal and yielding a learned
+            // clause stronger than the conflict justifies.
+            const A = node('A'), B = node('B');
+            const v = rig({ nodes: [A, B], edges: [], constraints: [], groups: [] });
+
+            const weak = leftOf(A, B, 10);
+            const strong = leftOf(A, B, 500);
+            v.addQualitativeEdge(weak);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(weak);
+
+            v.addQualitativeEdge(strong); // tightens; takes over provenance
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(strong);
+
+            v.removeQualitativeEdge(strong); // weak still holds the edge
+            expect(v.hGraph.hasEdge('A', 'B')).toBe(true);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(weak);
+
+            v.removeQualitativeEdge(weak);
+            expect(v.hGraph.hasEdge('A', 'B')).toBe(false);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBeUndefined();
+        });
+
+        it('a redundant add does not steal provenance from the stronger claim', () => {
+            const A = node('A'), B = node('B');
+            const v = rig({ nodes: [A, B], edges: [], constraints: [], groups: [] });
+
+            const strong = leftOf(A, B, 500);
+            const weak = leftOf(A, B, 10);
+            v.addQualitativeEdge(strong);
+            v.addQualitativeEdge(weak); // redundant — no graph change
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(strong);
+
+            v.removeQualitativeEdge(weak);
+            expect(v.hGraph.getEdgeProvenance('A', 'B')).toBe(strong);
+        });
+
         it('non-LIFO release keeps the strongest remaining claim', () => {
             const A = node('A'), B = node('B');
             const v = rig({ nodes: [A, B], edges: [], constraints: [leftOf(A, B, 15)], groups: [] });

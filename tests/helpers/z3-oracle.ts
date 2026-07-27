@@ -632,7 +632,14 @@ export type OracleProp =
 
 function compileProp(p: OracleProp, layout: InstanceLayout, vars: VarMap): Bool {
     const ctx = z3Ctx;
-    const coord = (id: string) => vars.get(varName(id, p.axis));
+    const coord = (id: string) => {
+        const v = vars.get(varName(id, p.axis));
+        // Without this the caller gets "cannot read properties of undefined
+        // (reading 'lt')" from inside compileProp, which reads like an oracle
+        // crash rather than a bad probe. Mirrors size() below.
+        if (!v) throw new Z3OracleError(`Unknown node in oracle proposition: ${id} (no ${p.axis} var)`);
+        return v;
+    };
     const size = (id: string): number => {
         const n = layout.nodes.find(node => node.id === id);
         if (!n) throw new Z3OracleError(`Unknown node in oracle proposition: ${id}`);
