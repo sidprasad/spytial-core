@@ -30,6 +30,7 @@ import {
 } from './helpers/z3-oracle';
 import {
     cloneLayout,
+    describeConstraint,
     describeLayout,
     leftOf,
     aboveOf,
@@ -46,6 +47,7 @@ import {
     arbDisjunction,
     arbRichDisjunction,
     arbFullSystem,
+    arbMixedSystem,
     arbNegativeOrdering,
     arbMixedOrdering,
     arbGroup,
@@ -492,6 +494,97 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
             ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
         });
 
+        it('random negated group with 4 members on 6 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(6).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 4 }),
+                        fc.shuffledSubarray(
+                            Array.from({ length: 6 }, (_, i) => i),
+                            { minLength: 4, maxLength: 4 },
+                        ),
+                    )
+                ),
+                async ([nodes, constraints, memberIndices]) => {
+                    const memberIds = memberIndices.map(i => nodes[i].id);
+                    const group: LayoutGroup = {
+                        name: 'NG0', nodeIds: memberIds,
+                        keyNodeId: memberIds[0], showLabel: true,
+                        sourceConstraint: gbf, negated: true,
+                    };
+                    const layout = buildLayout(nodes, constraints, undefined, [group]);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: 25, timeout: TIMEOUT });
+        });
+
+        // ── Multiple negated groups from ONE source constraint ─────────
+        // Both the validator and the oracle merge same-source negated groups
+        // into a single disjunction: at least ONE group must be violated
+        // (some non-member sits inside its members' span), not all of them.
+        // No prior test exercised this path with more than one group.
+
+        it('two same-source negated groups, either can be violated — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x a2, a3 <x a4, {!A: a1, a2}, {!B: a3, a4}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('same-source negated groups need only ONE violated (Or, not And) — SAT (Z3 cross-check)', async () => {
+            // The total order a1 < a2 < a3 < a4 makes {!B} impossible to violate
+            // (nothing can sit between a3 and a4's span from the left), but a2 or
+            // a3 can still sit inside span(a1, a4), violating {!A}. Under Or
+            // semantics this is SAT; under (wrong) And semantics it would be UNSAT.
+            const layout = parseConstraintSpec('a1 <x a2, a2 <x a3, a3 <x a4, {!A: a1, a4}, {!B: a3, a4}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('total horizontal order starves both negated groups — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x a2, a2 <x a3, a3 <x a4, {!A: a1, a2}, {!B: a3, a4}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('random pair of same-source negated 2-member groups on 5 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(5).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 4 }),
+                        fc.shuffledSubarray(
+                            Array.from({ length: 5 }, (_, i) => i),
+                            { minLength: 2, maxLength: 2 },
+                        ),
+                        fc.shuffledSubarray(
+                            Array.from({ length: 5 }, (_, i) => i),
+                            { minLength: 2, maxLength: 2 },
+                        ),
+                    )
+                ),
+                async ([nodes, constraints, indicesA, indicesB]) => {
+                    const groups: LayoutGroup[] = [indicesA, indicesB].map((indices, g) => {
+                        const memberIds = indices.map(i => nodes[i].id);
+                        return {
+                            name: `NG${g}`, nodeIds: memberIds,
+                            keyNodeId: memberIds[0], showLabel: true,
+                            sourceConstraint: gbf, negated: true,
+                        };
+                    });
+                    const layout = buildLayout(nodes, constraints, undefined, groups);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: 25, timeout: TIMEOUT });
+        });
+
         it('groups + ordering disjunctions on 6 nodes', async () => {
             const gbf = new GroupByField('type', 0, 1, 'type');
             const arbLayout = arbNodePool(6).chain(nodes => {
@@ -512,6 +605,103 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                 const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
                 assertAgreement(layout, validatorSat, oracleSat);
             }), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+    });
+
+    // ─── Nested and overlapping groups ──────────────────────────────────
+    // Subgroup pairs (B ⊂ A) are allowed and skip group-to-group separation;
+    // partially overlapping pairs get `overlapping: true` stamped by the
+    // validator (on the SHARED group objects, so the oracle sees it too).
+    // Neither shape was covered before.
+
+    describe('Nested and overlapping groups', () => {
+
+        it('nested group (B inside A) — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x a2, {A: a1, a2, a3}, {B: a1, a2}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('outsider trapped inside nested inner group — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x x, x <x a2, a1 <y x, x <y a2, {A: a1, a2, a3}, {B: a1, a2}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('outsider left of all members escapes both nested groups — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('x <x a1, x <x a2, x <x a3, {A: a1, a2, a3}, {B: a1, a2}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('shared member trapped inside one of two overlapping groups — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a1 <x s, s <x a2, a1 <y s, s <y a2, {A: a1, a2, s}, {B: s, b1, b2}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('random nested groups on 6 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(6).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.integer({ min: 3, max: 5 }),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 4 }),
+                    )
+                ),
+                async ([nodes, outerSize, constraints]) => {
+                    const outerIds = nodes.slice(0, outerSize).map(n => n.id);
+                    const innerIds = outerIds.slice(0, 2);
+                    const groups: LayoutGroup[] = [
+                        {
+                            name: 'G0', nodeIds: outerIds,
+                            keyNodeId: outerIds[0], showLabel: true, sourceConstraint: gbf,
+                        },
+                        {
+                            name: 'G1', nodeIds: innerIds,
+                            keyNodeId: innerIds[0], showLabel: true, sourceConstraint: gbf,
+                        },
+                    ];
+                    const layout = buildLayout(nodes, constraints, undefined, groups);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        it('random partially-overlapping groups on 6 nodes (Z3 cross-check)', async () => {
+            const gbf = new GroupByField('type', 0, 1, 'type');
+            await fc.assert(fc.asyncProperty(
+                arbNodePool(6).chain(nodes =>
+                    fc.tuple(
+                        fc.constant(nodes),
+                        fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 4 }),
+                    )
+                ),
+                async ([nodes, constraints]) => {
+                    // G0 = {0,1,2}, G1 = {2,3,4}: share node 2, neither subsumes.
+                    const g0Ids = nodes.slice(0, 3).map(n => n.id);
+                    const g1Ids = nodes.slice(2, 5).map(n => n.id);
+                    const groups: LayoutGroup[] = [
+                        {
+                            name: 'G0', nodeIds: g0Ids,
+                            keyNodeId: g0Ids[0], showLabel: true, sourceConstraint: gbf,
+                        },
+                        {
+                            name: 'G1', nodeIds: g1Ids,
+                            keyNodeId: g1Ids[0], showLabel: true, sourceConstraint: gbf,
+                        },
+                    ];
+                    const layout = buildLayout(nodes, constraints, undefined, groups);
+                    const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+                    assertAgreement(layout, validatorSat, oracleSat);
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
         });
     });
 
@@ -720,6 +910,54 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                                 `  Layout: ${describeLayout(layout)}\n` +
                                 `  MFS size: ${error.maximalFeasibleSubset.length}`
                             );
+                        }
+                    }
+                }
+            ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
+        });
+
+        // On conjunctive-only systems the validator's model coincides with the
+        // oracle's subset model (nodes + non-overlap + the given constraints),
+        // and the MFS comes from the global greedy builder — so maximality is
+        // checkable: adding back ANY excluded constraint must be Z3-UNSAT.
+        // (With groups/disjunctions in play the subset model is a relaxation
+        // and a SAT verdict on an excluded constraint would prove nothing.)
+        it('MFS on conjunctive-only systems is feasible AND maximal per Z3', async () => {
+            await fc.assert(fc.asyncProperty(
+                arbMixedSystem(5, 8),
+                async (layout) => {
+                    const layoutV = cloneLayout(layout);
+                    const validator = new QualitativeConstraintValidator(layoutV);
+                    const error = validator.validateConstraints();
+                    if (!error || !isPositionalConstraintError(error) || !error.maximalFeasibleSubset) {
+                        return;
+                    }
+                    const mfs = error.maximalFeasibleSubset;
+                    // cloneLayout shares constraint object identity, so the
+                    // excluded set is computable from the original array
+                    // (the validator replaces layoutV.constraints, not ours).
+                    const mfsSet = new Set(mfs);
+                    const excluded = layout.constraints.filter(c => !mfsSet.has(c));
+
+                    const feasible = await verifyFeasibleSubset(layout, mfs);
+                    if (!feasible) {
+                        const detail =
+                            `MFS is NOT feasible according to Z3!\n` +
+                            `  MFS: ${mfs.map(describeConstraint).join(', ')}\n` +
+                            `  ${describeLayout(layout)}`;
+                        console.error(`[z3-oracle] ${detail}`);
+                        throw new Error(detail);
+                    }
+
+                    for (const c of excluded) {
+                        const stillFeasible = await verifyFeasibleSubset(layout, [...mfs, c]);
+                        if (stillFeasible) {
+                            const detail =
+                                `MFS is not maximal: adding back "${describeConstraint(c)}" is still feasible per Z3\n` +
+                                `  MFS: ${mfs.map(describeConstraint).join(', ')}\n` +
+                                `  ${describeLayout(layout)}`;
+                            console.error(`[z3-oracle] ${detail}`);
+                            throw new Error(detail);
                         }
                     }
                 }

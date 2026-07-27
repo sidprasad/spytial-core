@@ -46,7 +46,9 @@ jobs:
       - run: npm install
         if: steps.changes.outputs.run == 'true'
 
-      - run: npx vitest run tests/z3-equivalence.test.ts
+      # --bail=1: one confirmed validator/oracle discrepancy is enough signal;
+      # everything after it (especially after a Z3 WASM abort) is noise.
+      - run: npx vitest run --bail=1 tests/z3-equivalence.test.ts
         if: steps.changes.outputs.run == 'true'
 
       - name: Skip (no relevant changes)
