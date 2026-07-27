@@ -88,6 +88,15 @@ import type { PositionalConstraintError, GroupOverlapError } from './constraint-
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Global mutation-stamp counter shared by all DifferenceConstraintGraph
+ * instances. Every stamp ever handed out is unique, so "stamp unchanged"
+ * always means "no structural mutation on that graph object since" — even
+ * across checkpoint/restore, which installs fresh graph objects with fresh
+ * stamps (never reusing values that older cached verdicts were keyed on).
+ */
+let nextGraphStamp = 1;
+
+/**
  * Weighted DAG representing difference constraints between spatial elements.
  *
  * Each edge (a → b, weight w) encodes the constraint "b must be at least w
@@ -117,6 +126,73 @@ class DifferenceConstraintGraph {
     private alignmentRefCount: Map<string, number> = new Map();
     private gap: number;
 
+    /**
+     * Mutation stamps. addVersion changes when an edge is inserted (or a
+     * zero-weight edge becomes positive); removeVersion changes when an edge
+     * is deleted. Positive-weight tightenings change neither reachability nor
+     * strict-orderedness, so they deliberately do NOT bump (keeps caches warm).
+     */
+    addVersion: number = nextGraphStamp++;
+    removeVersion: number = nextGraphStamp++;
+    /**
+     * Set if any non-alignment edge was ever inserted with weight ≤ 0. Such
+     * edges break the invariant "zero-weight edges occur only in symmetric
+     * alignment pairs", which the validator's cross-version feasibility-verdict
+     * reuse relies on (see graphPropagate). When set, callers must fall back
+     * to exact-stamp cache validity.
+     */
+    hasZeroWeightOrderingEdge = false;
+
+    /** Per-source reachability memo: src → (target → some path has a positive edge). */
+    private reachMemo: Map<string, Map<string, boolean>> = new Map();
+    /** Memoized Tarjan SCC components. */
+    private sccMemo: string[][] | null = null;
+    private memoAddV = -1;
+    private memoRemV = -1;
+
+    /**
+     * Reachability deltas accumulated since the last consumeReachDeltas():
+     * (from, to) pairs whose reach-status changed (became reachable, or a
+     * positive-weight path appeared where only zero-weight paths existed).
+     * Deltas are exact when produced by the incremental-closure path in
+     * addEdge; any mutation that goes the clear-the-memo route (alignment
+     * edges, removals, cold memo, zero-weight hazard) sets this to null =
+     * "unknown, assume anything changed". Starts null so workloads that never
+     * consume record nothing; the first consume (which precedes any cached
+     * verdict) arms tracking. Capped as a memory backstop.
+     */
+    private pendingDeltas: { from: string; to: string }[] | null = null;
+    /**
+     * Overflow degrades gracefully (consumer sees null = unknown), so this cap
+     * only needs to bound memory for workloads that never consume. Consuming
+     * workloads reset per propagation pass and stay far below it.
+     */
+    private static readonly MAX_PENDING_DELTAS = 65536;
+
+    /**
+     * Hand back the reachability deltas since the last call (and reset the
+     * accumulator). Returns null if the deltas are unknown — the caller must
+     * assume any pair's reachability may have changed.
+     */
+    consumeReachDeltas(): { from: string; to: string }[] | null {
+        const d = this.pendingDeltas;
+        this.pendingDeltas = [];
+        return d;
+    }
+
+    private markDeltasUnknown(): void {
+        this.pendingDeltas = null;
+    }
+
+    private recordDelta(from: string, to: string): void {
+        if (this.pendingDeltas === null) return;
+        if (this.pendingDeltas.length >= DifferenceConstraintGraph.MAX_PENDING_DELTAS) {
+            this.pendingDeltas = null;
+            return;
+        }
+        this.pendingDeltas.push({ from, to });
+    }
+
     constructor(gap: number = 15) {
         this.gap = gap;
     }
@@ -129,9 +205,26 @@ class DifferenceConstraintGraph {
         g.nodeSize = new Map(this.nodeSize);
         g.edgeProvenance = new Map(this.edgeProvenance);
         g.alignmentRefCount = new Map(this.alignmentRefCount);
+        g.hasZeroWeightOrderingEdge = this.hasZeroWeightOrderingEdge;
+        // Fresh stamps (from the constructor) — the clone is a new object with
+        // an empty memo and no cached verdicts keyed on it, so it must not
+        // inherit stamps that other caches associate with the original.
         return g;
     }
 
+    /** Drop memoized reachability/SCC state if the graph mutated since it was built. */
+    private validateMemo(): void {
+        if (this.memoAddV !== this.addVersion || this.memoRemV !== this.removeVersion) {
+            this.reachMemo.clear();
+            this.sccMemo = null;
+            this.memoAddV = this.addVersion;
+            this.memoRemV = this.removeVersion;
+        }
+    }
+
+    // Note: adding an isolated node deliberately does NOT bump the mutation
+    // stamps — it creates no paths, so cached reachability stays valid, and
+    // SCC consumers treat nodes absent from the memo as singletons.
     ensureNode(id: string, size: number = 0): void {
         if (!this.nodes.has(id)) {
             this.nodes.add(id);
@@ -173,15 +266,91 @@ class DifferenceConstraintGraph {
         // Zero-weight addEdge calls are only used internally via addAlignmentEdges
         // which has its own reachability checks, so reject all canReach here.
         if (this.canReach(b, a)) return false;
-        this.adj.get(a)!.set(b, w);
-        this.radj.get(b)!.set(a, w);
+        if (w <= 0) this.hasZeroWeightOrderingEdge = true;
+        // New edge, or a zero-weight edge becoming positive: reachability or
+        // strict-orderedness changed. (Positive→positive tightening changes
+        // neither, so it neither bumps nor invalidates.)
+        if (existing === undefined || existing === 0) {
+            // Incremental closure: a plain acyclic insert (the canReach check
+            // above guarantees b cannot reach a) only creates paths of the form
+            // s →* a → b →* t, so the memoized closure can be patched in place
+            // — and the patched (s, t) pairs are exactly the reachability
+            // deltas. Requires a current memo and no zero-weight hazard.
+            const incremental = existing === undefined
+                && !this.hasZeroWeightOrderingEdge
+                && this.memoAddV === this.addVersion
+                && this.memoRemV === this.removeVersion;
+            this.adj.get(a)!.set(b, w);
+            this.radj.get(b)!.set(a, w);
+            if (incremental) {
+                // Patch BEFORE bumping the stamp: reachFrom inside the patch
+                // must see matching stamps, or validateMemo would wipe the
+                // memo it is meant to update.
+                this.applyIncrementalClosure(a, b, w > 0);
+                // Memo (and SCC memo — an acyclic insert cannot merge SCCs)
+                // maintained in place; keep the stamps synced so validateMemo
+                // doesn't discard them.
+                this.addVersion = nextGraphStamp++;
+                this.memoAddV = this.addVersion;
+            } else {
+                this.addVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+        } else {
+            this.adj.get(a)!.set(b, w);
+            this.radj.get(b)!.set(a, w);
+        }
         if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
         return true;
     }
 
+    /**
+     * Patch the memoized closure after inserting acyclic edge u → v, recording
+     * every (source, target) pair whose reach-status changed as a delta.
+     *
+     * New paths are exactly s →* u → v →* t, so for every cached source s that
+     * reaches u (or s === u), merge v's closure (plus v itself) into s's set,
+     * OR-ing path positivity. Sources not in the memo recompute from the
+     * updated adjacency on demand. Coverage note: consumers' cached verdicts
+     * only ever probe sources they queried when computing — queries warm the
+     * memo, and the memo is only ever cleared wholesale by mutations that also
+     * mark deltas unknown — so every probe source of a live verdict is cached
+     * here and gets its deltas recorded.
+     */
+    private applyIncrementalClosure(u: string, v: string, edgePositive: boolean): void {
+        const vSet = this.reachFrom(v); // v's closure is unaffected by u → v (no cycle)
+        for (const [s, sSet] of this.reachMemo) {
+            let posToU: boolean;
+            if (s === u) {
+                posToU = false;
+            } else {
+                const e = sSet.get(u);
+                if (e === undefined) continue; // s does not reach u — unaffected
+                posToU = e;
+            }
+            const posToV = posToU || edgePositive;
+            const curV = sSet.get(v);
+            if (curV === undefined || (!curV && posToV)) {
+                sSet.set(v, posToV);
+                if (s !== v) this.recordDelta(s, v);
+            }
+            for (const [t, posVT] of vSet) {
+                const p = posToV || posVT;
+                const cur = sSet.get(t);
+                if (cur === undefined || (!cur && p)) {
+                    sSet.set(t, p);
+                    if (s !== t) this.recordDelta(s, t);
+                }
+            }
+        }
+    }
+
     removeEdge(a: string, b: string): void {
-        this.adj.get(a)?.delete(b);
-        this.radj.get(b)?.delete(a);
+        if (this.adj.get(a)?.delete(b)) {
+            this.radj.get(b)?.delete(a);
+            this.removeVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
+        }
         this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
     }
 
@@ -200,22 +369,54 @@ class DifferenceConstraintGraph {
 
     canReach(from: string, to: string): boolean {
         if (from === to) return true;
-        const visited = new Set<string>();
-        const queue: string[] = [from];
-        visited.add(from);
-        while (queue.length > 0) {
-            const cur = queue.shift()!;
-            const succs = this.adj.get(cur);
+        return this.reachFrom(from).has(to);
+    }
+
+    /**
+     * Memoized per-source reachability. One two-state BFS computes, for every
+     * node reachable from `src`, whether some path there contains a positive-
+     * weight edge — answering all canReach AND isStrictlyOrdered queries from
+     * `src` until the graph next mutates. Amortizes the ~600k single-pair BFS
+     * calls graphPropagate used to issue (each pass re-queries the same
+     * sources: bbox members, alignment endpoints, disjunction edge endpoints).
+     *
+     * Entry semantics: key present = reachable; value true = some path has a
+     * positive edge (strict ordering). `src` itself gets an entry with value
+     * false initially and may upgrade to true via a cycle through `src`,
+     * mirroring the original BFS exactly.
+     */
+    private reachFrom(src: string): Map<string, boolean> {
+        this.validateMemo();
+        const cached = this.reachMemo.get(src);
+        if (cached) return cached;
+
+        const m = new Map<string, boolean>(); // node → best "hasPositive" seen
+        const queue: string[] = [src];
+        const queuePositive: boolean[] = [false];
+        m.set(src, false);
+        let head = 0;
+        while (head < queue.length) {
+            const node = queue[head];
+            const hasPositive = queuePositive[head];
+            head++;
+            const succs = this.adj.get(node);
             if (!succs) continue;
-            for (const s of succs.keys()) {
-                if (s === to) return true;
-                if (!visited.has(s)) {
-                    visited.add(s);
+            for (const [s, w] of succs) {
+                const newHasPositive = hasPositive || w > 0;
+                const prev = m.get(s);
+                if (prev === undefined || (!prev && newHasPositive)) {
+                    m.set(s, newHasPositive);
                     queue.push(s);
+                    queuePositive.push(newHasPositive);
                 }
             }
         }
-        return false;
+        // src is trivially "reachable" from itself; drop the seed entry unless
+        // a real cycle re-reached it (upgraded to true), so `has(src)` reflects
+        // actual edge-reachability for canReach's non-early-exit path.
+        if (m.get(src) === false) m.delete(src);
+        this.reachMemo.set(src, m);
+        return m;
     }
 
     /**
@@ -349,15 +550,21 @@ class DifferenceConstraintGraph {
         }
 
         // Add zero-weight edges (don't overwrite existing positive-weight edges)
+        // Alignment pairs create deliberate 2-cycles — no incremental closure
+        // patch for those; take the clear-and-recompute route.
         if (!this.adj.get(a)!.has(b)) {
             this.adj.get(a)!.set(b, 0);
             this.radj.get(b)!.set(a, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
+            this.addVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
         if (!this.adj.get(b)!.has(a)) {
             this.adj.get(b)!.set(a, 0);
             this.radj.get(a)!.set(b, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(b, a), constraint);
+            this.addVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
 
         // Increment reference count for this alignment pair
@@ -384,11 +591,15 @@ class DifferenceConstraintGraph {
             this.adj.get(a)!.delete(b);
             this.radj.get(b)!.delete(a);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
+            this.removeVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
         if (this.adj.get(b)?.get(a) === 0) {
             this.adj.get(b)!.delete(a);
             this.radj.get(a)!.delete(b);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(b, a));
+            this.removeVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
     }
 
@@ -410,25 +621,7 @@ class DifferenceConstraintGraph {
      */
     isStrictlyOrdered(a: string, b: string): boolean {
         if (a === b) return false;
-        // BFS tracking whether we've traversed any positive-weight edge
-        const visited = new Map<string, boolean>(); // node → best "hasPositive" seen
-        const queue: { node: string; hasPositive: boolean }[] = [{ node: a, hasPositive: false }];
-        visited.set(a, false);
-        while (queue.length > 0) {
-            const { node, hasPositive } = queue.shift()!;
-            const succs = this.adj.get(node);
-            if (!succs) continue;
-            for (const [s, w] of succs) {
-                const newHasPositive = hasPositive || w > 0;
-                if (s === b && newHasPositive) return true;
-                const prevPositive = visited.get(s);
-                if (prevPositive === undefined || (!prevPositive && newHasPositive)) {
-                    visited.set(s, newHasPositive);
-                    queue.push({ node: s, hasPositive: newHasPositive });
-                }
-            }
-        }
-        return false;
+        return this.reachFrom(a).get(b) === true;
     }
 
     /**
@@ -442,6 +635,8 @@ class DifferenceConstraintGraph {
      * (87ms of a 200-node chain's validation, with zero alignments present).
      */
     private tarjanSCCs(): string[][] {
+        this.validateMemo();
+        if (this.sccMemo) return this.sccMemo;
         const index = new Map<string, number>();
         const lowlink = new Map<string, number>();
         const onStack = new Set<string>();
@@ -491,6 +686,7 @@ class DifferenceConstraintGraph {
                 }
             }
         }
+        this.sccMemo = components;
         return components;
     }
 
@@ -599,6 +795,18 @@ interface Assignment {
     isDecision: boolean;
 }
 
+/** Cached feasibility verdicts for one disjunction — see altVerdictCache. */
+interface AltVerdictEntry {
+    /** Per-alternative: 0 = unknown, 1 = feasible, 2 = infeasible. */
+    verdict: Int8Array;
+    /** Per-alternative: additionEpoch (probe-tracked) or add-stamp sum (alignment-bearing) at compute time. */
+    addStamp: Float64Array;
+    /** Per-alternative: remove-stamp sum at compute time. */
+    remStamp: Float64Array;
+    /** Per-alternative: 1 if the alternative contains an AlignmentConstraint. */
+    hasAlignment: Uint8Array;
+}
+
 interface SolverCheckpoint {
     hGraph: DifferenceConstraintGraph;
     vGraph: DifferenceConstraintGraph;
@@ -653,6 +861,44 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Statistics ───
     private prunedByTransitivity: number = 0;
     private prunedByDecomposition: number = 0;
+
+    // ─── graphPropagate feasibility-verdict cache ───
+    /**
+     * Per-(disjunction, alternative) cached isAlternativeFeasible verdicts,
+     * keyed by disjunction object identity (pruneDisjunctions builds new
+     * objects, which naturally start cold). Validity rests on the monotonicity
+     * of feasibility in the edge set:
+     *   - edge ADDITIONS only shrink feasibility → an INFEASIBLE verdict stays
+     *     valid while no edge has been removed (remStamp unchanged);
+     *   - edge REMOVALS only grow feasibility → a FEASIBLE verdict stays valid
+     *     across removals unconditionally.
+     * For additions, feasible verdicts are invalidated PRECISELY rather than
+     * wholesale: each non-alignment alternative's feasibility depends on a
+     * fixed set of (axis, from, to) reachability probes, registered in
+     * probeIndex; when the graphs report exact reachability deltas
+     * (consumeReachDeltas), only verdicts whose probes match a delta are
+     * dirtied. When deltas are unknown (alignment-pair edges, removals, cold
+     * memo), additionEpoch bumps, invalidating all probe-tracked feasible
+     * verdicts at once. Alternatives containing an AlignmentConstraint query
+     * alignment classes (a dynamic probe set), so their feasible verdicts fall
+     * back to exact add-stamp validity.
+     * The monotone rules additionally need "zero-weight edges occur only in
+     * symmetric alignment pairs"; if either graph ever sees a zero-weight
+     * ordering edge (hasZeroWeightOrderingEdge), the cache is bypassed
+     * entirely.
+     * Sums of per-graph stamps are safe keys: stamps are globally unique and
+     * monotonically increasing, so an unchanged sum implies both unchanged.
+     * addStamp stores additionEpoch for probe-tracked alternatives and the
+     * add-stamp sum for alignment-bearing ones — fixed per alternative, so the
+     * two value domains never mix.
+     */
+    private altVerdictCache: Map<DisjunctiveConstraint, AltVerdictEntry> = new Map();
+    /** (axis, from, to) probe → verdicts whose feasibility it supports. */
+    private probeIndex: Map<string, { entry: AltVerdictEntry; aIdx: number }[]> = new Map();
+    /** Bumped whenever a graph reports unknown reachability deltas. */
+    private additionEpoch = 0;
+    /** Combined stamp of the last graphPropagate that reached 'ok' fixpoint; bail early if unchanged. */
+    private lastPropagateOkStamp = -1;
 
     // ─── Modal query state (populated after successful validation) ───
     /** Conjunctive-only graph snapshots (before CDCL disjunction resolution). */
@@ -1645,9 +1891,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // alignment backtracking.
         if (this.groups.length === 0) return 'ok';
 
+        // Fast bail: if the graphs haven't structurally changed since the last
+        // 'ok' fixpoint, every feasibility verdict is unchanged, so the fixpoint
+        // still holds. (Any assignment or backtrack that matters bumps a stamp;
+        // an assignment whose edges were all already present changes nothing
+        // the feasibility checks can observe.)
+        if (this.combinedGraphStamp() === this.lastPropagateOkStamp) return 'ok';
+
         let changed = true;
         while (changed) {
             changed = false;
+            // Apply reachability deltas accumulated since the last pass (from
+            // decisions, unit propagation, backtracking, or tryAssigns made by
+            // the previous pass) to the verdict cache. Mid-pass mutations leave
+            // deltas pending until the next pass — sound, because a mid-pass
+            // mutation means a tryAssign succeeded, which forces another pass
+            // (and stale-FEASIBLE verdicts can only over-count, never force a
+            // wrong alternative or fabricate a conflict).
+            this.consumeGraphDeltas();
             for (let d = 0; d < this.allDisjunctions.length; d++) {
                 if (assigned[d] !== -1) continue;
 
@@ -1657,7 +1918,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 let lastFeasibleIdx = -1;
 
                 for (let a = 0; a < disj.alternatives.length; a++) {
-                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
+                    if (this.isAlternativeFeasibleCached(disj, a)) {
                         feasibleCount++;
                         lastFeasibleIdx = a;
                     }
@@ -1675,7 +1936,121 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 }
             }
         }
+        this.lastPropagateOkStamp = this.combinedGraphStamp();
         return 'ok';
+    }
+
+    private combinedGraphStamp(): number {
+        // Stamps are globally unique and monotone, so this sum changes iff any
+        // structural mutation happened on either graph (including checkpoint
+        // restores, which install fresh graph objects with fresh stamps).
+        return this.hGraph.addVersion + this.hGraph.removeVersion
+            + this.vGraph.addVersion + this.vGraph.removeVersion;
+    }
+
+    /**
+     * Pull reachability deltas from both graphs and dirty exactly the cached
+     * feasible verdicts whose probes they hit. Unknown deltas (null) bump
+     * additionEpoch, invalidating every probe-tracked feasible verdict.
+     */
+    private consumeGraphDeltas(): void {
+        const hd = this.hGraph.consumeReachDeltas();
+        const vd = this.vGraph.consumeReachDeltas();
+        if (hd === null || vd === null) {
+            this.additionEpoch++;
+            return;
+        }
+        for (const d of hd) this.dirtyProbe('h', d.from, d.to);
+        for (const d of vd) this.dirtyProbe('v', d.from, d.to);
+    }
+
+    private dirtyProbe(axis: 'h' | 'v', from: string, to: string): void {
+        const hits = this.probeIndex.get(`${axis}\x00${from}\x00${to}`);
+        if (!hits) return;
+        for (const { entry, aIdx } of hits) {
+            // Only feasible verdicts can be flipped by an addition; infeasible
+            // ones are stable under additions (guarded by remStamp instead).
+            if (entry.verdict[aIdx] === 1) entry.verdict[aIdx] = 0;
+        }
+    }
+
+    /**
+     * Register the fixed reachability probes that alternative aIdx's
+     * feasibility depends on — mirrors isAlternativeFeasible's queries exactly:
+     *   - Left/Top/BBox/GroupBoundary edge: canReach(edge.to, edge.from);
+     *   - BBox additionally, per member m on the side's axis:
+     *     areAligned(node, m) (both directions) and the isBboxFeasibleInGraphs
+     *     isOrdered check (one of those directions).
+     * Returns true if the alternative contains an AlignmentConstraint (dynamic
+     * alignment-class probes — not trackable; falls back to add-stamp validity).
+     */
+    private registerProbes(entry: AltVerdictEntry, aIdx: number, alternative: LayoutConstraint[]): boolean {
+        let hasAlignment = false;
+        const add = (axis: 'h' | 'v', from: string, to: string): void => {
+            const key = `${axis}\x00${from}\x00${to}`;
+            let arr = this.probeIndex.get(key);
+            if (!arr) { arr = []; this.probeIndex.set(key, arr); }
+            arr.push({ entry, aIdx });
+        };
+        for (const constraint of alternative) {
+            if (isAlignmentConstraint(constraint)) {
+                hasAlignment = true;
+                continue;
+            }
+            if (isBoundingBoxConstraint(constraint)) {
+                const bc = constraint as BoundingBoxConstraint;
+                const axis = (bc.side === 'left' || bc.side === 'right') ? 'h' : 'v';
+                for (const m of bc.group.nodeIds) {
+                    add(axis, bc.node.id, m);
+                    add(axis, m, bc.node.id);
+                }
+            }
+            const edge = this.constraintToEdge(constraint);
+            if (edge) add(edge.axis, edge.to, edge.from);
+        }
+        return hasAlignment;
+    }
+
+    /** Cached isAlternativeFeasible — validity rules documented at altVerdictCache. */
+    private isAlternativeFeasibleCached(disj: DisjunctiveConstraint, aIdx: number): boolean {
+        // Zero-weight ordering edges break the monotonicity invariants the
+        // cache relies on — bypass it entirely (memoized reachability inside
+        // isAlternativeFeasible remains exact-version-safe).
+        if (this.hGraph.hasZeroWeightOrderingEdge || this.vGraph.hasZeroWeightOrderingEdge) {
+            return this.isAlternativeFeasible(disj.alternatives[aIdx]);
+        }
+
+        let entry = this.altVerdictCache.get(disj);
+        if (!entry) {
+            const n = disj.alternatives.length;
+            entry = {
+                verdict: new Int8Array(n),
+                addStamp: new Float64Array(n),
+                remStamp: new Float64Array(n),
+                hasAlignment: new Uint8Array(n),
+            };
+            for (let a = 0; a < n; a++) {
+                if (this.registerProbes(entry, a, disj.alternatives[a])) entry.hasAlignment[a] = 1;
+            }
+            this.altVerdictCache.set(disj, entry);
+        }
+        const curRem = this.hGraph.removeVersion + this.vGraph.removeVersion;
+        const addKey = entry.hasAlignment[aIdx]
+            ? this.hGraph.addVersion + this.vGraph.addVersion
+            : this.additionEpoch;
+
+        const v = entry.verdict[aIdx];
+        // Feasible: stable under removals; add-side staleness is handled by
+        // probe dirtying (verdict zeroed) or epoch/add-stamp mismatch.
+        if (v === 1 && entry.addStamp[aIdx] === addKey) return true;
+        // Infeasible: stable under additions; only removals can flip it.
+        if (v === 2 && entry.remStamp[aIdx] === curRem) return false;
+
+        const feasible = this.isAlternativeFeasible(disj.alternatives[aIdx]);
+        entry.verdict[aIdx] = feasible ? 1 : 2;
+        entry.addStamp[aIdx] = addKey;
+        entry.remStamp[aIdx] = curRem;
+        return feasible;
     }
 
     // disjunctionHasAlignment is no longer needed — all disjunctions (including
@@ -2145,6 +2520,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private restoreCheckpoint(cp: SolverCheckpoint): void {
         this.hGraph = cp.hGraph.clone();
         this.vGraph = cp.vGraph.clone();
+        // The restored graphs are fresh objects with fresh stamps and empty
+        // delta accumulators; drop all cached verdicts and probes (restarts
+        // are rare, and pruneDisjunctions rebuilds the disjunction objects
+        // anyway). Also covers the corner where a restore re-introduces an
+        // edge that an undo path had over-eagerly removed.
+        this.altVerdictCache.clear();
+        this.probeIndex.clear();
+        this.additionEpoch++;
     }
 
     private constraintToEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
@@ -3077,6 +3460,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.learnedClauses = [];
         this.activity.clear();
         this.assignmentTrail = [];
+        this.altVerdictCache.clear();
+        this.probeIndex.clear();
+        this.lastPropagateOkStamp = -1;
     }
 
     public getStats(): {
