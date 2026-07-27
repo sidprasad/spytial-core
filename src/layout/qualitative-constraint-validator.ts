@@ -1025,6 +1025,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     public validatePositionalConstraints(): PositionalConstraintError | null {
+        // Any modal state belongs to a previous run over a possibly different
+        // constraint set — drop it before this one can be observed. Without
+        // this, a re-validation serves the earlier run's facts: modalStateBuilt
+        // short-circuits the rebuild on success, and the derived pair sets
+        // outlive the graphs on failure.
+        this.resetModalQueryState();
+
         // Phase 1: Add conjunctive constraints — stop on first error but don't return yet
         let phase1Failed = false;
         for (const constraint of this.orientationConstraints) {
@@ -1119,16 +1126,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = error.maximalFeasibleSubset;
         }
         // Every error return in validatePositionalConstraints funnels through
-        // here, so this is the one place that has to drop the modal must-graph
-        // snapshots. They are taken at Phase 4b (before CDCL), so a later
+        // here, so this is the one place that has to drop modal state. The
+        // must-graphs are snapshotted at Phase 4b (before CDCL), so a later
         // failure would otherwise leave them describing a constraint system
-        // this method just replaced on the layout — and getCannot /
-        // getCannotAligned read those graphs DIRECTLY (not the lazily-built
-        // pair sets), so gating the lazy build alone would not stop them
-        // answering. Clearing here makes every reader fall back to its
-        // empty/reflexive default via the null checks they already have.
-        this.mustHGraph = null;
-        this.mustVGraph = null;
+        // this method just replaced on the layout. Note the readers disagree on
+        // what they consult — getCannot/getCannotAligned read the must-graphs
+        // DIRECTLY, getMust/getMustAligned read the derived pair and class
+        // sets — so nulling the graphs alone is not enough; reset all of it.
+        this.resetModalQueryState();
         return error;
     }
 
@@ -3727,6 +3732,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.verdictEntryByIndex.length = 0;
         this.verdictEntryDisj.length = 0;
         this.lastPropagateOkStamp = -1;
+        // The must-pair sets are O(n²) and were the largest thing this method
+        // left behind; dropping them also stops modal getters answering from a
+        // disposed validator.
+        this.resetModalQueryState();
     }
 
     public getStats(): {
@@ -3766,6 +3775,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * path that forgets to route through there.
      */
     private modalStateBuilt = false;
+
+    /**
+     * Drop every piece of modal state: the pre-CDCL graph snapshots, the
+     * derived pair/alignment-class sets, and the two flags. Kept in one place
+     * because the getters consult different halves of it — clearing only the
+     * graphs leaves getMust answering from the derived sets, and clearing only
+     * the sets leaves getCannot answering from the graphs.
+     */
+    private resetModalQueryState(): void {
+        this.mustHGraph = null;
+        this.mustVGraph = null;
+        this.mustHPairs = null;
+        this.mustVPairs = null;
+        this.mustHAlignmentClasses = null;
+        this.mustVAlignmentClasses = null;
+        this.modalStateBuilt = false;
+        this.validationSucceeded = false;
+    }
 
     private ensureModalQueryState(): void {
         if (this.modalStateBuilt || !this.validationSucceeded) return;
