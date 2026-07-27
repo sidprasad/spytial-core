@@ -323,6 +323,57 @@ describe('Modal spatial queries (must/can/cannot)', () => {
             expect(v.getAlignedWith('B', 'x')).toEqual(new Set(['A']));
         });
     });
+
+    describe('Rejected layouts answer no modal facts', () => {
+        // The must-graph snapshots are taken at Phase 4b, before CDCL, so they
+        // survive a later failure. Since #518 made modal state lazy, a rejected
+        // layout could still answer must/cannot — describing a constraint
+        // system enforceMaximalFeasibleSubset had already replaced on the
+        // layout. Note getCannot/getCannotAligned read the must-graphs
+        // DIRECTLY, so gating only the lazy build does not close this; the
+        // snapshots must be cleared on the error path.
+        //
+        // The baseline is a never-validated validator (empty for getMust,
+        // reflexive {self} for getCannot) — a rejected layout must match it.
+
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const baseline = () =>
+            new QualitativeConstraintValidator(layout([a, b, c], [], undefined, []));
+
+        it('CDCL-UNSAT layout answers exactly as a never-validated one', () => {
+            // Base A <x B commits before the snapshot; every alternative of the
+            // disjunction closes a cycle with it, so CDCL fails afterwards.
+            const src = new RelativeOrientationConstraint(['left'], 'unsat');
+            const rev = (d: number) => ({ left: b, right: a, minDistance: d, sourceConstraint: src });
+            const v = new QualitativeConstraintValidator(
+                layout([a, b, c], [leftOf(a, b)], [disjunction(src, [[rev(15)], [rev(5)]])]),
+            );
+            expect(v.validateConstraints()).not.toBeNull();
+
+            const ref = baseline();
+            expect(v.getMust('B', 'leftOf')).toEqual(ref.getMust('B', 'leftOf'));
+            // Would be {B, A} if the pre-CDCL snapshot leaked through.
+            expect(v.getCannot('B', 'rightOf')).toEqual(ref.getCannot('B', 'rightOf'));
+            expect(v.getCannotAligned('B', 'x')).toEqual(ref.getCannotAligned('B', 'x'));
+        });
+
+        it('conjunctively infeasible layout answers exactly as a never-validated one', () => {
+            const v = new QualitativeConstraintValidator(
+                layout([a, b, c], [leftOf(a, b), leftOf(b, a)]),
+            );
+            expect(v.validateConstraints()).not.toBeNull();
+
+            const ref = baseline();
+            expect(v.getMust('B', 'leftOf')).toEqual(ref.getMust('B', 'leftOf'));
+            expect(v.getCannot('B', 'rightOf')).toEqual(ref.getCannot('B', 'rightOf'));
+        });
+
+        it('a never-validated validator answers defaults (empty must, reflexive cannot)', () => {
+            const ref = baseline();
+            expect(ref.getMust('B', 'leftOf')).toEqual(new Set());
+            expect(ref.getCannot('B', 'rightOf')).toEqual(new Set(['B']));
+        });
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

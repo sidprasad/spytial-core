@@ -991,6 +991,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     /** Conjunctive-only graph snapshots (before CDCL disjunction resolution). */
     private mustHGraph: DifferenceConstraintGraph | null = null;
     private mustVGraph: DifferenceConstraintGraph | null = null;
+    /** Set only when validatePositionalConstraints completes without error. */
+    private validationSucceeded = false;
     /** Precomputed must-ordering pairs: "A\x00B" means A is strictly before B. */
     private mustHPairs: Set<string> | null = null;
     private mustVPairs: Set<string> | null = null;
@@ -1095,6 +1097,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
 
         this.layout.constraints = this.layout.constraints.concat(implicitConstraints);
+        // Only now may modal queries build their state: every error path above
+        // routes through enforceMaximalFeasibleSubset, which REPLACES
+        // layout.constraints with the feasible subset — so the must-graph
+        // snapshots taken at Phase 4b would describe a constraint system the
+        // layout no longer has. See ensureModalQueryState.
+        this.validationSucceeded = true;
         return null;
     }
 
@@ -1110,6 +1118,17 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (error.maximalFeasibleSubset) {
             this.layout.constraints = error.maximalFeasibleSubset;
         }
+        // Every error return in validatePositionalConstraints funnels through
+        // here, so this is the one place that has to drop the modal must-graph
+        // snapshots. They are taken at Phase 4b (before CDCL), so a later
+        // failure would otherwise leave them describing a constraint system
+        // this method just replaced on the layout — and getCannot /
+        // getCannotAligned read those graphs DIRECTLY (not the lazily-built
+        // pair sets), so gating the lazy build alone would not stop them
+        // answering. Clearing here makes every reader fall back to its
+        // empty/reflexive default via the null checks they already have.
+        this.mustHGraph = null;
+        this.mustVGraph = null;
         return error;
     }
 
@@ -3731,14 +3750,26 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Build modal state on first use. Safe to defer past validation because
      * buildModalQueryState reads only the must-graph snapshots (taken before
      * CDCL) and this.allDisjunctions (final after solveCDCL) — neither
-     * changes after validatePositionalConstraints returns. If validation
-     * failed (or never ran), the snapshots are null and modal queries keep
-     * their pre-existing behavior of returning empty/reflexive sets.
+     * changes after validatePositionalConstraints returns.
+     *
+     * Gated on validationSucceeded, NOT merely on the snapshots being present:
+     * they are taken at Phase 4b, before CDCL, so a later failure (CDCL UNSAT,
+     * node overlap) would otherwise leave them populated for a rejected layout
+     * and this deferred build would answer must/cannot queries about a
+     * constraint system enforceMaximalFeasibleSubset already replaced. When
+     * the eager build lived at Phase 5b it simply never ran on the CDCL-UNSAT
+     * path; this restores that, and extends it to the overlap path.
+     *
+     * enforceMaximalFeasibleSubset also nulls the snapshots, which is what
+     * covers the getters that read the must-graphs directly. This flag is the
+     * belt to that braces: it keeps the build correct even for a future error
+     * path that forgets to route through there.
      */
     private modalStateBuilt = false;
 
     private ensureModalQueryState(): void {
-        if (this.modalStateBuilt || !this.mustHGraph || !this.mustVGraph) return;
+        if (this.modalStateBuilt || !this.validationSucceeded) return;
+        if (!this.mustHGraph || !this.mustVGraph) return;
         this.modalStateBuilt = true;
         this.buildModalQueryState();
     }
