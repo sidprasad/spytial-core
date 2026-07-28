@@ -721,7 +721,7 @@ const BORDER_STYLE_FIELDS: readonly FieldSpec[] = [
  * resolver's compose / collision rules.
  */
 const ICON_STYLE_FIELDS: readonly FieldSpec[] = [
-  { key: 'path', kind: 'text', label: 'Path / URL', placeholder: 'e.g. bi:person-fill, person, https://…' },
+  { key: 'path', kind: 'iconPath', label: 'Icon', placeholder: 'e.g. person, bi:person-fill, https://…' },
   { key: 'placement', kind: 'enum', options: ICON_PLACEMENTS, label: 'Placement' },
   { key: 'opacity', kind: 'number', label: 'Opacity', help: '0–1. Fade a full-bleed icon to use it as a watermark behind the label.' },
 ];

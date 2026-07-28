@@ -41,6 +41,7 @@ export type FieldKind =
   | 'number'
   | 'color'
   | 'text'
+  | 'iconPath' // free text (URL / path / pack ref) plus a browser for the bundled icons
   | 'boolean'
   | 'group'; // a nested block (lineStyle / textStyle / …); renders its `children` recursively
 

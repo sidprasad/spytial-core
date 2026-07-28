@@ -177,10 +177,77 @@ export function getIconPackPrefixes(): string[] {
 }
 
 /**
+ * Human-readable name for each pack prefix, for UI that offers packs as a
+ * choice. Kept beside {@link ICON_PACK_CDNS} rather than folded into it so the
+ * resolver stays a plain prefix→URL map; a test asserts every prefix has a
+ * label, so the two cannot drift.
+ */
+const ICON_PACK_LABELS: Record<string, string> = {
+  'bi': 'Bootstrap Icons',
+  'fa': 'FontAwesome (solid)',
+  'fa-solid': 'FontAwesome (solid)',
+  'fa-regular': 'FontAwesome (regular)',
+  'fa-brands': 'FontAwesome (brands)',
+  'lucide': 'Lucide',
+  'heroicons': 'Heroicons (outline)',
+  'heroicons-solid': 'Heroicons (solid)',
+  'tabler': 'Tabler Icons',
+  'simple': 'Simple Icons (brands)',
+};
+
+/** A CDN icon pack, described for display. */
+export interface IconPackInfo {
+  /** The prefix an author writes, e.g. `bi`. */
+  prefix: string;
+  /** Human-readable pack name, e.g. `Bootstrap Icons`. */
+  label: string;
+  /** A representative reference an author could paste, e.g. `bi:person-fill`. */
+  example: string;
+}
+
+/**
+ * The icon packs, described for a picker or docs. These resolve to CDN URLs at
+ * render time, so unlike the bundled set they cannot be previewed offline —
+ * consumers should present them as guidance (prefix + name) rather than
+ * thumbnails.
+ */
+export function getIconPacks(): IconPackInfo[] {
+  return Object.keys(ICON_PACK_CDNS).map((prefix) => ({
+    prefix,
+    label: ICON_PACK_LABELS[prefix] ?? prefix,
+    example: `${prefix}:${prefix.startsWith('fa') || prefix === 'bi' ? 'person' : 'home'}`,
+  }));
+}
+
+/**
  * Check if an icon name is a bundled icon.
  */
 export function isBundledIcon(iconPath: string): boolean {
   return iconPath in BUNDLED_ICONS;
+}
+
+const BUNDLED_PREFIX = 'data:image/svg+xml,';
+
+/**
+ * The raw SVG markup of a bundled icon, or `undefined` for anything not in the
+ * bundled set (a URL, a relative path, a `pack:name` reference).
+ *
+ * Why this exists: the bundled glyphs are drawn with `fill="currentColor"`, and
+ * `currentColor` inside an SVG loaded through `<img>` resolves against the SVG
+ * *document* — whose initial `color` is black — not the host page. So an `<img>`
+ * thumbnail is always black no matter what the surrounding theme is, which is
+ * invisible on a dark surface. Inlining the markup instead lets `color` cascade
+ * in normally.
+ *
+ * Returning `undefined` for everything else is the safety property, not an
+ * omission: only markup this module authored at compile time is ever eligible
+ * for inlining, so a caller cannot be tricked into injecting a user-supplied
+ * string by passing it here.
+ */
+export function getBundledIconSvg(name: string): string | undefined {
+  const uri = BUNDLED_ICONS[name];
+  if (!uri) return undefined;
+  return decodeURIComponent(uri.slice(BUNDLED_PREFIX.length));
 }
 
 /**

@@ -11,6 +11,7 @@
  * - `color`           → color swatch input
  * - `boolean`         → switch
  * - `text`            → text input
+ * - `iconPath`        → {@link IconField} (text input + built-in icon browser)
  *
  * The renderer is domain-agnostic. Domain names for `relationName`/`typeName`
  * combo boxes come from the `options` prop; per-field selector props (the
@@ -22,6 +23,7 @@ import React, { useId } from 'react';
 import type { Diagnostic, FieldSpec } from '../core/types';
 import { SelectorField } from './SelectorField';
 import type { SelectorFieldProps } from './SelectorField';
+import { IconField } from './IconField';
 
 /** Domain names available for the combo-box field kinds. */
 export interface FieldRendererOptions {
@@ -496,6 +498,20 @@ function renderControl(
         >
           <span className="spytial-ed-switch-thumb" aria-hidden="true" />
         </button>
+      );
+    }
+
+    case 'iconPath': {
+      return (
+        <IconField
+          id={fieldId}
+          value={asString(value)}
+          onChange={(v) => onChange(field.key, v)}
+          placeholder={field.placeholder}
+          disabled={disabled}
+          aria-describedby={describedBy}
+          aria-invalid={diagnostics.some((d) => d.severity === 'error')}
+        />
       );
     }
 
