@@ -88,6 +88,15 @@ import type { PositionalConstraintError, GroupOverlapError } from './constraint-
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
+ * Global mutation-stamp counter shared by all DifferenceConstraintGraph
+ * instances. Every stamp ever handed out is unique, so "stamp unchanged"
+ * always means "no structural mutation on that graph object since" — even
+ * across checkpoint/restore, which installs fresh graph objects with fresh
+ * stamps (never reusing values that older cached verdicts were keyed on).
+ */
+let nextGraphStamp = 1;
+
+/**
  * Weighted DAG representing difference constraints between spatial elements.
  *
  * Each edge (a → b, weight w) encodes the constraint "b must be at least w
@@ -115,7 +124,104 @@ class DifferenceConstraintGraph {
     private edgeProvenance: Map<string, LayoutConstraint> = new Map();
     /** Reference count for alignment edge pairs (key: "a\x00b" with a < b lexicographically). */
     private alignmentRefCount: Map<string, number> = new Map();
+    /**
+     * Active claims per directed edge (key: "a\x00b"), each the weight an
+     * addEdge asked for plus the constraint that asked. Every successful
+     * addEdge registers one — including the redundant path (an equal-or-tighter
+     * edge already exists) and the tightening path (which displaces a smaller
+     * weight). The stored edge weight is always the max of its claims, and
+     * edgeProvenance always names the strongest claim's constraint.
+     * removeEdgeClaim releases one claim and restores both (or deletes the
+     * edge when none remain). Without this, undoing an assignment whose
+     * constraint duplicated an existing pair blindly deleted the shared edge —
+     * dropping a base constraint or another assigned alternative's edge.
+     */
+    private edgeClaims: Map<string, { w: number; c?: LayoutConstraint }[]> = new Map();
     private gap: number;
+
+    /**
+     * Mutation stamps. addVersion changes when an edge is inserted (or a
+     * zero-weight edge becomes positive); removeVersion changes when an edge
+     * is deleted. Positive-weight tightenings change neither reachability nor
+     * strict-orderedness, so they deliberately do NOT bump (keeps caches warm).
+     */
+    addVersion: number = nextGraphStamp++;
+    removeVersion: number = nextGraphStamp++;
+    /**
+     * Bumped by every change to an edge's WEIGHT, including the
+     * positive→positive tightenings that deliberately leave
+     * addVersion/removeVersion alone. Distances depend on weights, so the
+     * longest-path caches key on this instead (see validateMemo).
+     */
+    private weightVersion: number = nextGraphStamp++;
+    /**
+     * Set if any non-alignment edge was ever inserted with weight ≤ 0. Such
+     * edges break the invariant "zero-weight edges occur only in symmetric
+     * alignment pairs", which the validator's cross-version feasibility-verdict
+     * reuse relies on (see graphPropagate). When set, callers must fall back
+     * to exact-stamp cache validity.
+     */
+    hasZeroWeightOrderingEdge = false;
+
+    /** Per-source reachability memo: src → (target → some path has a positive edge). */
+    private reachMemo: Map<string, Map<string, boolean>> = new Map();
+    /** Per-source longest-path memo: src → (target → max total edge weight). */
+    private maxWeightMemo: Map<string, Map<string, number>> = new Map();
+    /** Source-independent contraction backing maxWeightMemo (see contractedDag). */
+    private contractedMemo: {
+        rep: Map<string, string>;
+        adj: Map<string, Map<string, number>>;
+        order: string[];
+        members: Map<string, string[]>;
+    } | null = null;
+    /** Memoized Tarjan SCC components. */
+    private sccMemo: string[][] | null = null;
+    private memoAddV = -1;
+    private memoRemV = -1;
+    private memoWeightV = -1;
+
+    /**
+     * Reachability deltas accumulated since the last consumeReachDeltas():
+     * (from, to) pairs whose reach-status changed (became reachable, or a
+     * positive-weight path appeared where only zero-weight paths existed).
+     * Deltas are exact when produced by the incremental-closure path in
+     * addEdge; any mutation that goes the clear-the-memo route (alignment
+     * edges, removals, cold memo, zero-weight hazard) sets this to null =
+     * "unknown, assume anything changed". Starts null so workloads that never
+     * consume record nothing; the first consume (which precedes any cached
+     * verdict) arms tracking. Capped as a memory backstop.
+     */
+    private pendingDeltas: { from: string; to: string }[] | null = null;
+    /**
+     * Overflow degrades gracefully (consumer sees null = unknown), so this cap
+     * only needs to bound memory for workloads that never consume. Consuming
+     * workloads reset per propagation pass and stay far below it.
+     */
+    private static readonly MAX_PENDING_DELTAS = 65536;
+
+    /**
+     * Hand back the reachability deltas since the last call (and reset the
+     * accumulator). Returns null if the deltas are unknown — the caller must
+     * assume any pair's reachability may have changed.
+     */
+    consumeReachDeltas(): { from: string; to: string }[] | null {
+        const d = this.pendingDeltas;
+        this.pendingDeltas = [];
+        return d;
+    }
+
+    private markDeltasUnknown(): void {
+        this.pendingDeltas = null;
+    }
+
+    private recordDelta(from: string, to: string): void {
+        if (this.pendingDeltas === null) return;
+        if (this.pendingDeltas.length >= DifferenceConstraintGraph.MAX_PENDING_DELTAS) {
+            this.pendingDeltas = null;
+            return;
+        }
+        this.pendingDeltas.push({ from, to });
+    }
 
     constructor(gap: number = 15) {
         this.gap = gap;
@@ -129,9 +235,51 @@ class DifferenceConstraintGraph {
         g.nodeSize = new Map(this.nodeSize);
         g.edgeProvenance = new Map(this.edgeProvenance);
         g.alignmentRefCount = new Map(this.alignmentRefCount);
+        // Claim records are never mutated in place (only pushed/spliced), so
+        // copying the arrays is enough — the entries can be shared.
+        for (const [k, claims] of this.edgeClaims) g.edgeClaims.set(k, [...claims]);
+        g.hasZeroWeightOrderingEdge = this.hasZeroWeightOrderingEdge;
+        // Fresh stamps (from the constructor) — the clone is a new object with
+        // an empty memo and no cached verdicts keyed on it, so it must not
+        // inherit stamps that other caches associate with the original.
         return g;
     }
 
+    /**
+     * Drop memoized state the graph has outgrown. Two tiers, because the
+     * reachability caches and the longest-path caches depend on different
+     * things:
+     *
+     *  - reachMemo / sccMemo depend on the edge SET, tracked by
+     *    addVersion/removeVersion. A positive→positive tightening leaves both
+     *    untouched, which is why it deliberately does not bump them.
+     *  - maxWeightMemo / contractedMemo depend on edge WEIGHTS, tracked by
+     *    weightVersion. Tightening an edge changes distances without changing
+     *    reachability, and the incremental-closure path in addEdge keeps
+     *    reachMemo alive across an insert without recomputing distances — so
+     *    without this second tier both would stay stale while looking valid.
+     */
+    private validateMemo(): void {
+        if (this.memoAddV !== this.addVersion || this.memoRemV !== this.removeVersion) {
+            this.reachMemo.clear();
+            this.sccMemo = null;
+            this.maxWeightMemo.clear();
+            this.contractedMemo = null;
+            this.memoAddV = this.addVersion;
+            this.memoRemV = this.removeVersion;
+            this.memoWeightV = this.weightVersion;
+            return;
+        }
+        if (this.memoWeightV !== this.weightVersion) {
+            this.maxWeightMemo.clear();
+            this.contractedMemo = null;
+            this.memoWeightV = this.weightVersion;
+        }
+    }
+
+    // Note: adding an isolated node deliberately does NOT bump the mutation
+    // stamps — it creates no paths, so cached reachability stays valid, and
+    // SCC consumers treat nodes absent from the memo as singletons.
     ensureNode(id: string, size: number = 0): void {
         if (!this.nodes.has(id)) {
             this.nodes.add(id);
@@ -164,7 +312,10 @@ class DifferenceConstraintGraph {
         if (a === b) return false;
         const existing = this.adj.get(a)!.get(b);
         if (existing !== undefined && w <= existing) {
-            // Edge exists with equal or tighter weight — redundant, no change needed
+            // Edge exists with equal or tighter weight — no graph change, but
+            // the claim must be registered so a later removeEdgeClaim releases
+            // THIS add instead of deleting the edge someone else still needs.
+            this.registerClaim(a, b, w, constraint);
             return true;
         }
         // For new edges or tightening: check if a return path b→...→a exists.
@@ -173,16 +324,196 @@ class DifferenceConstraintGraph {
         // Zero-weight addEdge calls are only used internally via addAlignmentEdges
         // which has its own reachability checks, so reject all canReach here.
         if (this.canReach(b, a)) return false;
-        this.adj.get(a)!.set(b, w);
-        this.radj.get(b)!.set(a, w);
-        if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
+        if (w <= 0) this.hasZeroWeightOrderingEdge = true;
+        // New edge, or a zero-weight edge becoming positive: reachability or
+        // strict-orderedness changed. (Positive→positive tightening changes
+        // neither, so it neither bumps nor invalidates.)
+        if (existing === undefined || existing === 0) {
+            // Incremental closure: a plain acyclic insert (the canReach check
+            // above guarantees b cannot reach a) only creates paths of the form
+            // s →* a → b →* t, so the memoized closure can be patched in place
+            // — and the patched (s, t) pairs are exactly the reachability
+            // deltas. Requires a current memo and no zero-weight hazard.
+            const incremental = existing === undefined
+                && !this.hasZeroWeightOrderingEdge
+                && this.memoAddV === this.addVersion
+                && this.memoRemV === this.removeVersion;
+            this.adj.get(a)!.set(b, w);
+            this.radj.get(b)!.set(a, w);
+            this.weightVersion = nextGraphStamp++;
+            if (incremental) {
+                // Patch BEFORE bumping the stamp: reachFrom inside the patch
+                // must see matching stamps, or validateMemo would wipe the
+                // memo it is meant to update.
+                this.applyIncrementalClosure(a, b, w > 0);
+                // Memo (and SCC memo — an acyclic insert cannot merge SCCs)
+                // maintained in place; keep the stamps synced so validateMemo
+                // doesn't discard them.
+                this.addVersion = nextGraphStamp++;
+                this.memoAddV = this.addVersion;
+            } else {
+                this.addVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+        } else {
+            // Tightening only: reachability and strict-orderedness are
+            // unchanged (so no add/removeVersion bump), but distances are not.
+            this.adj.get(a)!.set(b, w);
+            this.radj.get(b)!.set(a, w);
+            this.weightVersion = nextGraphStamp++;
+        }
+        this.registerClaim(a, b, w, constraint);
         return true;
     }
 
-    removeEdge(a: string, b: string): void {
-        this.adj.get(a)?.delete(b);
-        this.radj.get(b)?.delete(a);
-        this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
+    private registerClaim(a: string, b: string, w: number, constraint?: LayoutConstraint): void {
+        const key = DifferenceConstraintGraph.provenanceKey(a, b);
+        const claims = this.edgeClaims.get(key);
+        if (claims) claims.push({ w, c: constraint });
+        else this.edgeClaims.set(key, [{ w, c: constraint }]);
+        this.refreshProvenance(key);
+    }
+
+    /**
+     * Point edgeProvenance at the strongest remaining claim that carries a
+     * constraint, or drop it when no claim does. Provenance has to follow the
+     * claims because conflict analysis maps path edges back to trail entries
+     * through it (analyzeConflictForDecision / analyzeTheoryConflict): naming a
+     * constraint whose claim was already released finds no trail entry, which
+     * silently OMITS a literal and yields a learned clause stronger than the
+     * conflict justifies. Before claims existed this could not arise — an undo
+     * deleted the edge and its provenance together.
+     *
+     * Ties keep the earliest claim, and a claim without a constraint never
+     * displaces one that has it, so the add-side outcomes are exactly what the
+     * previous `if (constraint) set(...)` produced: a fresh edge takes its
+     * constraint, a redundant add leaves the stronger claim's constraint in
+     * place, and a tightening add takes over.
+     */
+    private refreshProvenance(key: string): void {
+        const claims = this.edgeClaims.get(key);
+        if (!claims || claims.length === 0) {
+            this.edgeProvenance.delete(key);
+            return;
+        }
+        let best: LayoutConstraint | undefined;
+        let bestW = -Infinity;
+        for (const claim of claims) {
+            if (claim.c !== undefined && claim.w > bestW) {
+                bestW = claim.w;
+                best = claim.c;
+            }
+        }
+        if (best !== undefined) this.edgeProvenance.set(key, best);
+        else this.edgeProvenance.delete(key);
+    }
+
+    /**
+     * Release one claim on edge a → b, mirroring an earlier addEdge with the
+     * same raw weight (the stored claim is `(weight ?? gap) + size(a)`, the
+     * same formula addEdge applies). The edge survives at the strongest
+     * remaining claim's weight; it is physically deleted only when the last
+     * claim is released. A missing claim is a no-op — that add never took
+     * effect (e.g. a cycle-rejected member edge of a BoundingBox alternative).
+     *
+     * This replaces the old blind removeEdge, which deleted unconditionally
+     * and thereby destroyed edges still required by a base constraint or
+     * another assigned alternative whenever an undone constraint duplicated
+     * their pair (validator reported SAT with a cyclic committed set —
+     * caught by the Z3 committed-set cross-check).
+     */
+    removeEdgeClaim(a: string, b: string, weight?: number, constraint?: LayoutConstraint): void {
+        const w = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
+        const key = DifferenceConstraintGraph.provenanceKey(a, b);
+        const claims = this.edgeClaims.get(key);
+        if (!claims) return;
+        // Match the RELEASING constraint's own claim, not just any claim of the
+        // same weight: two distinct constraints can claim one edge at the same
+        // weight (equal minDistance on the same pair), and dropping the wrong
+        // record leaves the released constraint's claim alive — so provenance
+        // then names a constraint that is off the trail while the still-active
+        // one goes unnamed, which is exactly the omitted-literal case that
+        // makes a learned clause stronger than its conflict.
+        //
+        // Identity matching also makes a missed claim a true no-op: a member
+        // edge whose add was cycle-rejected registers nothing, and weight-only
+        // matching could have released some other constraint's claim instead.
+        const idx = constraint !== undefined
+            ? claims.findIndex(claim => claim.w === w && claim.c === constraint)
+            : claims.findIndex(claim => claim.w === w);
+        if (idx === -1) return;
+        claims.splice(idx, 1);
+
+        if (claims.length === 0) {
+            this.edgeClaims.delete(key);
+            if (this.adj.get(a)?.delete(b)) {
+                this.radj.get(b)?.delete(a);
+                this.removeVersion = nextGraphStamp++;
+                this.weightVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+            this.edgeProvenance.delete(key);
+            return;
+        }
+
+        let newW = -Infinity;
+        for (const claim of claims) { if (claim.w > newW) newW = claim.w; }
+        const cur = this.adj.get(a)?.get(b);
+        if (cur !== undefined && newW < cur) {
+            this.adj.get(a)!.set(b, newW);
+            this.radj.get(b)!.set(a, newW);
+            this.weightVersion = nextGraphStamp++;
+            if (cur > 0 && newW <= 0) {
+                // Strict-orderedness may have shrunk — removal-like event for
+                // the reachability caches. (Positive→positive decreases change
+                // neither reachability nor strictness: no bump needed.)
+                this.removeVersion = nextGraphStamp++;
+                this.markDeltasUnknown();
+            }
+        }
+        // The released claim may have been the one naming this edge.
+        this.refreshProvenance(key);
+    }
+
+    /**
+     * Patch the memoized closure after inserting acyclic edge u → v, recording
+     * every (source, target) pair whose reach-status changed as a delta.
+     *
+     * New paths are exactly s →* u → v →* t, so for every cached source s that
+     * reaches u (or s === u), merge v's closure (plus v itself) into s's set,
+     * OR-ing path positivity. Sources not in the memo recompute from the
+     * updated adjacency on demand. Coverage note: consumers' cached verdicts
+     * only ever probe sources they queried when computing — queries warm the
+     * memo, and the memo is only ever cleared wholesale by mutations that also
+     * mark deltas unknown — so every probe source of a live verdict is cached
+     * here and gets its deltas recorded.
+     */
+    private applyIncrementalClosure(u: string, v: string, edgePositive: boolean): void {
+        const vSet = this.reachFrom(v); // v's closure is unaffected by u → v (no cycle)
+        for (const [s, sSet] of this.reachMemo) {
+            let posToU: boolean;
+            if (s === u) {
+                posToU = false;
+            } else {
+                const e = sSet.get(u);
+                if (e === undefined) continue; // s does not reach u — unaffected
+                posToU = e;
+            }
+            const posToV = posToU || edgePositive;
+            const curV = sSet.get(v);
+            if (curV === undefined || (!curV && posToV)) {
+                sSet.set(v, posToV);
+                if (s !== v) this.recordDelta(s, v);
+            }
+            for (const [t, posVT] of vSet) {
+                const p = posToV || posVT;
+                const cur = sSet.get(t);
+                if (cur === undefined || (!cur && p)) {
+                    sSet.set(t, p);
+                    if (s !== t) this.recordDelta(s, t);
+                }
+            }
+        }
     }
 
     hasEdge(a: string, b: string): boolean {
@@ -200,22 +531,54 @@ class DifferenceConstraintGraph {
 
     canReach(from: string, to: string): boolean {
         if (from === to) return true;
-        const visited = new Set<string>();
-        const queue: string[] = [from];
-        visited.add(from);
-        while (queue.length > 0) {
-            const cur = queue.shift()!;
-            const succs = this.adj.get(cur);
+        return this.reachFrom(from).has(to);
+    }
+
+    /**
+     * Memoized per-source reachability. One two-state BFS computes, for every
+     * node reachable from `src`, whether some path there contains a positive-
+     * weight edge — answering all canReach AND isStrictlyOrdered queries from
+     * `src` until the graph next mutates. Amortizes the ~600k single-pair BFS
+     * calls graphPropagate used to issue (each pass re-queries the same
+     * sources: bbox members, alignment endpoints, disjunction edge endpoints).
+     *
+     * Entry semantics: key present = reachable; value true = some path has a
+     * positive edge (strict ordering). `src` itself gets an entry with value
+     * false initially and may upgrade to true via a cycle through `src`,
+     * mirroring the original BFS exactly.
+     */
+    private reachFrom(src: string): Map<string, boolean> {
+        this.validateMemo();
+        const cached = this.reachMemo.get(src);
+        if (cached) return cached;
+
+        const m = new Map<string, boolean>(); // node → best "hasPositive" seen
+        const queue: string[] = [src];
+        const queuePositive: boolean[] = [false];
+        m.set(src, false);
+        let head = 0;
+        while (head < queue.length) {
+            const node = queue[head];
+            const hasPositive = queuePositive[head];
+            head++;
+            const succs = this.adj.get(node);
             if (!succs) continue;
-            for (const s of succs.keys()) {
-                if (s === to) return true;
-                if (!visited.has(s)) {
-                    visited.add(s);
+            for (const [s, w] of succs) {
+                const newHasPositive = hasPositive || w > 0;
+                const prev = m.get(s);
+                if (prev === undefined || (!prev && newHasPositive)) {
+                    m.set(s, newHasPositive);
                     queue.push(s);
+                    queuePositive.push(newHasPositive);
                 }
             }
         }
-        return false;
+        // src is trivially "reachable" from itself; drop the seed entry unless
+        // a real cycle re-reached it (upgraded to true), so `has(src)` reflects
+        // actual edge-reachability for canReach's non-early-exit path.
+        if (m.get(src) === false) m.delete(src);
+        this.reachMemo.set(src, m);
+        return m;
     }
 
     /**
@@ -349,15 +712,23 @@ class DifferenceConstraintGraph {
         }
 
         // Add zero-weight edges (don't overwrite existing positive-weight edges)
+        // Alignment pairs create deliberate 2-cycles — no incremental closure
+        // patch for those; take the clear-and-recompute route.
         if (!this.adj.get(a)!.has(b)) {
             this.adj.get(a)!.set(b, 0);
             this.radj.get(b)!.set(a, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(a, b), constraint);
+            this.addVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
         if (!this.adj.get(b)!.has(a)) {
             this.adj.get(b)!.set(a, 0);
             this.radj.get(a)!.set(b, 0);
             if (constraint) this.edgeProvenance.set(DifferenceConstraintGraph.provenanceKey(b, a), constraint);
+            this.addVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
 
         // Increment reference count for this alignment pair
@@ -384,11 +755,17 @@ class DifferenceConstraintGraph {
             this.adj.get(a)!.delete(b);
             this.radj.get(b)!.delete(a);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(a, b));
+            this.removeVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
         if (this.adj.get(b)?.get(a) === 0) {
             this.adj.get(b)!.delete(a);
             this.radj.get(a)!.delete(b);
             this.edgeProvenance.delete(DifferenceConstraintGraph.provenanceKey(b, a));
+            this.removeVersion = nextGraphStamp++;
+            this.weightVersion = nextGraphStamp++;
+            this.markDeltasUnknown();
         }
     }
 
@@ -410,25 +787,230 @@ class DifferenceConstraintGraph {
      */
     isStrictlyOrdered(a: string, b: string): boolean {
         if (a === b) return false;
-        // BFS tracking whether we've traversed any positive-weight edge
-        const visited = new Map<string, boolean>(); // node → best "hasPositive" seen
-        const queue: { node: string; hasPositive: boolean }[] = [{ node: a, hasPositive: false }];
-        visited.set(a, false);
-        while (queue.length > 0) {
-            const { node, hasPositive } = queue.shift()!;
-            const succs = this.adj.get(node);
-            if (!succs) continue;
-            for (const [s, w] of succs) {
-                const newHasPositive = hasPositive || w > 0;
-                if (s === b && newHasPositive) return true;
-                const prevPositive = visited.get(s);
-                if (prevPositive === undefined || (!prevPositive && newHasPositive)) {
-                    visited.set(s, newHasPositive);
-                    queue.push({ node: s, hasPositive: newHasPositive });
+        return this.reachFrom(a).get(b) === true;
+    }
+
+    /**
+     * Check if a sits entirely before b on this axis: coord_a + size_a < coord_b.
+     *
+     * This is the spatial relation the query language means by "left of" /
+     * "above" — a is clear of b, not merely starting earlier. isStrictlyOrdered
+     * is the weaker "coord_a < coord_b"; use that one for questions about
+     * ordering or alignment feasibility, and this one for questions about where
+     * a box actually sits relative to another.
+     *
+     * The two coincide when every box has the same size on this axis, because
+     * any forced separation is then at least one box plus its padding. They
+     * come apart as soon as sizes differ: with A aligned to a narrow N and
+     * N before B, the forced separation is N's width, which says nothing about
+     * whether the much wider A clears B.
+     *
+     * Sound but not complete: maxWeightFrom is the separation this graph
+     * entails, and non-overlap and unresolved disjunctions can force more.
+     * Claiming less than is true is the safe direction for a must-fact.
+     */
+    isProperlyBefore(a: string, b: string): boolean {
+        if (a === b) return false;
+        const w = this.maxWeightFrom(a).get(b);
+        return w !== undefined && w > (this.nodeSize.get(a) ?? 0);
+    }
+
+    /**
+     * Does the graph already force at least the separation an edge (a → b) with
+     * this raw minDistance would add? Converts the same way addEdge does
+     * (minDistance + source size) and compares against the entailed longest
+     * path, so an identical existing edge qualifies but a weaker one does not.
+     *
+     * "Ordered" is not enough to call such a constraint implied: a path merely
+     * proves SOME separation, while the constraint demands a specific amount.
+     */
+    entailsSeparation(a: string, b: string, weight?: number): boolean {
+        if (a === b) return false;
+        const required = (weight ?? this.gap) + (this.nodeSize.get(a) ?? 0);
+        const w = this.maxWeightFrom(a).get(b);
+        return w !== undefined && w >= required;
+    }
+
+    /**
+     * Memoized per-source longest-path weight. reachFrom answers "is there a
+     * path with any separation at all", which entails only coord_a < coord_b.
+     * Deciding whether a box CLEARS another needs the total separation the
+     * constraints force — coord_target ≥ coord_src + maxWeightFrom(src, target)
+     * — and that is the maximum over paths, not the existence of one.
+     *
+     * Alignment classes are contracted first: their members share a coordinate,
+     * so every edge inside a class weighs 0 and contributes nothing to a path.
+     * What remains is a DAG (positive-weight cycles are rejected at insertion),
+     * so the longest path is a single topological relaxation pass.
+     */
+    private maxWeightFrom(src: string): Map<string, number> {
+        this.validateMemo();
+        const cached = this.maxWeightMemo.get(src);
+        if (cached) return cached;
+
+        const { rep, adj, order, members } = this.contractedDag();
+        const srcRep = rep.get(src) ?? src;
+
+        const dist = new Map<string, number>();
+        dist.set(srcRep, 0);
+        for (const n of order) {
+            const base = dist.get(n);
+            if (base === undefined) continue; // not downstream of src
+            for (const [s, w] of adj.get(n)!) {
+                const cand = base + w;
+                const cur = dist.get(s);
+                if (cur === undefined || cand > cur) dist.set(s, cand);
+            }
+        }
+
+        // Expand super-nodes back to members. Walking `dist` rather than every
+        // node keeps this proportional to what src actually reaches, matching
+        // reachFrom — expanding over all nodes instead made each source O(V)
+        // even when it reaches nothing.
+        const result = new Map<string, number>();
+        for (const [r, d] of dist) {
+            const ms = members.get(r);
+            if (ms === undefined) { result.set(r, d); continue; }
+            for (const m of ms) result.set(m, d);
+        }
+        this.maxWeightMemo.set(src, result);
+        return result;
+    }
+
+    /**
+     * The alignment-contracted DAG plus a topological order, shared by every
+     * maxWeightFrom source. Building it is O(V + E) and it does not depend on
+     * the source, so it is computed once per graph version — rebuilding it per
+     * source made the lazy modal build ~3-5x slower on chains.
+     *
+     * Members of an alignment class share a coordinate, so intra-class edges
+     * (necessarily zero-weight) are dropped and the class collapses to one
+     * super-node. Between super-nodes only the heaviest edge matters, since a
+     * longest-path relaxation would pick it anyway.
+     */
+    private contractedDag(): {
+        rep: Map<string, string>;
+        adj: Map<string, Map<string, number>>;
+        order: string[];
+        members: Map<string, string[]>;
+    } {
+        if (this.contractedMemo) return this.contractedMemo;
+
+        const rep = new Map<string, string>();
+        const members = this.getAlignmentClasses();
+        for (const [r, ms] of members) {
+            for (const m of ms) rep.set(m, r);
+        }
+        const repOf = (id: string): string => rep.get(id) ?? id;
+
+        const adj = new Map<string, Map<string, number>>();
+        const indeg = new Map<string, number>();
+        for (const n of this.nodes) {
+            const r = repOf(n);
+            if (!adj.has(r)) { adj.set(r, new Map()); indeg.set(r, 0); }
+        }
+        for (const [u, succs] of this.adj) {
+            const ru = repOf(u);
+            const out = adj.get(ru);
+            if (!out) continue;
+            for (const [v, w] of succs) {
+                const rv = repOf(v);
+                if (ru === rv) continue;
+                const cur = out.get(rv);
+                if (cur === undefined) {
+                    out.set(rv, w);
+                    indeg.set(rv, (indeg.get(rv) ?? 0) + 1);
+                } else if (w > cur) {
+                    out.set(rv, w);
                 }
             }
         }
-        return false;
+
+        // Kahn order. Anything left unordered would sit on a surviving cycle,
+        // which after contraction means a positive-weight cycle — rejected at
+        // insertion, so unreachable in practice. Such nodes simply never get a
+        // distance, which reads as "no entailed separation": conservative.
+        const order: string[] = [];
+        const queue: string[] = [];
+        for (const [n, d] of indeg) if (d === 0) queue.push(n);
+        for (let head = 0; head < queue.length; head++) {
+            const n = queue[head];
+            order.push(n);
+            for (const [s] of adj.get(n)!) {
+                const d = (indeg.get(s) ?? 1) - 1;
+                indeg.set(s, d);
+                if (d === 0) queue.push(s);
+            }
+        }
+
+        this.contractedMemo = { rep, adj, order, members };
+        return this.contractedMemo;
+    }
+
+    /**
+     * All strongly connected components of the graph (any-weight edges).
+     * In a consistent graph, mutual reachability is only possible through
+     * zero-weight alignment cycles (positive-weight cycles are rejected at
+     * insertion), so SCCs are exactly the alignment classes.
+     *
+     * Iterative Tarjan, O(V + E) — replaces the old per-node nested-BFS
+     * approach, which was O(V·(V+E)) and dominated computeAlignmentOrders
+     * (87ms of a 200-node chain's validation, with zero alignments present).
+     */
+    private tarjanSCCs(): string[][] {
+        this.validateMemo();
+        if (this.sccMemo) return this.sccMemo;
+        const index = new Map<string, number>();
+        const lowlink = new Map<string, number>();
+        const onStack = new Set<string>();
+        const stack: string[] = [];
+        const components: string[][] = [];
+        let next = 0;
+
+        interface Frame { node: string; succs: string[]; i: number }
+
+        for (const root of this.nodes) {
+            if (index.has(root)) continue;
+            const frames: Frame[] = [];
+            const open = (n: string): void => {
+                index.set(n, next);
+                lowlink.set(n, next);
+                next++;
+                stack.push(n);
+                onStack.add(n);
+                frames.push({ node: n, succs: [...(this.adj.get(n)?.keys() ?? [])], i: 0 });
+            };
+            open(root);
+            while (frames.length > 0) {
+                const f = frames[frames.length - 1];
+                if (f.i < f.succs.length) {
+                    const s = f.succs[f.i++];
+                    if (!index.has(s)) {
+                        open(s);
+                    } else if (onStack.has(s)) {
+                        lowlink.set(f.node, Math.min(lowlink.get(f.node)!, index.get(s)!));
+                    }
+                } else {
+                    frames.pop();
+                    if (lowlink.get(f.node) === index.get(f.node)) {
+                        const comp: string[] = [];
+                        let m: string;
+                        do {
+                            m = stack.pop()!;
+                            onStack.delete(m);
+                            comp.push(m);
+                        } while (m !== f.node);
+                        components.push(comp);
+                    }
+                    const parent = frames[frames.length - 1];
+                    if (parent) {
+                        lowlink.set(parent.node, Math.min(lowlink.get(parent.node)!, lowlink.get(f.node)!));
+                    }
+                }
+            }
+        }
+        this.sccMemo = components;
+        return components;
     }
 
     /**
@@ -437,66 +1019,22 @@ class DifferenceConstraintGraph {
      * Classes with only one member are omitted.
      */
     getAlignmentClasses(): Map<string, string[]> {
-        // Find SCCs using Tarjan's or simpler approach: for each node, find its
-        // SCC by checking mutual reachability. For small graphs, nested BFS is fine.
         const classes = new Map<string, string[]>();
-        const assigned = new Set<string>();
-
-        for (const node of this.nodes) {
-            if (assigned.has(node)) continue;
-
-            // Find all nodes mutually reachable from this node (same SCC)
-            const forwardReachable = this.reachableSet(node);
-            const classMembers: string[] = [];
-
-            for (const candidate of forwardReachable) {
-                if (this.canReach(candidate, node)) {
-                    classMembers.push(candidate);
-                }
-            }
-
-            if (classMembers.length > 1) {
-                classMembers.sort(); // deterministic
-                const representative = classMembers[0];
-                classes.set(representative, classMembers);
-                for (const m of classMembers) assigned.add(m);
-            } else {
-                assigned.add(node);
+        for (const comp of this.tarjanSCCs()) {
+            if (comp.length > 1) {
+                comp.sort(); // deterministic
+                classes.set(comp[0], comp);
             }
         }
-
         return classes;
     }
 
     /** Get the alignment class (SCC) containing the given node. */
     getAlignmentClassOf(nodeId: string): string[] {
-        const forward = this.reachableSet(nodeId);
-        const members: string[] = [];
-        for (const candidate of forward) {
-            if (this.canReach(candidate, nodeId)) {
-                members.push(candidate);
-            }
+        for (const comp of this.tarjanSCCs()) {
+            if (comp.includes(nodeId)) return comp;
         }
-        return members;
-    }
-
-    /** Get all nodes reachable from `start` via any edges. */
-    private reachableSet(start: string): Set<string> {
-        const visited = new Set<string>();
-        const queue: string[] = [start];
-        visited.add(start);
-        while (queue.length > 0) {
-            const cur = queue.shift()!;
-            const succs = this.adj.get(cur);
-            if (!succs) continue;
-            for (const s of succs.keys()) {
-                if (!visited.has(s)) {
-                    visited.add(s);
-                    queue.push(s);
-                }
-            }
-        }
-        return visited;
+        return [nodeId];
     }
 
     /**
@@ -580,6 +1118,18 @@ interface Assignment {
     isDecision: boolean;
 }
 
+/** Cached feasibility verdicts for one disjunction — see altVerdictCache. */
+interface AltVerdictEntry {
+    /** Per-alternative: 0 = unknown, 1 = feasible, 2 = infeasible. */
+    verdict: Int8Array;
+    /** Per-alternative: additionEpoch (probe-tracked) or add-stamp sum (alignment-bearing) at compute time. */
+    addStamp: Float64Array;
+    /** Per-alternative: remove-stamp sum at compute time. */
+    remStamp: Float64Array;
+    /** Per-alternative: 1 if the alternative contains an AlignmentConstraint. */
+    hasAlignment: Uint8Array;
+}
+
 interface SolverCheckpoint {
     hGraph: DifferenceConstraintGraph;
     vGraph: DifferenceConstraintGraph;
@@ -621,7 +1171,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private assignmentTrail: Assignment[] = [];
     private decisionLevel: number = 0;
     private learnedClauses: LearnedClause[] = [];
-    private activity: Map<string, number> = new Map();
+    /**
+     * VSIDS activity, indexed by `disjunctionIndex * branchStride +
+     * alternativeIndex` (replaces a `d${d}a${a}`-keyed Map: pickBranch built
+     * one string per alternative per call — ~1.2M allocations on the 10-group
+     * benchmark). The stride never shrinks, so an entry keeps its (d, a)
+     * identity across restarts exactly as the string keys did.
+     */
+    private activityFlat: Float64Array = new Float64Array(0);
+    /** Branching tiebreaker 1/(1 + altLength), same indexing as activityFlat. */
+    private simplicityFlat: Float64Array = new Float64Array(0);
+    /** Reusable scratch for pickBranch's learned-clause elimination bitmap. */
+    private elimScratch: Uint8Array = new Uint8Array(0);
+    private branchStride = 0;
     private activityDecay: number = 0.95;
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
@@ -635,10 +1197,60 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private prunedByTransitivity: number = 0;
     private prunedByDecomposition: number = 0;
 
+    // ─── graphPropagate feasibility-verdict cache ───
+    /**
+     * Per-(disjunction, alternative) cached isAlternativeFeasible verdicts,
+     * keyed by disjunction object identity (pruneDisjunctions builds new
+     * objects, which naturally start cold). Validity rests on the monotonicity
+     * of feasibility in the edge set:
+     *   - edge ADDITIONS only shrink feasibility → an INFEASIBLE verdict stays
+     *     valid while no edge has been removed (remStamp unchanged);
+     *   - edge REMOVALS only grow feasibility → a FEASIBLE verdict stays valid
+     *     across removals unconditionally.
+     * For additions, feasible verdicts are invalidated PRECISELY rather than
+     * wholesale: each non-alignment alternative's feasibility depends on a
+     * fixed set of (axis, from, to) reachability probes, registered in
+     * probeIndex; when the graphs report exact reachability deltas
+     * (consumeReachDeltas), only verdicts whose probes match a delta are
+     * dirtied. When deltas are unknown (alignment-pair edges, removals, cold
+     * memo), additionEpoch bumps, invalidating all probe-tracked feasible
+     * verdicts at once. Alternatives containing an AlignmentConstraint query
+     * alignment classes (a dynamic probe set), so their feasible verdicts fall
+     * back to exact add-stamp validity.
+     * The monotone rules additionally need "zero-weight edges occur only in
+     * symmetric alignment pairs"; if either graph ever sees a zero-weight
+     * ordering edge (hasZeroWeightOrderingEdge), the cache is bypassed
+     * entirely.
+     * Sums of per-graph stamps are safe keys: stamps are globally unique and
+     * monotonically increasing, so an unchanged sum implies both unchanged.
+     * addStamp stores additionEpoch for probe-tracked alternatives and the
+     * add-stamp sum for alignment-bearing ones — fixed per alternative, so the
+     * two value domains never mix.
+     */
+    private altVerdictCache: Map<DisjunctiveConstraint, AltVerdictEntry> = new Map();
+    /**
+     * Positional memo of altVerdictCache for the graphPropagate scan, which
+     * revisits every unassigned disjunction each pass (~300k Map probes on the
+     * 10-group benchmark). verdictEntryDisj holds the disjunction the slot was
+     * filled from, and the scan only trusts a slot when that object is still
+     * identical — so a reshaped allDisjunctions can never alias the wrong
+     * entry, independent of the explicit clears.
+     */
+    private verdictEntryByIndex: (AltVerdictEntry | null)[] = [];
+    private verdictEntryDisj: (DisjunctiveConstraint | null)[] = [];
+    /** (axis, from, to) probe → verdicts whose feasibility it supports. */
+    private probeIndex: Map<string, { entry: AltVerdictEntry; aIdx: number }[]> = new Map();
+    /** Bumped whenever a graph reports unknown reachability deltas. */
+    private additionEpoch = 0;
+    /** Combined stamp of the last graphPropagate that reached 'ok' fixpoint; bail early if unchanged. */
+    private lastPropagateOkStamp = -1;
+
     // ─── Modal query state (populated after successful validation) ───
     /** Conjunctive-only graph snapshots (before CDCL disjunction resolution). */
     private mustHGraph: DifferenceConstraintGraph | null = null;
     private mustVGraph: DifferenceConstraintGraph | null = null;
+    /** Set only when validatePositionalConstraints completes without error. */
+    private validationSucceeded = false;
     /** Precomputed must-ordering pairs: "A\x00B" means A is strictly before B. */
     private mustHPairs: Set<string> | null = null;
     private mustVPairs: Set<string> | null = null;
@@ -671,6 +1283,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     public validatePositionalConstraints(): PositionalConstraintError | null {
+        // Any modal state belongs to a previous run over a possibly different
+        // constraint set — drop it before this one can be observed. Without
+        // this, a re-validation serves the earlier run's facts: modalStateBuilt
+        // short-circuits the rebuild on success, and the derived pair sets
+        // outlive the graphs on failure.
+        this.resetModalQueryState();
+
         // Phase 1: Add conjunctive constraints — stop on first error but don't return yet
         let phase1Failed = false;
         for (const constraint of this.orientationConstraints) {
@@ -727,8 +1346,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
         }
 
-        // Phase 5b: Build modal query state (must/can/cannot)
-        this.buildModalQueryState();
+        // Phase 5b: Modal query state (must/can/cannot) is built LAZILY on the
+        // first modal query (ensureModalQueryState). It is pure post-solve
+        // analysis over the must-graph snapshots and this.allDisjunctions —
+        // both frozen from here on — and profiling showed it dominating
+        // validation wall time (e.g. 78% on a 200-node conjunctive chain)
+        // while its only consumers (layout-evaluator, spytial-explorer) query
+        // interactively after render, and often never.
 
         // Phase 6: Alignment orders
         const implicitConstraints = this.computeAlignmentOrders();
@@ -738,6 +1362,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
 
         this.layout.constraints = this.layout.constraints.concat(implicitConstraints);
+        // Only now may modal queries build their state: every error path above
+        // routes through enforceMaximalFeasibleSubset, which REPLACES
+        // layout.constraints with the feasible subset — so the must-graph
+        // snapshots taken at Phase 4b would describe a constraint system the
+        // layout no longer has. See ensureModalQueryState.
+        this.validationSucceeded = true;
         return null;
     }
 
@@ -753,6 +1383,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (error.maximalFeasibleSubset) {
             this.layout.constraints = error.maximalFeasibleSubset;
         }
+        // Every error return in validatePositionalConstraints funnels through
+        // here, so this is the one place that has to drop modal state. The
+        // must-graphs are snapshotted at Phase 4b (before CDCL), so a later
+        // failure would otherwise leave them describing a constraint system
+        // this method just replaced on the layout. Note the readers disagree on
+        // what they consult — getCannot/getCannotAligned read the must-graphs
+        // DIRECTLY, getMust/getMustAligned read the derived pair and class
+        // sets — so nulling the graphs alone is not enough; reset all of it.
+        this.resetModalQueryState();
         return error;
     }
 
@@ -903,18 +1542,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const remaining: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            const regionPair = this.getDisjunctionRegionPair(disj);
-
-            // Already separated?
-            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
-                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
-                if (satisfyingAlt !== null) {
-                    for (const constraint of disj.alternatives[satisfyingAlt]) {
-                        this.addedConstraints.push(constraint);
-                    }
-                    this.prunedByTransitivity++;
-                    continue;
+            // Already satisfied? An alternative fully implied by the current
+            // graphs can be committed without adding edges (already entailed).
+            const impliedAlt = this.findImpliedAlternative(disj);
+            if (impliedAlt !== null) {
+                for (const constraint of disj.alternatives[impliedAlt]) {
+                    this.addedConstraints.push(constraint);
                 }
+                this.prunedByTransitivity++;
+                continue;
             }
 
             // Prune infeasible alternatives
@@ -1287,13 +1923,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // Geometric pruning helpers
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private areSeparated(idA: string, idB: string): boolean {
-        return (
-            this.hGraph.isOrdered(idA, idB) || this.hGraph.isOrdered(idB, idA) ||
-            this.vGraph.isOrdered(idA, idB) || this.vGraph.isOrdered(idB, idA)
-        );
-    }
-
     /**
      * Check if an alternative is feasible:
      * 1. No cycle (transitivity check)
@@ -1397,20 +2026,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // alignment conflicts are caught automatically by DifferenceConstraintGraph.addEdge
     // (which checks canReach for cycles through zero-weight alignment edges).
 
-    private getDisjunctionRegionPair(disj: DisjunctiveConstraint): [string, string] | null {
-        if (disj.alternatives.length === 0) return null;
-        const first = disj.alternatives[0][0];
-        if (isBoundingBoxConstraint(first)) return [first.node.id, `_group_${first.group.name}`];
-        if (isGroupBoundaryConstraint(first)) return [`_group_${first.groupA.name}`, `_group_${first.groupB.name}`];
-        if (isLeftConstraint(first)) return [first.left.id, first.right.id];
-        if (isTopConstraint(first)) return [first.top.id, first.bottom.id];
-        return null;
-    }
-
-    private findSatisfyingAlternative(disj: DisjunctiveConstraint, pair: [string, string]): number | null {
-        // Find an alternative whose constraints are all actually implied by
-        // the current ordering graphs (forward direction is ordered or alignment
-        // already holds).
+    /**
+     * Find an alternative whose constraints are ALL already implied by the
+     * current ordering graphs (forward direction is ordered or the alignment
+     * already holds). Only such an alternative may be committed WITHOUT adding
+     * its edges to the graphs — the facts are already entailed, so nothing can
+     * later contradict them undetected.
+     *
+     * There is deliberately NO "merely not contradicted" fallback here. The
+     * old fallback checked each constraint of an alternative against the
+     * graphs individually and committed the alternative without edges; the
+     * constraints could then contradict each other JOINTLY with the base
+     * (e.g. a negated-group tuple N1 <x N2 <x N0 against base N0 <x N1),
+     * producing a SAT verdict with an unsatisfiable committed constraint set.
+     * Caught by the Z3 committed-model cross-check in z3-equivalence.test.ts.
+     * Non-implied alternatives must go through the normal path, where commits
+     * add graph edges (addConjunctiveConstraint / tryAssign).
+     */
+    private findImpliedAlternative(disj: DisjunctiveConstraint): number | null {
         for (let i = 0; i < disj.alternatives.length; i++) {
             let allImplied = true;
             for (const constraint of disj.alternatives[i]) {
@@ -1423,36 +2056,22 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
                 const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                // Must be actually ordered in the forward direction
-                if (!graph.isOrdered(edge.from, edge.to)) { allImplied = false; break; }
+                // Must be ordered in the forward direction AND already forced
+                // to at least this constraint's separation. Ordering alone let
+                // a stronger constraint on an already-ordered pair count as
+                // implied, so it was committed without tightening the graph and
+                // the graph then under-entailed what the committed set requires
+                // (visible through getReachable / the must-queries). Both
+                // checks are kept: the conjunction can only ever shrink the
+                // implied set relative to the old behaviour, never grow it.
+                const minDistance = (constraint as { minDistance?: number }).minDistance;
+                if (!graph.isOrdered(edge.from, edge.to)
+                    || !graph.entailsSeparation(edge.from, edge.to, minDistance)) {
+                    allImplied = false;
+                    break;
+                }
             }
             if (allImplied) return i;
-        }
-        // Fallback: if no alternative is fully implied, find one that's at least
-        // not contradicted. Must also check alignment conflicts — an ordering
-        // between aligned nodes is contradicted even if no reverse edge exists.
-        // With zero-weight alignment edges, isStrictlyOrdered catches this:
-        // ordering aligned nodes would create a negative cycle through the
-        // zero-weight alignment path.
-        for (let i = 0; i < disj.alternatives.length; i++) {
-            let feasible = true;
-            for (const constraint of disj.alternatives[i]) {
-                if (isAlignmentConstraint(constraint)) {
-                    const ac = constraint as AlignmentConstraint;
-                    const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-                    // Alignment is contradicted if the nodes are strictly ordered
-                    if (graph.isStrictlyOrdered(ac.node1.id, ac.node2.id) || graph.isStrictlyOrdered(ac.node2.id, ac.node1.id)) {
-                        feasible = false; break;
-                    }
-                    continue;
-                }
-                const edge = this.constraintToEdge(constraint);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-                // Contradicted by reverse ordering (including through alignment paths)?
-                if (graph.canReach(edge.to, edge.from)) { feasible = false; break; }
-            }
-            if (feasible) return i;
         }
         return null;
     }
@@ -1470,11 +2089,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
 
-        for (let d = 0; d < this.allDisjunctions.length; d++) {
-            for (let a = 0; a < this.allDisjunctions[d].alternatives.length; a++) {
-                this.activity.set(`d${d}a${a}`, 0);
-            }
-        }
+        this.rebuildBranchIndex(true);
 
         const initialCheckpoint = this.checkpoint();
         const initialAddedLength = this.addedConstraints.length;
@@ -1493,6 +2108,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 this.pruneDisjunctions();
                 if (this.allDisjunctions.length === 0) return { satisfiable: true };
                 assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
+                // Pruning reshapes allDisjunctions; refresh the simplicity terms
+                // for the new shape but keep accumulated activity (the old
+                // index-keyed Map behaved the same way).
+                this.rebuildBranchIndex(false);
             }
 
             const result = this.cdclSearchLoop(assigned);
@@ -1653,19 +2272,64 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // alignment backtracking.
         if (this.groups.length === 0) return 'ok';
 
+        // Fast bail: if the graphs haven't structurally changed since the last
+        // 'ok' fixpoint, every feasibility verdict is unchanged, so the fixpoint
+        // still holds. (Any assignment or backtrack that matters bumps a stamp;
+        // an assignment whose edges were all already present changes nothing
+        // the feasibility checks can observe.)
+        if (this.combinedGraphStamp() === this.lastPropagateOkStamp) return 'ok';
+
         let changed = true;
         while (changed) {
             changed = false;
+            // Apply reachability deltas accumulated since the last pass (from
+            // decisions, unit propagation, backtracking, or tryAssigns made by
+            // the previous pass) to the verdict cache. Mid-pass mutations leave
+            // deltas pending until the next pass — sound, because a mid-pass
+            // mutation means a tryAssign succeeded, which forces another pass
+            // (and stale-FEASIBLE verdicts can only over-count, never force a
+            // wrong alternative or fabricate a conflict).
+            this.consumeGraphDeltas();
+
             for (let d = 0; d < this.allDisjunctions.length; d++) {
                 if (assigned[d] !== -1) continue;
 
                 const disj = this.allDisjunctions[d];
+                // Re-read per disjunction, not per pass: a tryAssign below can
+                // both add and REMOVE edges (a partially-applied alternative is
+                // rolled back), and a stale remove-stamp would keep an
+                // INFEASIBLE verdict alive across a removal — under-counting
+                // feasible alternatives, which could fabricate a conflict.
+                // Alternatives of one disjunction are only read, never mutated
+                // between, so this granularity is exactly right.
+                //
+                // Zero-weight ordering edges break the monotonicity invariants
+                // the cache relies on — bypass it entirely then (the memoized
+                // reachability inside isAlternativeFeasible is still
+                // exact-version-safe, so results stay correct, just slower).
+                const bypassCache = this.hGraph.hasZeroWeightOrderingEdge
+                    || this.vGraph.hasZeroWeightOrderingEdge;
+                const curAdd = this.hGraph.addVersion + this.vGraph.addVersion;
+                const curRem = this.hGraph.removeVersion + this.vGraph.removeVersion;
+                let entry: AltVerdictEntry | null = null;
+                if (!bypassCache) {
+                    if (this.verdictEntryDisj[d] === disj) {
+                        entry = this.verdictEntryByIndex[d];
+                    } else {
+                        entry = this.verdictEntryFor(disj);
+                        this.verdictEntryDisj[d] = disj;
+                        this.verdictEntryByIndex[d] = entry;
+                    }
+                }
 
                 let feasibleCount = 0;
                 let lastFeasibleIdx = -1;
 
                 for (let a = 0; a < disj.alternatives.length; a++) {
-                    if (this.isAlternativeFeasible(disj.alternatives[a])) {
+                    const feasible = entry === null
+                        ? this.isAlternativeFeasible(disj.alternatives[a])
+                        : this.altFeasibleCached(disj, entry, a, curAdd, curRem);
+                    if (feasible) {
                         feasibleCount++;
                         lastFeasibleIdx = a;
                     }
@@ -1683,7 +2347,127 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 }
             }
         }
+        this.lastPropagateOkStamp = this.combinedGraphStamp();
         return 'ok';
+    }
+
+    private combinedGraphStamp(): number {
+        // Stamps are globally unique and monotone, so this sum changes iff any
+        // structural mutation happened on either graph (including checkpoint
+        // restores, which install fresh graph objects with fresh stamps).
+        return this.hGraph.addVersion + this.hGraph.removeVersion
+            + this.vGraph.addVersion + this.vGraph.removeVersion;
+    }
+
+    /**
+     * Pull reachability deltas from both graphs and dirty exactly the cached
+     * feasible verdicts whose probes they hit. Unknown deltas (null) bump
+     * additionEpoch, invalidating every probe-tracked feasible verdict.
+     */
+    private consumeGraphDeltas(): void {
+        const hd = this.hGraph.consumeReachDeltas();
+        const vd = this.vGraph.consumeReachDeltas();
+        if (hd === null || vd === null) {
+            this.additionEpoch++;
+            return;
+        }
+        for (const d of hd) this.dirtyProbe('h', d.from, d.to);
+        for (const d of vd) this.dirtyProbe('v', d.from, d.to);
+    }
+
+    private dirtyProbe(axis: 'h' | 'v', from: string, to: string): void {
+        const hits = this.probeIndex.get(`${axis}\x00${from}\x00${to}`);
+        if (!hits) return;
+        for (const { entry, aIdx } of hits) {
+            // Only feasible verdicts can be flipped by an addition; infeasible
+            // ones are stable under additions (guarded by remStamp instead).
+            if (entry.verdict[aIdx] === 1) entry.verdict[aIdx] = 0;
+        }
+    }
+
+    /**
+     * Register the fixed reachability probes that alternative aIdx's
+     * feasibility depends on — mirrors isAlternativeFeasible's queries exactly:
+     *   - Left/Top/BBox/GroupBoundary edge: canReach(edge.to, edge.from);
+     *   - BBox additionally, per member m on the side's axis:
+     *     areAligned(node, m) (both directions) and the isBboxFeasibleInGraphs
+     *     isOrdered check (one of those directions).
+     * Returns true if the alternative contains an AlignmentConstraint (dynamic
+     * alignment-class probes — not trackable; falls back to add-stamp validity).
+     */
+    private registerProbes(entry: AltVerdictEntry, aIdx: number, alternative: LayoutConstraint[]): boolean {
+        let hasAlignment = false;
+        const add = (axis: 'h' | 'v', from: string, to: string): void => {
+            const key = `${axis}\x00${from}\x00${to}`;
+            let arr = this.probeIndex.get(key);
+            if (!arr) { arr = []; this.probeIndex.set(key, arr); }
+            arr.push({ entry, aIdx });
+        };
+        for (const constraint of alternative) {
+            if (isAlignmentConstraint(constraint)) {
+                hasAlignment = true;
+                continue;
+            }
+            if (isBoundingBoxConstraint(constraint)) {
+                const bc = constraint as BoundingBoxConstraint;
+                const axis = (bc.side === 'left' || bc.side === 'right') ? 'h' : 'v';
+                for (const m of bc.group.nodeIds) {
+                    add(axis, bc.node.id, m);
+                    add(axis, m, bc.node.id);
+                }
+            }
+            const edge = this.constraintToEdge(constraint);
+            if (edge) add(edge.axis, edge.to, edge.from);
+        }
+        return hasAlignment;
+    }
+
+    /** Fetch the verdict-cache entry for a disjunction, creating and registering its probes on first use. */
+    private verdictEntryFor(disj: DisjunctiveConstraint): AltVerdictEntry {
+        let entry = this.altVerdictCache.get(disj);
+        if (!entry) {
+            const n = disj.alternatives.length;
+            entry = {
+                verdict: new Int8Array(n),
+                addStamp: new Float64Array(n),
+                remStamp: new Float64Array(n),
+                hasAlignment: new Uint8Array(n),
+            };
+            for (let a = 0; a < n; a++) {
+                if (this.registerProbes(entry, a, disj.alternatives[a])) entry.hasAlignment[a] = 1;
+            }
+            this.altVerdictCache.set(disj, entry);
+        }
+        return entry;
+    }
+
+    /**
+     * Cached isAlternativeFeasible for one alternative of an already-fetched
+     * entry — validity rules documented at altVerdictCache. Split from the
+     * entry lookup so the scan in graphPropagate pays one Map probe per
+     * disjunction instead of one per alternative.
+     */
+    private altFeasibleCached(
+        disj: DisjunctiveConstraint,
+        entry: AltVerdictEntry,
+        aIdx: number,
+        curAdd: number,
+        curRem: number,
+    ): boolean {
+        const addKey = entry.hasAlignment[aIdx] ? curAdd : this.additionEpoch;
+
+        const v = entry.verdict[aIdx];
+        // Feasible: stable under removals; add-side staleness is handled by
+        // probe dirtying (verdict zeroed) or epoch/add-stamp mismatch.
+        if (v === 1 && entry.addStamp[aIdx] === addKey) return true;
+        // Infeasible: stable under additions; only removals can flip it.
+        if (v === 2 && entry.remStamp[aIdx] === curRem) return false;
+
+        const feasible = this.isAlternativeFeasible(disj.alternatives[aIdx]);
+        entry.verdict[aIdx] = feasible ? 1 : 2;
+        entry.addStamp[aIdx] = addKey;
+        entry.remStamp[aIdx] = curRem;
+        return feasible;
     }
 
     // disjunctionHasAlignment is no longer needed — all disjunctions (including
@@ -1816,29 +2600,49 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
     }
 
+    /**
+     * Undo of addQualitativeEdge, releasing exactly the claims that add took
+     * (claim-based so shared edges survive — see removeEdgeClaim). The
+     * BoundingBox case mirrors the add's Rule C loop: the add creates the
+     * node↔group edge AND per-member edges, so the undo must release the
+     * member claims too — the old code removed only the group edge, leaving
+     * the member edges behind after backtracking (over-constrained graph).
+     */
     private removeQualitativeEdge(constraint: LayoutConstraint): void {
         if (isLeftConstraint(constraint)) {
-            this.hGraph.removeEdge(constraint.left.id, constraint.right.id);
+            this.hGraph.removeEdgeClaim(constraint.left.id, constraint.right.id, constraint.minDistance, constraint);
         } else if (isTopConstraint(constraint)) {
-            this.vGraph.removeEdge(constraint.top.id, constraint.bottom.id);
+            this.vGraph.removeEdgeClaim(constraint.top.id, constraint.bottom.id, constraint.minDistance, constraint);
         } else if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const groupId = `_group_${bc.group.name}`;
             switch (bc.side) {
-                case 'left':   this.hGraph.removeEdge(bc.node.id, groupId); break;
-                case 'right':  this.hGraph.removeEdge(groupId, bc.node.id); break;
-                case 'top':    this.vGraph.removeEdge(bc.node.id, groupId); break;
-                case 'bottom': this.vGraph.removeEdge(groupId, bc.node.id); break;
+                case 'left':
+                    this.hGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance, constraint);
+                    break;
+                case 'right':
+                    this.hGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.hGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance, constraint);
+                    break;
+                case 'top':
+                    this.vGraph.removeEdgeClaim(bc.node.id, groupId, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(bc.node.id, mId, bc.minDistance, constraint);
+                    break;
+                case 'bottom':
+                    this.vGraph.removeEdgeClaim(groupId, bc.node.id, bc.minDistance, constraint);
+                    for (const mId of bc.group.nodeIds) this.vGraph.removeEdgeClaim(mId, bc.node.id, bc.minDistance, constraint);
+                    break;
             }
         } else if (isGroupBoundaryConstraint(constraint)) {
             const gc = constraint as GroupBoundaryConstraint;
             const gAId = `_group_${gc.groupA.name}`;
             const gBId = `_group_${gc.groupB.name}`;
             switch (gc.side) {
-                case 'left':   this.hGraph.removeEdge(gAId, gBId); break;
-                case 'right':  this.hGraph.removeEdge(gBId, gAId); break;
-                case 'top':    this.vGraph.removeEdge(gAId, gBId); break;
-                case 'bottom': this.vGraph.removeEdge(gBId, gAId); break;
+                case 'left':   this.hGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
+                case 'right':  this.hGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
+                case 'top':    this.vGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
+                case 'bottom': this.vGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
             }
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
@@ -2054,17 +2858,108 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Decision heuristic (VSIDS + simplicity, from V1) ───────────────────
 
+    /**
+     * (Re)build the flat branching arrays for the current allDisjunctions.
+     * `reset` zeroes activity (start of a solve); restarts keep it.
+     * The stride only ever grows, so an alternative's slot keeps its (d, a)
+     * identity — matching the old index-keyed activity Map.
+     */
+    private rebuildBranchIndex(reset: boolean): void {
+        const numD = this.allDisjunctions.length;
+        let maxAlts = 1;
+        for (const disj of this.allDisjunctions) {
+            if (disj.alternatives.length > maxAlts) maxAlts = disj.alternatives.length;
+        }
+
+        if (maxAlts > this.branchStride) {
+            const oldStride = this.branchStride;
+            const oldAct = this.activityFlat;
+            this.branchStride = maxAlts;
+            this.activityFlat = new Float64Array(Math.max(numD, 1) * maxAlts);
+            if (oldStride > 0 && !reset) {
+                const oldD = Math.floor(oldAct.length / oldStride);
+                for (let d = 0; d < oldD && d < numD; d++) {
+                    for (let a = 0; a < oldStride; a++) {
+                        this.activityFlat[d * maxAlts + a] = oldAct[d * oldStride + a];
+                    }
+                }
+            }
+        } else if (numD * this.branchStride > this.activityFlat.length) {
+            const grown = new Float64Array(numD * this.branchStride);
+            if (!reset) grown.set(this.activityFlat);
+            this.activityFlat = grown;
+        } else if (reset) {
+            this.activityFlat.fill(0);
+        }
+
+        const size = Math.max(numD, 1) * this.branchStride;
+        if (this.simplicityFlat.length < size) {
+            this.simplicityFlat = new Float64Array(size);
+            this.elimScratch = new Uint8Array(size);
+        }
+        this.simplicityFlat.fill(0);
+        for (let d = 0; d < numD; d++) {
+            const alts = this.allDisjunctions[d].alternatives;
+            const base = d * this.branchStride;
+            for (let a = 0; a < alts.length; a++) {
+                this.simplicityFlat[base + a] = 1.0 / (1 + alts[a].length);
+            }
+        }
+    }
+
+    /** Activity for (d, a), 0 when out of range — mirrors the old `?? 0`. */
+    private activityAt(d: number, a: number): number {
+        const i = d * this.branchStride + a;
+        return i >= 0 && i < this.activityFlat.length ? this.activityFlat[i] : 0;
+    }
+
+    /**
+     * Mark alternatives eliminated by learned clauses, for ALL disjunctions in
+     * one pass over the clause list. getRemainingAlternatives did this per
+     * disjunction — O(D · C · L) per pickBranch call, allocating a Set and an
+     * array each time; this is O(C · L) into a reused bitmap. Returns null
+     * when there are no learned clauses (nothing can be eliminated).
+     */
+    private computeEliminatedFlags(assigned: Int32Array): Uint8Array | null {
+        if (this.learnedClauses.length === 0) return null;
+        const elim = this.elimScratch;
+        elim.fill(0);
+        const stride = this.branchStride;
+        for (const clause of this.learnedClauses) {
+            for (const lit of clause) {
+                if (lit.sign) continue;
+                const idx = lit.disjunctionIndex * stride + lit.alternativeIndex;
+                // Stale index from a pre-restart clause, or already eliminated.
+                if (idx < 0 || idx >= elim.length || elim[idx] === 1) continue;
+                let allOthersFalse = true;
+                for (const l of clause) {
+                    if (l === lit) continue;
+                    const cur = assigned[l.disjunctionIndex];
+                    if (cur === -1
+                        || (l.sign ? cur === l.alternativeIndex : cur !== l.alternativeIndex)) {
+                        allOthersFalse = false;
+                        break;
+                    }
+                }
+                if (allOthersFalse) elim[idx] = 1;
+            }
+        }
+        return elim;
+    }
+
     private pickBranch(assigned: Int32Array): { dIdx: number; aIdx: number } {
         let bestDIdx = -1, bestAIdx = -1, bestScore = -1;
+        const elim = this.computeEliminatedFlags(assigned);
+        const stride = this.branchStride;
 
         for (let d = 0; d < this.allDisjunctions.length; d++) {
             if (assigned[d] !== -1) continue;
-            // Only consider alternatives not eliminated by learned clauses
-            const remaining = this.getRemainingAlternatives(d, assigned);
-            const disj = this.allDisjunctions[d];
-            for (const a of remaining) {
-                const score = (this.activity.get(`d${d}a${a}`) ?? 0)
-                    + 1.0 / (1 + disj.alternatives[a].length);
+            const alts = this.allDisjunctions[d].alternatives;
+            const base = d * stride;
+            for (let a = 0; a < alts.length; a++) {
+                // Only consider alternatives not eliminated by learned clauses
+                if (elim !== null && elim[base + a] === 1) continue;
+                const score = this.activityFlat[base + a] + this.simplicityFlat[base + a];
                 if (score > bestScore) {
                     bestScore = score;
                     bestDIdx = d;
@@ -2079,13 +2974,17 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private bumpActivity(clause: LearnedClause): void {
         for (const lit of clause) {
-            const key = `d${lit.disjunctionIndex}a${lit.alternativeIndex}`;
-            this.activity.set(key, (this.activity.get(key) ?? 0) + 1);
+            const i = lit.disjunctionIndex * this.branchStride + lit.alternativeIndex;
+            if (i >= 0 && i < this.activityFlat.length) this.activityFlat[i] += 1;
         }
     }
 
     private decayActivity(): void {
-        for (const [key, val] of this.activity) this.activity.set(key, val * this.activityDecay);
+        // Multiply-all, same as the old Map sweep (zero slots are unaffected),
+        // so branching order is bit-for-bit what it was.
+        const act = this.activityFlat;
+        const decay = this.activityDecay;
+        for (let i = 0; i < act.length; i++) act[i] *= decay;
     }
 
     // ─── Restart management ──────────────────────────────────────────────────
@@ -2108,13 +3007,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const pruned: DisjunctiveConstraint[] = [];
 
         for (const disj of this.allDisjunctions) {
-            const regionPair = this.getDisjunctionRegionPair(disj);
-            if (regionPair && this.areSeparated(regionPair[0], regionPair[1])) {
-                const satisfyingAlt = this.findSatisfyingAlternative(disj, regionPair);
-                if (satisfyingAlt !== null) {
-                    for (const c of disj.alternatives[satisfyingAlt]) this.addedConstraints.push(c);
-                    continue;
-                }
+            const impliedAlt = this.findImpliedAlternative(disj);
+            if (impliedAlt !== null) {
+                for (const c of disj.alternatives[impliedAlt]) this.addedConstraints.push(c);
+                continue;
             }
 
             const validAlternatives: LayoutConstraint[][] = [];
@@ -2156,6 +3052,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private restoreCheckpoint(cp: SolverCheckpoint): void {
         this.hGraph = cp.hGraph.clone();
         this.vGraph = cp.vGraph.clone();
+        // The restored graphs are fresh objects with fresh stamps and empty
+        // delta accumulators; drop all cached verdicts and probes (restarts
+        // are rare, and pruneDisjunctions rebuilds the disjunction objects
+        // anyway). Also covers the corner where a restore re-introduces an
+        // edge that an undo path had over-eagerly removed.
+        this.altVerdictCache.clear();
+        this.probeIndex.clear();
+        this.verdictEntryByIndex.length = 0;
+        this.verdictEntryDisj.length = 0;
+        this.additionEpoch++;
     }
 
     private constraintToEdge(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string } | null {
@@ -2380,8 +3286,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const sortedDisjunctions = [...disjSource].sort((a, b) => {
             const aIdx = disjSource.indexOf(a);
             const bIdx = disjSource.indexOf(b);
-            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activity.get(`d${aIdx}a${ai}`) ?? 0));
-            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activity.get(`d${bIdx}a${bi}`) ?? 0));
+            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activityAt(aIdx, ai)));
+            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activityAt(bIdx, bi)));
             // Stable tiebreaker: use original index when activity scores are equal
             return aMax - bMax || aIdx - bIdx;
         });
@@ -3086,8 +3992,20 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.hGraph = new DifferenceConstraintGraph(this.minPadding);
         this.vGraph = new DifferenceConstraintGraph(this.minPadding);
         this.learnedClauses = [];
-        this.activity.clear();
+        this.activityFlat = new Float64Array(0);
+        this.simplicityFlat = new Float64Array(0);
+        this.elimScratch = new Uint8Array(0);
+        this.branchStride = 0;
         this.assignmentTrail = [];
+        this.altVerdictCache.clear();
+        this.probeIndex.clear();
+        this.verdictEntryByIndex.length = 0;
+        this.verdictEntryDisj.length = 0;
+        this.lastPropagateOkStamp = -1;
+        // The must-pair sets are O(n²) and were the largest thing this method
+        // left behind; dropping them also stops modal getters answering from a
+        // disposed validator.
+        this.resetModalQueryState();
     }
 
     public getStats(): {
@@ -3108,12 +4026,58 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ─── Modal query computation ────────────────────────────────────────────
 
     /**
+     * Build modal state on first use. Safe to defer past validation because
+     * buildModalQueryState reads only the must-graph snapshots (taken before
+     * CDCL) and this.allDisjunctions (final after solveCDCL) — neither
+     * changes after validatePositionalConstraints returns.
+     *
+     * Gated on validationSucceeded, NOT merely on the snapshots being present:
+     * they are taken at Phase 4b, before CDCL, so a later failure (CDCL UNSAT,
+     * node overlap) would otherwise leave them populated for a rejected layout
+     * and this deferred build would answer must/cannot queries about a
+     * constraint system enforceMaximalFeasibleSubset already replaced. When
+     * the eager build lived at Phase 5b it simply never ran on the CDCL-UNSAT
+     * path; this restores that, and extends it to the overlap path.
+     *
+     * enforceMaximalFeasibleSubset also nulls the snapshots, which is what
+     * covers the getters that read the must-graphs directly. This flag is the
+     * belt to that braces: it keeps the build correct even for a future error
+     * path that forgets to route through there.
+     */
+    private modalStateBuilt = false;
+
+    /**
+     * Drop every piece of modal state: the pre-CDCL graph snapshots, the
+     * derived pair/alignment-class sets, and the two flags. Kept in one place
+     * because the getters consult different halves of it — clearing only the
+     * graphs leaves getMust answering from the derived sets, and clearing only
+     * the sets leaves getCannot answering from the graphs.
+     */
+    private resetModalQueryState(): void {
+        this.mustHGraph = null;
+        this.mustVGraph = null;
+        this.mustHPairs = null;
+        this.mustVPairs = null;
+        this.mustHAlignmentClasses = null;
+        this.mustVAlignmentClasses = null;
+        this.modalStateBuilt = false;
+        this.validationSucceeded = false;
+    }
+
+    private ensureModalQueryState(): void {
+        if (this.modalStateBuilt || !this.validationSucceeded) return;
+        if (!this.mustHGraph || !this.mustVGraph) return;
+        this.modalStateBuilt = true;
+        this.buildModalQueryState();
+    }
+
+    /**
      * Build the precomputed must-ordering pairs by:
      * 1. Starting with the conjunctive base (post-presolve snapshot)
      * 2. Strengthening via disjunction intersection: for each remaining disjunction,
      *    compute which orderings ALL alternatives agree on
      *
-     * Called once after successful validation (feasible layout).
+     * Called once, lazily, via ensureModalQueryState.
      */
     private buildModalQueryState(): void {
         if (!this.mustHGraph || !this.mustVGraph) return;
@@ -3137,12 +4101,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         this.mustVAlignmentClasses = this.collectAlignmentClasses(this.mustVGraph, realNodeIds);
     }
 
-    /** Collect all strict ordering pairs from a graph. */
+    /**
+     * Collect the pairs this graph forces into a proper spatial relation:
+     * a sits entirely before b, which is what getMust reports as "a is left of
+     * / above b". Deliberately isProperlyBefore and not isStrictlyOrdered —
+     * the latter only entails coord_a < coord_b, which for a box wider than
+     * the forced separation still leaves a overlapping b's span.
+     */
     private collectStrictPairs(graph: DifferenceConstraintGraph, nodeIds: string[]): Set<string> {
         const pairs = new Set<string>();
         for (const a of nodeIds) {
             for (const b of nodeIds) {
-                if (a !== b && graph.isStrictlyOrdered(a, b)) {
+                if (a !== b && graph.isProperlyBefore(a, b)) {
                     pairs.add(`${a}\x00${b}`);
                 }
             }
@@ -3150,17 +4120,20 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return pairs;
     }
 
-    /** Collect alignment equivalence classes from a graph. */
+    /** Collect alignment equivalence classes from a graph (one SCC pass). */
     private collectAlignmentClasses(graph: DifferenceConstraintGraph, nodeIds: string[]): Map<string, Set<string>> {
         const classes = new Map<string, Set<string>>();
         const realSet = new Set(nodeIds);
-        for (const id of nodeIds) {
-            const members = graph.getAlignmentClassOf(id);
-            const filtered = new Set<string>();
-            for (const m of members) {
-                if (m !== id && realSet.has(m)) filtered.add(m);
+        for (const id of nodeIds) classes.set(id, new Set());
+        for (const [, members] of graph.getAlignmentClasses()) {
+            const real = members.filter(m => realSet.has(m));
+            for (const m of real) {
+                const set = classes.get(m);
+                if (!set) continue;
+                for (const other of real) {
+                    if (other !== m) set.add(other);
+                }
             }
-            classes.set(id, filtered);
         }
         return classes;
     }
@@ -3313,6 +4286,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Derived from conjunctive entailment + disjunction intersection.
      */
     public getMust(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        this.ensureModalQueryState();
         const realNodeIds = new Set(this.nodes.map(n => n.id));
         const result = new Set<string>();
         if (!this.mustHPairs || !this.mustVPairs) return result;
@@ -3342,6 +4316,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * because it also catches infeasibility via zero-weight path chains.
      */
     public getCannot(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
+        this.ensureModalQueryState();
         const result = new Set<string>();
         result.add(nodeId); // reflexive exclusion
 
@@ -3388,6 +4363,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     /** Alignment equivalence class — nodes that MUST be aligned with nodeId. */
     public getMustAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        this.ensureModalQueryState();
         const classes = axis === 'x' ? this.mustHAlignmentClasses : this.mustVAlignmentClasses;
         return classes?.get(nodeId) ?? new Set();
     }
@@ -3396,19 +4372,34 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Nodes that CANNOT be aligned with nodeId on the given axis.
      *
      * Feasibility check: adding alignment(X, Y) means zero-weight edges in both
-     * directions. This is infeasible if there's a strict ordering between them
-     * (isStrictlyOrdered in either direction), because the zero-weight cycle
-     * would contradict the positive-weight edge.
+     * directions. This is infeasible if:
+     * 1. There's a strict ordering between them (isStrictlyOrdered in either
+     *    direction) — the zero-weight cycle would contradict the positive-weight
+     *    edge; or
+     * 2. Merging their alignment classes on this axis would put two distinct
+     *    nodes that are aligned on the OTHER axis into the same class —
+     *    dual-axis alignment forces identical positions, i.e. node overlap.
+     *    This is the same rule the solver applies in isAlternativeFeasible
+     *    (classHasDualAxisOverlap); without it getCanAligned over-claims,
+     *    e.g. "A =x B" alone would report that A and B can also be y-aligned.
      */
     public getCannotAligned(nodeId: string, axis: 'x' | 'y'): Set<string> {
+        this.ensureModalQueryState();
         const result = new Set<string>();
         result.add(nodeId); // X is not "aligned with itself" in the query sense
         const graph = axis === 'x' ? this.mustHGraph : this.mustVGraph;
+        const otherGraph = axis === 'x' ? this.mustVGraph : this.mustHGraph;
         if (!graph) return result;
 
         for (const n of this.nodes) {
             if (n.id === nodeId) continue;
             if (graph.isStrictlyOrdered(nodeId, n.id) || graph.isStrictlyOrdered(n.id, nodeId)) {
+                result.add(n.id);
+                continue;
+            }
+            if (otherGraph && QualitativeConstraintValidator.classHasDualAxisOverlap(
+                graph, otherGraph, nodeId, n.id, false,
+            )) {
                 result.add(n.id);
             }
         }
@@ -3490,7 +4481,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Post-CDCL resolved model queries (what's true in THIS layout) ───
 
-    /** Get all nodes reachable from `nodeId` in the given direction (resolved model). */
+    /**
+     * Get all nodes reachable from `nodeId` in the given direction (resolved model).
+     *
+     * Uses isProperlyBefore for the same reason getMust does: the question is
+     * which boxes actually sit to the given side, not which ones merely start
+     * earlier on the axis.
+     */
     public getReachable(nodeId: string, relation: 'leftOf' | 'rightOf' | 'above' | 'below'): Set<string> {
         const realNodeIds = new Set(this.nodes.map(n => n.id));
         const result = new Set<string>();
@@ -3498,25 +4495,25 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         switch (relation) {
             case 'rightOf': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                    if (n !== nodeId && this.hGraph.isProperlyBefore(nodeId, n)) result.add(n);
                 }
                 break;
             }
             case 'leftOf': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.hGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                    if (n !== nodeId && this.hGraph.isProperlyBefore(n, nodeId)) result.add(n);
                 }
                 break;
             }
             case 'below': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(nodeId, n)) result.add(n);
+                    if (n !== nodeId && this.vGraph.isProperlyBefore(nodeId, n)) result.add(n);
                 }
                 break;
             }
             case 'above': {
                 for (const n of realNodeIds) {
-                    if (n !== nodeId && this.vGraph.isStrictlyOrdered(n, nodeId)) result.add(n);
+                    if (n !== nodeId && this.vGraph.isProperlyBefore(n, nodeId)) result.add(n);
                 }
                 break;
             }

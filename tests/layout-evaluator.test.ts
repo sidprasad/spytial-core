@@ -323,6 +323,98 @@ describe('Modal spatial queries (must/can/cannot)', () => {
             expect(v.getAlignedWith('B', 'x')).toEqual(new Set(['A']));
         });
     });
+
+    describe('Rejected layouts answer no modal facts', () => {
+        // The must-graph snapshots are taken at Phase 4b, before CDCL, so they
+        // survive a later failure. Since #518 made modal state lazy, a rejected
+        // layout could still answer must/cannot — describing a constraint
+        // system enforceMaximalFeasibleSubset had already replaced on the
+        // layout. Note getCannot/getCannotAligned read the must-graphs
+        // DIRECTLY, so gating only the lazy build does not close this; the
+        // snapshots must be cleared on the error path.
+        //
+        // The baseline is a never-validated validator (empty for getMust,
+        // reflexive {self} for getCannot) — a rejected layout must match it.
+
+        const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+        const baseline = () =>
+            new QualitativeConstraintValidator(layout([a, b, c], [], undefined, []));
+
+        it('CDCL-UNSAT layout answers exactly as a never-validated one', () => {
+            // Base A <x B commits before the snapshot; every alternative of the
+            // disjunction closes a cycle with it, so CDCL fails afterwards.
+            const src = new RelativeOrientationConstraint(['left'], 'unsat');
+            const rev = (d: number) => ({ left: b, right: a, minDistance: d, sourceConstraint: src });
+            const v = new QualitativeConstraintValidator(
+                layout([a, b, c], [leftOf(a, b)], [disjunction(src, [[rev(15)], [rev(5)]])]),
+            );
+            expect(v.validateConstraints()).not.toBeNull();
+
+            const ref = baseline();
+            expect(v.getMust('B', 'leftOf')).toEqual(ref.getMust('B', 'leftOf'));
+            // Would be {B, A} if the pre-CDCL snapshot leaked through.
+            expect(v.getCannot('B', 'rightOf')).toEqual(ref.getCannot('B', 'rightOf'));
+            expect(v.getCannotAligned('B', 'x')).toEqual(ref.getCannotAligned('B', 'x'));
+        });
+
+        it('conjunctively infeasible layout answers exactly as a never-validated one', () => {
+            const v = new QualitativeConstraintValidator(
+                layout([a, b, c], [leftOf(a, b), leftOf(b, a)]),
+            );
+            expect(v.validateConstraints()).not.toBeNull();
+
+            const ref = baseline();
+            expect(v.getMust('B', 'leftOf')).toEqual(ref.getMust('B', 'leftOf'));
+            expect(v.getCannot('B', 'rightOf')).toEqual(ref.getCannot('B', 'rightOf'));
+        });
+
+        it('a never-validated validator answers defaults (empty must, reflexive cannot)', () => {
+            const ref = baseline();
+            expect(ref.getMust('B', 'leftOf')).toEqual(new Set());
+            expect(ref.getCannot('B', 'rightOf')).toEqual(new Set(['B']));
+        });
+
+        // getMust reads the DERIVED pair sets while getCannot reads the graphs,
+        // so state has to be reset as a whole — clearing either half alone
+        // leaves the other answering. These cover re-validation and dispose.
+
+        it('a failing re-validation drops the previous run facts', () => {
+            const constraints = [leftOf(a, b)];
+            const v = new QualitativeConstraintValidator(layout([a, b, c], constraints));
+            expect(v.validateConstraints()).toBeNull();
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set(['B'])); // builds modal state
+
+            constraints.push(leftOf(b, a)); // close a cycle on the captured array
+            expect(v.validateConstraints()).not.toBeNull();
+
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set());
+            expect(v.getCannot('A', 'rightOf')).toEqual(new Set(['A']));
+        });
+
+        it('a succeeding re-validation reflects the new system, not the old', () => {
+            const constraints = [leftOf(a, b)];
+            const v = new QualitativeConstraintValidator(layout([a, b, c], constraints));
+            expect(v.validateConstraints()).toBeNull();
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set(['B']));
+
+            constraints.push(leftOf(b, c)); // now A is also left of C, transitively
+            expect(v.validateConstraints()).toBeNull();
+
+            // Stale state would still report just {B}.
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set(['B', 'C']));
+        });
+
+        it('dispose() stops modal getters answering', () => {
+            const v = new QualitativeConstraintValidator(layout([a, b, c], [leftOf(a, b)]));
+            expect(v.validateConstraints()).toBeNull();
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set(['B']));
+
+            v.dispose();
+
+            expect(v.getMust('A', 'rightOf')).toEqual(new Set());
+            expect(v.getCannot('A', 'rightOf')).toEqual(new Set(['A']));
+        });
+    });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
