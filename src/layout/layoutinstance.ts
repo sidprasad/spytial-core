@@ -22,7 +22,7 @@ import {
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
-import { resolveAtomStyle } from './style/atom-style-spec';
+import { resolveAtomStyle, iconToAtomStyleRule } from './style/atom-style-spec';
 import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
 import type { TextStyle } from './style/text-style';
 
@@ -288,6 +288,58 @@ class LayoutNodePath {
     static areEquivalent(p1: LayoutNodePath, p2: LayoutNodePath): boolean {
         return p1.isSubpathOf(p2) && p2.isSubpathOf(p1);
     }
+}
+
+
+/**
+ * Desugar any legacy directives still sitting on a {@link LayoutSpec} into the
+ * `atomStyle` rules the layout actually reads.
+ *
+ * `parseLayoutSpec` already does this for YAML, leaving `icons`/`atomColors`
+ * empty — but a `LayoutSpec` can also arrive as an object, via the
+ * `setupLayout(spec: LayoutSpec, ...)` overload or `new LayoutInstance(spec)`
+ * directly. Those paths never touch the parser, so a programmatically-built
+ * spec would populate `directives.icons` and have it silently ignored: nothing
+ * reads those arrays any more.
+ *
+ * `atomColors` carries the same latent hole — nothing has read it since the
+ * legacy color desugar landed — so it is normalized here too. Note these arrays
+ * hold *parsed* directives, not raw YAML: an {@link AtomColorDirective} spells
+ * its color `color`, where the YAML form (which `atomColorToAtomStyleRule`
+ * consumes) spells it `value`. Hence the mapping below rather than a reuse of
+ * that parser-side helper. {@link AtomIconDirective} happens to match the YAML
+ * shape exactly, so it can go through {@link iconToAtomStyleRule} directly.
+ *
+ * Idempotent by construction — a parsed spec has empty legacy arrays, so this
+ * is a no-op and returns the spec untouched. Only a spec that actually carries
+ * legacy directives is copied (shallowly, so the caller's object isn't
+ * mutated). Selectorless/pathless entries drop, matching the parser exactly.
+ */
+export function normalizeLegacyDirectives(spec: LayoutSpec): LayoutSpec {
+    const legacyIcons = spec.directives?.icons ?? [];
+    const legacyAtomColors = spec.directives?.atomColors ?? [];
+    if (legacyIcons.length === 0 && legacyAtomColors.length === 0) return spec;
+
+    const fromAtomColors: (AtomStyleRule | null)[] = legacyAtomColors.map((d) => {
+        if (!d.selector || d.selector.trim().length === 0) return null;
+        if (typeof d.color !== 'string' || d.color.length === 0) return null;
+        return { selector: d.selector, style: { borderStyle: { color: d.color } } };
+    });
+
+    const desugared: AtomStyleRule[] = [
+        ...fromAtomColors,
+        ...legacyIcons.map(iconToAtomStyleRule),
+    ].filter((rule): rule is AtomStyleRule => rule !== null);
+
+    return {
+        ...spec,
+        directives: {
+            ...spec.directives,
+            atomStyles: [...spec.directives.atomStyles, ...desugared],
+            icons: [],
+            atomColors: [],
+        },
+    };
 }
 
 
@@ -661,7 +713,7 @@ export class LayoutInstance {
     ) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
-        this._layoutSpec = layoutSpec;
+        this._layoutSpec = normalizeLegacyDirectives(layoutSpec);
 
         // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
         // Otherwise, convert boolean addAlignmentEdges to strategy

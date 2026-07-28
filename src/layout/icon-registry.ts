@@ -75,6 +75,19 @@ const BUNDLED_ICONS: Record<string, string> = {
   'key': `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor"><path d="M0 8a4 4 0 0 1 7.465-2H14a.5.5 0 0 1 .354.146l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0L13 9.207l-.646.647a.5.5 0 0 1-.708 0L11 9.207l-.646.647a.5.5 0 0 1-.708 0L9 9.207l-.646.647A.5.5 0 0 1 8 10h-.535A4 4 0 0 1 0 8m4-3a3 3 0 1 0 2.712 4.285A.5.5 0 0 1 7.163 9h.63l.853-.854a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.646-.647a.5.5 0 0 1 .708 0l.646.647.793-.793-1-1h-6.63a.5.5 0 0 1-.451-.285A3 3 0 0 0 4 5m-1.5 3a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0"/></svg>')}`,
 };
 
+/**
+ * Drawn in place of an icon whose URL fails to load — a broken-image glyph,
+ * inlined as a data URI.
+ *
+ * Deliberately not a packaged asset path: a relative URL would resolve against
+ * the *host application*, not this package, so it would 404 for every library
+ * consumer and could fire another error event. A data URI needs no network and
+ * no bundling, so it renders identically everywhere — which matters most for an
+ * icon-only (`placement: full`) atom, where losing the icon would otherwise
+ * leave an empty transparent box with no label to explain it.
+ */
+export const FALLBACK_ICON: string = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><line x1="2" y1="13" x2="14" y2="3" stroke-dasharray="2 1.5"/></svg>')}`;
+
 // CDN-based icon packs (requires internet access)
 // These resolve icon names to CDN URLs
 const ICON_PACK_CDNS: Record<string, (name: string) => string> = {

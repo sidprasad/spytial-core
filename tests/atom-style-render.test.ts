@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
+import { FALLBACK_ICON, resolveIconPath } from '../src/layout/icon-registry';
 
 const proto = WebColaCnDGraph.prototype as any;
 
@@ -64,6 +65,29 @@ describe('webcola-cnd-graph — node fill color', () => {
     it('stays transparent for a hidden node whatever its icon or fill', () => {
         const hidden = { ...base, isHiddenNode: () => true };
         expect(fill(hidden, { fillColor: '#eef', icon: 'x', iconPlacement: 'full' })).toBe('transparent');
+    });
+});
+
+describe('icon load failure fallback', () => {
+    it('is self-contained, not a path resolved against the host application', () => {
+        // A relative asset path (the old `img/default.png`) resolves against the
+        // consuming app, not this package, so it 404s for every library consumer
+        // and can fire a second error event. The fallback must need no network
+        // and no bundling.
+        expect(FALLBACK_ICON.startsWith('data:image/svg+xml')).toBe(true);
+        expect(FALLBACK_ICON).not.toMatch(/^(https?:)?\/\//);
+        expect(FALLBACK_ICON).not.toContain('img/default.png');
+    });
+
+    it('decodes to a drawable SVG', () => {
+        const decoded = decodeURIComponent(FALLBACK_ICON.replace(/^data:image\/svg\+xml,/, ''));
+        expect(decoded).toMatch(/^<svg[\s>]/);
+        expect(decoded).toContain('</svg>');
+    });
+
+    it('is not something resolveIconPath would rewrite', () => {
+        // It travels the same path as an authored icon, so it has to survive it.
+        expect(resolveIconPath(FALLBACK_ICON)).toBe(FALLBACK_ICON);
     });
 });
 

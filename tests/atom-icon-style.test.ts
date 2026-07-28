@@ -14,8 +14,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
-import { parseLayoutSpec } from '../src/layout/layoutspec';
-import { LayoutInstance } from '../src/layout/layoutinstance';
+import { parseLayoutSpec, type LayoutSpec } from '../src/layout/layoutspec';
+import { LayoutInstance, normalizeLegacyDirectives } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import { StyleCollisionError } from '../src/layout/style/style-resolver';
 import { resolveIconPath } from '../src/layout/icon-registry';
@@ -328,5 +328,89 @@ directives:
   - atomStyle: { selector: n1, iconStyle: { placement: full } }
 `);
         expect(run).toThrow(StyleCollisionError);
+    });
+});
+
+/**
+ * A LayoutSpec can reach the layout as an *object* — via the
+ * `setupLayout(spec: LayoutSpec, ...)` overload or `new LayoutInstance(spec)` —
+ * which never touches `parseLayoutSpec`, so nothing desugars its legacy
+ * directives. Since the layout now reads only `atomStyles`, such a spec would
+ * silently lose its icons without the normalization these pin.
+ */
+describe('programmatic LayoutSpec — legacy directives are normalized', () => {
+    function layoutForSpec(spec: LayoutSpec) {
+        const instance = new JSONDataInstance(data);
+        const evaluator = new SGraphQueryEvaluator();
+        evaluator.initialize({ sourceData: instance });
+        return new LayoutInstance(spec, evaluator, 0, true).generateLayout(instance);
+    }
+
+    /** A spec built by hand, as an integration or a test harness would. */
+    function specWithLegacy(overrides: Partial<LayoutSpec['directives']>): LayoutSpec {
+        const base = parseLayoutSpec('directives: []');
+        return { ...base, directives: { ...base.directives, ...overrides } };
+    }
+
+    it('honours icons set directly on directives.icons', () => {
+        const { layout } = layoutForSpec(specWithLegacy({
+            icons: [{ selector: 'n1', path: 'person', showLabels: false }],
+        }));
+        const n = nodeById(layout, 'n1');
+        expect(n.icon).toBe(PERSON_ICON);
+        expect(n.showLabels).toBe(false);
+        expect(n.iconPlacement).toBe('full');
+    });
+
+    it('maps a programmatic showLabels:true onto a badge, like the YAML desugar', () => {
+        const { layout } = layoutForSpec(specWithLegacy({
+            icons: [{ selector: 'n1', path: 'person', showLabels: true }],
+        }));
+        const n = nodeById(layout, 'n1');
+        expect(n.showLabels).toBe(true);
+        expect(n.iconPlacement).toBe('badge');
+    });
+
+    it('honours a programmatic atomColor, which spells its color `color` not `value`', () => {
+        const { layout } = layoutForSpec(specWithLegacy({
+            atomColors: [{ selector: 'n1', color: '#f80' }],
+        }));
+        expect(nodeById(layout, 'n1').color).toBe('#f80');
+    });
+
+    it('composes programmatic legacy directives with native atomStyle rules', () => {
+        const { layout } = layoutForSpec(specWithLegacy({
+            icons: [{ selector: 'n1', path: 'person', showLabels: false }],
+            atomStyles: [{ selector: 'n1', style: { fillStyle: { color: '#eef' } } }],
+        }));
+        const n = nodeById(layout, 'n1');
+        expect(n.icon).toBe(PERSON_ICON);
+        expect(n.fillColor).toBe('#eef');
+    });
+
+    it('drops selectorless / pathless entries rather than applying them globally', () => {
+        const { layout } = layoutForSpec(specWithLegacy({
+            icons: [
+                { selector: '', path: 'person', showLabels: false },
+                { selector: 'n1', path: '', showLabels: false },
+            ],
+            atomColors: [{ selector: '', color: '#f00' }],
+        }));
+        for (const id of ['n1', 'r1']) {
+            expect(nodeById(layout, id).icon).toBe('');
+            expect(nodeById(layout, id).color).not.toBe('#f00');
+        }
+    });
+
+    it('leaves a parsed spec untouched — normalization is a no-op and does not copy', () => {
+        const parsed = parseLayoutSpec('directives:\n  - atomStyle: { selector: n1, fillStyle: { color: "#eef" } }');
+        expect(normalizeLegacyDirectives(parsed)).toBe(parsed);
+    });
+
+    it('does not mutate the caller\'s spec object', () => {
+        const spec = specWithLegacy({ icons: [{ selector: 'n1', path: 'person', showLabels: false }] });
+        normalizeLegacyDirectives(spec);
+        expect(spec.directives.icons).toHaveLength(1); // caller's copy still intact
+        expect(spec.directives.atomStyles).toHaveLength(0);
     });
 });

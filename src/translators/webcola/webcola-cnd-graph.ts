@@ -5,6 +5,7 @@ import type { LayoutWarning } from '../../layout/error-state';
 import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
+import { FALLBACK_ICON } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 
 // Guarded: this module is reachable from the npm entries' static import graph
@@ -4184,8 +4185,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Bound to the <image>, not to the <title> appended below: chaining `.on`
     // after `.append("title")` would attach the handler to the title element,
     // which never emits `error`, leaving broken icons silently blank.
+    //
+    // The fallback is an inlined data URI (not a packaged asset path, which
+    // would resolve against the host app and 404), and the guard stops a
+    // fallback that somehow also failed from looping on its own error event.
     images.on("error", function (this: SVGImageElement, _event: Event, d: any) {
-      d3.select(this).attr("xlink:href", "img/default.png");
+      const img = d3.select(this);
+      if (img.attr("xlink:href") === FALLBACK_ICON) return;
+      img.attr("xlink:href", FALLBACK_ICON);
       console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
     });
 
