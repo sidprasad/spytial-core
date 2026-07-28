@@ -52,7 +52,7 @@ Both sections are optional. An empty specification is valid.
 
 Selectors use [Forge](https://forge-fm.org/docs/building-models/constraints/formulas-and-expressions/) relational syntax. [AlaSQL](https://alasql.org/) is also supported as an alternative. See the full [Selector Syntax](selectors.md) guide.
 
-**Unary selectors** return a set of atoms — used by `atomStyle`, `align`, `hideAtom`, `icon`, `group`, `size`:
+**Unary selectors** return a set of atoms — used by `atomStyle`, `align`, `hideAtom`, `group`, `size`:
 
 ```yaml
 selector: Node                        # All Node atoms
@@ -115,10 +115,11 @@ directives:
       value: currentGrade
       textStyle: { size: small, color: "#2980b9" }
 
-  - icon:
+  - atomStyle:
       selector: File
-      path: "file-icon"
-      showLabels: true
+      iconStyle:
+        path: "file-icon"
+        placement: badge
 
   - hideField:
       field: internal

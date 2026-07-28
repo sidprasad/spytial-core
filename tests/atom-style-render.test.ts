@@ -13,12 +13,19 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
+import { FALLBACK_ICON, resolveIconPath } from '../src/layout/icon-registry';
 
 const proto = WebColaCnDGraph.prototype as any;
 
 describe('webcola-cnd-graph — node fill color', () => {
     // A themed default canvas; nodeFillColor falls back to it when no fill is set.
-    const base = { isHiddenNode: () => false, getCanvasBackground: () => '#fafafa' };
+    // `isBadgeIcon` is the real predicate — the fill rule keys off icon placement,
+    // so stubbing it would test the stub rather than the precedence.
+    const base = {
+        isHiddenNode: () => false,
+        getCanvasBackground: () => '#fafafa',
+        isBadgeIcon: proto.isBadgeIcon,
+    };
     const fill = (thisArg: any, d: any) => proto.nodeFillColor.call(thisArg, d);
 
     it('uses an explicit atomStyle fill color', () => {
@@ -34,8 +41,91 @@ describe('webcola-cnd-graph — node fill color', () => {
         expect(fill(hidden, { fillColor: '#eef', showLabels: true })).toBe('transparent');
     });
 
-    it('stays transparent for an icon-only node (icon, labels hidden)', () => {
-        expect(fill(base, { fillColor: '#eef', icon: 'x', showLabels: false })).toBe('transparent');
+    it('stays transparent under a full-bleed icon, so a group hull shows through', () => {
+        expect(fill(base, { icon: 'x', iconPlacement: 'full', showLabels: false })).toBe('transparent');
+    });
+
+    it('treats a missing placement as full (the engine default)', () => {
+        expect(fill(base, { icon: 'x', showLabels: false })).toBe('transparent');
+    });
+
+    it('keeps a normal fill under a badge icon — only the box-filling placement goes transparent', () => {
+        expect(fill(base, { icon: 'x', iconPlacement: 'badge', showLabels: true })).toBe('#fafafa');
+        expect(fill(base, { fillColor: '#eef', icon: 'x', iconPlacement: 'badge', showLabels: true })).toBe('#eef');
+    });
+
+    it('lets an explicit fill win over a full-bleed icon', () => {
+        // Deliberate precedence change from the icon → atomStyle move: asking for a
+        // fill and a full-bleed icon together is now a coherent request (an icon on
+        // a tinted card) rather than a silently-discarded fill. Transparency is the
+        // *default* for that placement, not an override of an explicit choice.
+        expect(fill(base, { fillColor: '#eef', icon: 'x', iconPlacement: 'full', showLabels: false })).toBe('#eef');
+    });
+
+    it('stays transparent for a hidden node whatever its icon or fill', () => {
+        const hidden = { ...base, isHiddenNode: () => true };
+        expect(fill(hidden, { fillColor: '#eef', icon: 'x', iconPlacement: 'full' })).toBe('transparent');
+    });
+});
+
+describe('icon load failure fallback', () => {
+    it('is self-contained, not a path resolved against the host application', () => {
+        // A relative asset path (the old `img/default.png`) resolves against the
+        // consuming app, not this package, so it 404s for every library consumer
+        // and can fire a second error event. The fallback must need no network
+        // and no bundling.
+        expect(FALLBACK_ICON.startsWith('data:image/svg+xml')).toBe(true);
+        expect(FALLBACK_ICON).not.toMatch(/^(https?:)?\/\//);
+        expect(FALLBACK_ICON).not.toContain('img/default.png');
+    });
+
+    it('decodes to a drawable SVG', () => {
+        const decoded = decodeURIComponent(FALLBACK_ICON.replace(/^data:image\/svg\+xml,/, ''));
+        expect(decoded).toMatch(/^<svg[\s>]/);
+        expect(decoded).toContain('</svg>');
+    });
+
+    it('is not something resolveIconPath would rewrite', () => {
+        // It travels the same path as an authored icon, so it has to survive it.
+        expect(resolveIconPath(FALLBACK_ICON)).toBe(FALLBACK_ICON);
+    });
+});
+
+describe('webcola-cnd-graph — icon geometry', () => {
+    // A 100×60 node centred at (200, 100); SMALL_IMG_SCALE_FACTOR is 0.3.
+    const d = (extra: Record<string, unknown> = {}) => ({
+        x: 200, y: 100, visualWidth: 100, visualHeight: 60, icon: 'x', ...extra,
+    });
+    const call = (fn: string, node: unknown, ...rest: unknown[]) =>
+        proto[fn].call(proto, node, ...rest);
+
+    it('sizes a full icon to the whole box and a badge to a fraction of it', () => {
+        expect(call('iconWidth', d({ iconPlacement: 'full' }))).toBe(100);
+        expect(call('iconHeight', d({ iconPlacement: 'full' }))).toBe(60);
+        expect(call('iconWidth', d({ iconPlacement: 'badge' }))).toBeCloseTo(30);
+        expect(call('iconHeight', d({ iconPlacement: 'badge' }))).toBeCloseTo(18);
+    });
+
+    it('anchors a full icon to the box origin and a badge to the top-right corner', () => {
+        expect(call('iconX', d({ iconPlacement: 'full' }))).toBe(150); // 200 - 100/2
+        expect(call('iconY', d({ iconPlacement: 'full' }))).toBe(70);  // 100 - 60/2
+        expect(call('iconX', d({ iconPlacement: 'badge' }))).toBeCloseTo(220); // 200 + 50 - 30
+        expect(call('iconY', d({ iconPlacement: 'badge' }))).toBe(70);  // both hug the top edge
+    });
+
+    it('honours a caller-supplied origin for a full icon but not for a badge', () => {
+        // The WebCola tick path passes bounds (which include layout padding) so the
+        // icon stays registered with the rect drawn from those same bounds.
+        expect(call('iconX', d({ iconPlacement: 'full' }), 111)).toBe(111);
+        expect(call('iconY', d({ iconPlacement: 'full' }), 222)).toBe(222);
+        expect(call('iconX', d({ iconPlacement: 'badge' }), 111)).toBeCloseTo(220);
+        expect(call('iconY', d({ iconPlacement: 'badge' }), 222)).toBe(70);
+    });
+
+    it('falls back to width/height when no visual size was recorded', () => {
+        const noVisual = { x: 0, y: 0, width: 80, height: 40, icon: 'x', iconPlacement: 'full' };
+        expect(call('iconWidth', noVisual)).toBe(80);
+        expect(call('iconHeight', noVisual)).toBe(40);
     });
 });
 

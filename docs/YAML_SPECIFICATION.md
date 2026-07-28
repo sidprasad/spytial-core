@@ -396,7 +396,7 @@ Directives control visual styling and presentation without affecting layout stru
 
 ### Atom Style Directive (atomStyle)
 
-Styles the atoms (nodes) matching a selector. An atom is a composite of an interior **fill**, an outline **border**, and its **label**, so styling uses the shared `fillStyle`, `borderStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
+Styles the atoms (nodes) matching a selector. An atom is a composite of an interior **fill**, an outline **border**, an **icon**, and its **label**, so styling uses the shared `fillStyle`, `borderStyle`, `iconStyle`, and `textStyle` blocks (the same block vocabulary as `edgeStyle`'s `lineStyle`/`textStyle`).
 
 ```yaml
 - atomStyle:
@@ -406,23 +406,42 @@ Styles the atoms (nodes) matching a selector. An atom is a composite of an inter
     borderStyle:                 # Optional: the outline
       color: <color>
       width: <number>
+    iconStyle:                   # Optional: an icon drawn on the atom
+      path: <icon-path>
+      placement: <full|badge>
+      opacity: <0..1>
     textStyle:                   # Optional: the atom's own (name) label
       size: <small|normal|large>
       color: <color>
+    showLabel: <boolean>         # Optional: whether the atom's label is drawn
 ```
 
 **Fields:**
 
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `selector` | ❌ No | string | Unary selector for target atoms; absent styles every atom |
-| `fillStyle.color` | ❌ No | string | CSS color of the node's interior fill (opt-in; the default is an unfilled Tufte look where only stroke + label mark the node) |
-| `borderStyle.color` | ❌ No | string | CSS color of the node's outline |
-| `borderStyle.width` | ❌ No | number | Outline thickness in pixels (must be > 0) |
-| `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` — *reserved; not yet applied to the node's own label* |
-| `textStyle.color` | ❌ No | string | CSS color of the atom's label |
+| Field | Required | Type | Default | Description |
+|-------|----------|------|---------|-------------|
+| `selector` | ❌ No | string | all atoms | Unary selector for target atoms |
+| `fillStyle.color` | ❌ No | string | — | CSS color of the node's interior fill (opt-in; the default is an unfilled Tufte look where only stroke + label mark the node) |
+| `borderStyle.color` | ❌ No | string | — | CSS color of the node's outline |
+| `borderStyle.width` | ❌ No | number | — | Outline thickness in pixels (must be > 0) |
+| `iconStyle.path` | ❌ No | string | — | Icon path, URL, bundled name (`person`), or icon-pack reference (`bi:person-fill`) |
+| `iconStyle.placement` | ❌ No | enum | `full` | `full` — the icon occupies the box; `badge` — a small top-right marker |
+| `iconStyle.opacity` | ❌ No | number | `1` | Icon alpha in `[0,1]`; out-of-range values are ignored |
+| `textStyle.size` | ❌ No | enum | `normal` | `small`, `normal`, or `large` — *reserved; not yet applied to the node's own label* |
+| `textStyle.color` | ❌ No | string | — | CSS color of the atom's label |
+| `showLabel` | ❌ No | boolean | `true` | Whether the atom's label is drawn |
 
-**Inheritance & conflicts:** rules match atoms through their selector, and a supertype selector already returns subtype atoms — so a `Node` rule and a `RedNode` rule both apply to a `RedNode` atom, their set properties **composing** (gap-fill inheritance up the type hierarchy). Two rules that set the *same* property to *different* values is an error: styles never silently override.
+**Inheritance & conflicts:** rules match atoms through their selector, and a supertype selector already returns subtype atoms — so a `Node` rule and a `RedNode` rule both apply to a `RedNode` atom, their set properties **composing** (gap-fill inheritance up the type hierarchy). Two rules that set the *same* property to *different* values is an error: styles never silently override. This applies to `iconStyle` like any other block, so a supertype can supply the `path` and a subtype tune only its `opacity`.
+
+**Icons and labels are independent.** `placement` controls the icon's geometry; `showLabel` controls whether the label draws. The three useful combinations:
+
+| Idiom | Spec | Result |
+|---|---|---|
+| **Glyph** | `placement: full`, `showLabel: false` | The icon *is* the node — the box goes transparent, no label |
+| **Badge** | `placement: badge`, `showLabel: true` | Small corner marker beside a normal labelled node |
+| **Watermark** | `placement: full`, `opacity: 0.15`, `showLabel: true` | Faded full-size icon behind the label |
+
+A `full` icon leaves the node's box transparent (so a group hull shows through) unless you ask for a `fillStyle.color`, which wins.
 
 **Examples:**
 
@@ -438,6 +457,25 @@ Styles the atoms (nodes) matching a selector. An atom is a composite of an inter
 - atomStyle:
     selector: Error
     borderStyle: { color: red }
+
+# Glyph: the icon replaces the node entirely
+- atomStyle:
+    selector: XCell
+    showLabel: false
+    iconStyle: { path: tic-x }
+
+# Badge: a lock marker alongside the label
+- atomStyle:
+    selector: Locked
+    iconStyle: { path: 'bi:lock-fill', placement: badge }
+
+# Watermark: every Person faded behind its label, Admins more strongly
+- atomStyle:
+    selector: Person
+    iconStyle: { path: person, opacity: 0.12 }
+- atomStyle:
+    selector: Admin
+    iconStyle: { opacity: 0.35 }   # inherits `path` from the Person rule
 ```
 
 **Migrating from `atomColor`:** `atomColor` (below) is the legacy flat form and still works; its `value` maps onto `borderStyle.color` (so existing diagrams keep their outlines exactly), and you can add a `fillStyle` for a real interior fill:
@@ -446,6 +484,15 @@ Styles the atoms (nodes) matching a selector. An atom is a composite of an inter
 |---|---|
 | `value` | `borderStyle.color` |
 | `selector` | `selector` |
+
+**Migrating from `icon`:** the legacy `icon` directive's single `showLabels` boolean drove label visibility *and* icon geometry at once. It splits into the two independent knobs:
+
+| `icon` | `atomStyle` |
+|---|---|
+| `path` | `iconStyle.path` |
+| `selector` | `selector` |
+| `showLabels: false` (default) | `showLabel: false` + `iconStyle.placement: full` |
+| `showLabels: true` | `showLabel: true` + `iconStyle.placement: badge` |
 
 ---
 
@@ -618,7 +665,9 @@ Customizes the appearance of edges for a specific field/relation.
 
 ---
 
-### Icon Directive
+### Icon Directive — *legacy*
+
+> **Deprecated:** prefer [`atomStyle`](#atom-style-directive-atomstyle) with an `iconStyle` block. `icon` still works and desugars onto `atomStyle` with a deprecation warning. See [Migrating from `icon`](#atom-style-directive-atomstyle) for the exact mapping — the one `showLabels` boolean becomes `showLabel` plus `iconStyle.placement`, which is what lets you fade an icon, or hide a label with no icon at all.
 
 Assigns an icon to atoms matching a selector.
 
@@ -636,6 +685,8 @@ Assigns an icon to atoms matching a selector.
 | `selector` | ✅ Yes | string | - | Unary selector for target atoms |
 | `path` | ✅ Yes | string | - | Icon path, URL, or registered icon name |
 | `showLabels` | ❌ No | boolean | `false` | Display text labels with the icon |
+
+A directive missing either required field draws nothing, and is dropped rather than desugared.
 
 **Examples:**
 
@@ -1025,25 +1076,29 @@ constraints:
 
 directives:
   # Visual styling
-  - atomColor:
+  - atomStyle:
       selector: Person
-      value: "#4a90d9"
+      borderStyle:
+        color: "#4a90d9"
   
-  - atomColor:
+  - atomStyle:
       selector: Error
-      value: red
+      borderStyle:
+        color: red
   
-  - icon:
+  - atomStyle:
       selector: File
-      path: "file-icon"
-      showLabels: true
+      iconStyle:
+        path: "file-icon"
+        placement: badge
   
   # Edge styling
-  - edgeColor:
+  - edgeStyle:
       field: error
-      value: red
-      style: dashed
-      weight: 2
+      lineStyle:
+        color: red
+        pattern: dashed
+        weight: 2
   
   # Convert to attributes
   - attribute:

@@ -6,30 +6,48 @@ Directives control the **visual presentation** of your graph — colors, icons, 
 
 ## Atom Styling
 
-Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, an outline **border**, and a **label**, styled with the shared `fillStyle`, `borderStyle`, and `textStyle` blocks — the same block vocabulary `edgeStyle` uses for lines and labels. Use `atomStyle` in the directives section.
+Styles the atoms (nodes) matching a selector. An atom has an interior **fill**, an outline **border**, an **icon**, and a **label**, styled with the shared `fillStyle`, `borderStyle`, `iconStyle`, and `textStyle` blocks — the same block vocabulary `edgeStyle` uses for lines and labels. Use `atomStyle` in the directives section.
 
 ```yaml
 - atomStyle:
     selector: <unary-selector>                        # Optional (absent = all atoms)
     fillStyle:   { color: <color> }                   # the interior fill (opt-in)
     borderStyle: { color: <color>, width: <number> }  # the outline
+    iconStyle:   { path: <icon-path>, placement: <full|badge>, opacity: <0..1> }
     textStyle:   { size: <small|normal|large>, color: <color> }  # the atom's label
+    showLabel:   <boolean>                            # Optional (default: true)
 ```
 
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `selector` | No | string | Unary selector for target atoms; absent styles every atom |
-| `fillStyle.color` | No | string | Interior fill color (opt-in; the default is unfilled) |
-| `borderStyle.color` | No | string | Outline color |
-| `borderStyle.width` | No | number | Outline thickness in px (must be > 0) |
-| `textStyle.color` | No | string | Label color |
-| `textStyle.size` | No | enum | `small`/`normal`/`large` — *reserved; not yet applied to the node's own label* |
+| Field | Required | Type | Default | Description |
+|-------|----------|------|---------|-------------|
+| `selector` | No | string | all atoms | Unary selector for target atoms |
+| `fillStyle.color` | No | string | — | Interior fill color (opt-in; the default is unfilled) |
+| `borderStyle.color` | No | string | — | Outline color |
+| `borderStyle.width` | No | number | — | Outline thickness in px (must be > 0) |
+| `iconStyle.path` | No | string | — | Icon path, URL, or registered name — see [Icons](#icons) |
+| `iconStyle.placement` | No | enum | `full` | `full` (the icon occupies the box) or `badge` (small top-right marker) |
+| `iconStyle.opacity` | No | number | `1` | Icon alpha in `[0,1]` |
+| `textStyle.color` | No | string | — | Label color |
+| `textStyle.size` | No | enum | `normal` | `small`/`normal`/`large` — *reserved; not yet applied to the node's own label* |
+| `showLabel` | No | boolean | `true` | Whether the atom's label is drawn |
 
 You can use hex codes, named colors, `rgb()`, `hsl()`, etc.
 
-When several `atomStyle` rules match one atom their set properties **compose**; because a supertype selector already returns subtype atoms, a rule on a supertype and a rule on a subtype both apply (inheritance up the type hierarchy). Setting the *same* property two different ways is an error — no silent override.
+When several `atomStyle` rules match one atom their set properties **compose**; because a supertype selector already returns subtype atoms, a rule on a supertype and a rule on a subtype both apply (inheritance up the type hierarchy). Setting the *same* property two different ways is an error — no silent override. `iconStyle` composes like any other block, so a supertype can supply the icon and a subtype tune only its opacity.
+
+**Icons and labels are separate knobs.** `placement` sets the icon's geometry, `showLabel` decides whether the label draws — combine them freely:
+
+| Idiom | Spec | Result |
+|---|---|---|
+| **Glyph** | `placement: full`, `showLabel: false` | The icon *is* the node — transparent box, no label |
+| **Badge** | `placement: badge` | Small corner marker beside a normal labelled node |
+| **Watermark** | `placement: full`, low `opacity` | Faded full-size icon behind the label |
+
+A `full` icon leaves the box transparent (a group hull shows through it) unless you ask for a `fillStyle.color`, which wins.
 
 > **`atomColor` is the legacy form** and still works: `value`→`borderStyle.color`, so a node keeps its outline exactly as before. It desugars to `atomStyle` with a deprecation warning. Add a `fillStyle` to give a node a real interior fill.
+>
+> **`icon` is likewise legacy.** Its one `showLabels` boolean drove both label visibility and icon geometry: `showLabels: false` → `showLabel: false` + `placement: full`; `showLabels: true` → `showLabel: true` + `placement: badge`. It desugars with a deprecation warning.
 
 ### Examples
 
@@ -114,7 +132,7 @@ Customizes the appearance of edges for a specific field (relation). Use `edgeSty
 
 When several `edgeStyle` rules match one edge their set properties **compose**; setting the *same* property two different ways is an error — no silent override.
 
-> **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning. The scoping and example snippets below use `edgeColor`; swap the flat keys for the blocks above to get the `edgeStyle` form.
+> **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning.
 
 ### Scoping with `selector` and `filter`
 
@@ -122,54 +140,51 @@ When multiple types share the same field name (e.g., both `Person` and `Car` hav
 
 ```yaml
 # Color Person.name edges red
-- edgeColor:
+- edgeStyle:
     field: name
-    value: red
     selector: Person
+    lineStyle: { color: red }
 
 # Color Car.name edges blue
-- edgeColor:
+- edgeStyle:
     field: name
-    value: blue
     selector: Car
+    lineStyle: { color: blue }
 ```
 
 Use `filter` for finer control over which tuples are affected:
 
 ```yaml
 # Only style edges where the target is Active
-- edgeColor:
+- edgeStyle:
     field: status
-    value: green
     filter: "status & (univ -> Active)"
+    lineStyle: { color: green }
 ```
 
 ### Examples
 
 ```yaml
 # Color all 'parent' edges blue
-- edgeColor:
+- edgeStyle:
     field: parent
-    value: blue
+    lineStyle: { color: blue }
 
 # Dashed red edges with thicker lines
-- edgeColor:
+- edgeStyle:
     field: references
-    value: red
     selector: Document
-    style: dashed
-    weight: 2
+    lineStyle: { color: red, pattern: dashed, weight: 2 }
 
 # Hide edges but keep the relationship in the data
-- edgeColor:
+- edgeStyle:
     field: internal
-    value: gray
     hidden: true
 
 # Remove edge labels for cleaner look
-- edgeColor:
+- edgeStyle:
     field: owns
-    value: "#666"
+    lineStyle: { color: "#666" }
     showLabel: false
 ```
 
@@ -198,8 +213,8 @@ Use `filter` for finer control over which tuples are affected:
 constraints:
   - orientation: { selector: parent, directions: [above] }
 directives:
-  - edgeColor: { field: parent,     value: "blue" }
-  - edgeColor: { field: references, value: "red", selector: Document, style: dashed, weight: 2 }
+  - edgeStyle: { field: parent,     lineStyle: { color: "blue" } }
+  - edgeStyle: { field: references, selector: Document, lineStyle: { color: "red", pattern: dashed, weight: 2 } }
 </template>
 </div>
 
@@ -207,20 +222,19 @@ directives:
 
 ## Icons
 
-Assigns an icon to nodes matching a selector. Replaces the default rectangular node appearance.
+Icons are part of [atom styling](#atom-styling) — set them with an `iconStyle` block:
 
 ```yaml
-- icon:
-    selector: <unary-selector>   # Required
-    path: <icon-path>            # Required
-    showLabels: <boolean>        # Optional (default: false)
+- atomStyle:
+    selector: <unary-selector>
+    iconStyle:
+      path: <icon-path>            # bundled name, pack reference, URL, or path
+      placement: <full|badge>      # Optional (default: full)
+      opacity: <0..1>              # Optional (default: 1)
+    showLabel: <boolean>           # Optional (default: true)
 ```
 
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `selector` | Yes | string | — | Unary selector for target atoms |
-| `path` | Yes | string | — | Icon path, URL, or registered icon name |
-| `showLabels` | No | boolean | `false` | Show text labels alongside the icon |
+> The standalone `- icon:` directive is deprecated but still works. See the [atom styling](#atom-styling) section for how its `showLabels` flag maps onto `showLabel` + `placement`.
 
 ### Icon Sources
 
@@ -272,35 +286,38 @@ Use a prefix to pull icons from popular icon libraries:
 ### Examples
 
 ```yaml
-# Bundled icon
-- icon:
+# Bundled icon as a corner badge, label kept
+- atomStyle:
     selector: Person
-    path: "person"
-    showLabels: true
+    iconStyle: { path: "person", placement: badge }
 
 # Bootstrap Icons pack
-- icon:
+- atomStyle:
     selector: Folder
-    path: "bi:folder2-open"
-    showLabels: true
-
-# Lucide pack
-- icon:
-    selector: Settings
-    path: "lucide:settings"
+    iconStyle: { path: "bi:folder2-open", placement: badge }
 
 # External URL
-- icon:
+- atomStyle:
     selector: File
-    path: "https://example.com/icons/file.svg"
+    iconStyle: { path: "https://example.com/icons/file.svg" }
 
-# Shapes for game boards
-- icon:
+# Shapes for game boards — the icon replaces the node entirely
+- atomStyle:
     selector: XPlayer
-    path: "tic-x"
-- icon:
+    showLabel: false
+    iconStyle: { path: "tic-x" }
+- atomStyle:
     selector: OPlayer
-    path: "tic-o"
+    showLabel: false
+    iconStyle: { path: "tic-o" }
+
+# Watermark: a faded icon behind the label, stronger for admins
+- atomStyle:
+    selector: Person
+    iconStyle: { path: "person", opacity: 0.12 }
+- atomStyle:
+    selector: Admin
+    iconStyle: { opacity: 0.35 }   # path inherited from the Person rule
 ```
 
 <div class="spytial-diagram" data-height="340" data-caption="Live: bundled icons replace the default rectangles — Person uses person, Folder uses folder.">
@@ -322,8 +339,8 @@ Use a prefix to pull icons from popular icon libraries:
 </template>
 <template class="spec">
 directives:
-  - icon: { selector: Person, path: "person", showLabels: true }
-  - icon: { selector: Folder, path: "folder", showLabels: true }
+  - atomStyle: { selector: Person, iconStyle: { path: "person", placement: badge } }
+  - atomStyle: { selector: Folder, iconStyle: { path: "folder", placement: badge } }
 </template>
 </div>
 

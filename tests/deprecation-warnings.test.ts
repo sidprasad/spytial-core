@@ -68,6 +68,7 @@ describe('Deprecation warnings', () => {
         const cases: Array<[string, string]> = [
             ['atomColor', "directives:\n  - atomColor: { selector: Node, value: '#ff0000' }"],
             ['edgeColor', "directives:\n  - edgeColor: { field: next, value: '#111111' }"],
+            ['icon', 'directives:\n  - icon: { selector: Node, path: person }'],
             [
                 'inferredEdge',
                 "directives:\n  - inferredEdge: { name: n, selector: next, color: '#00ff00' }",

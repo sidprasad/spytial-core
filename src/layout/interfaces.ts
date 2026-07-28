@@ -2,6 +2,7 @@ import { Group } from "webcola";
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import type { TextStyle } from "./style/text-style";
+import type { IconPlacement } from "./style/atom-style-spec";
 import type { LayoutWarning } from "./error-state";
 
 export interface LayoutGroup {
@@ -110,11 +111,25 @@ export interface LayoutNode {
      * metadata in the data instance.
      */
     labels?: Record<string, string[]>;
+    /** Resolved icon URL / data URI from `atomStyle.iconStyle.path`. Empty = no icon. */
     icon? : string;
+    /**
+     * How {@link icon} draws: `full` (occupies the box, which stays transparent
+     * unless an explicit fill was asked for) or `badge` (small top-right marker).
+     * Defaults to `full`. Meaningless without an {@link icon}.
+     */
+    iconPlacement? : IconPlacement;
+    /** Icon alpha in [0,1] from `atomStyle.iconStyle.opacity`. Undefined = opaque. */
+    iconOpacity? : number;
     width : number;
     height : number;
     mostSpecificType : string;
     types : string[];
+    /**
+     * Whether the atom's label is drawn, from `atomStyle.showLabel` (default true).
+     * Named plural for back-compat with the render contract; the spec-level key is
+     * the singular `showLabel`, matching `edgeStyle`.
+     */
     showLabels : boolean;
     /** True when the node has no edges connecting it to the rest of the graph. */
     disconnected?: boolean;

@@ -1641,3 +1641,133 @@
 .spytial-ed-group-add:hover {
   background: var(--spytial-ed-hover, #f6f8fa);
 }
+
+/* ── iconPath field: text input + built-in icon browser ──────────────────── */
+
+.spytial-ed-icon {
+  position: relative;
+  width: 100%;
+}
+
+.spytial-ed-icon-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* Only shown for bundled values — see IconField for why. The glyph is inlined
+   SVG, not an <img>, so `fill="currentColor"` inherits this color and the icon
+   stays legible in both the light and dark themes. */
+.spytial-ed-icon-preview,
+.spytial-ed-icon-cell-glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--spytial-ed-text, #221d14);
+}
+.spytial-ed-icon-preview svg {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+}
+.spytial-ed-icon-cell-glyph svg {
+  inline-size: 1.35rem;
+  block-size: 1.35rem;
+}
+
+.spytial-ed-icon-btn {
+  flex: 0 0 auto;
+  cursor: pointer;
+  padding: 0.3em 0.5em;
+  line-height: 1;
+  color: var(--spytial-ed-text-muted, #6e6553);
+  background: var(--spytial-ed-surface, #faf8f2);
+  border: 1px solid var(--spytial-ed-border, #d9d2c0);
+  border-radius: var(--spytial-ed-radius-sm, 2px);
+}
+.spytial-ed-icon-btn:hover:not(:disabled) {
+  color: var(--spytial-ed-text, #221d14);
+  background: var(--spytial-ed-hover, #f6f8fa);
+}
+.spytial-ed-icon-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.spytial-ed-icon-pop {
+  position: fixed;
+  z-index: 1000;
+  inline-size: 20rem;
+  max-inline-size: calc(100vw - 1rem);
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: var(--spytial-ed-surface, #faf8f2);
+  border: 1px solid var(--spytial-ed-border, #d9d2c0);
+  border-radius: var(--spytial-ed-radius, 2px);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--spytial-ed-text, #221d14) 8%, transparent),
+    0 8px 24px color-mix(in srgb, var(--spytial-ed-text, #221d14) 18%, transparent);
+  animation: spytial-ed-pop 0.12s ease-out;
+}
+
+.spytial-ed-icon-search {
+  margin-block-end: 0.4rem;
+}
+
+.spytial-ed-icon-note,
+.spytial-ed-icon-empty {
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--spytial-ed-text-muted, #6e6553);
+}
+
+.spytial-ed-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(4.25rem, 1fr));
+  gap: 0.25rem;
+}
+
+.spytial-ed-icon-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  cursor: pointer;
+  padding: 0.4rem 0.2rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--spytial-ed-radius-sm, 2px);
+  color: var(--spytial-ed-text, #221d14);
+}
+.spytial-ed-icon-cell:hover {
+  background: var(--spytial-ed-hover, #f6f8fa);
+  border-color: var(--spytial-ed-border, #d9d2c0);
+}
+.spytial-ed-icon-cell--active {
+  border-color: var(--spytial-ed-accent, #0969da);
+  background: color-mix(in srgb, var(--spytial-ed-accent, #0969da) 10%, transparent);
+}
+.spytial-ed-icon-cell-name {
+  max-inline-size: 100%;
+  overflow: hidden;
+  font-size: 0.65rem;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--spytial-ed-text-muted, #6e6553);
+}
+
+.spytial-ed-icon-packs {
+  margin-block-start: 0.6rem;
+  padding-block-start: 0.5rem;
+  border-block-start: 1px solid var(--spytial-ed-border, #d9d2c0);
+}
+.spytial-ed-icon-packs ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.72rem;
+  line-height: 1.6;
+  color: var(--spytial-ed-text, #221d14);
+}
+.spytial-ed-icon-pack-eg {
+  color: var(--spytial-ed-text-muted, #6e6553);
+}

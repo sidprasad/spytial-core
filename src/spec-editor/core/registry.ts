@@ -23,8 +23,8 @@
  *     - flag: <scalar string>
  *     - attribute:    { field, selector?, filter?, textStyle?:{size,color} }
  *     - hideField:    { field, selector?, filter? }
- *     - icon:         { path, selector?, showLabels? }
- *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, textStyle?:{size,color} }
+ *     - icon:         { path, selector?, showLabels? }  (deprecated → atomStyle)
+ *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, iconStyle?:{path,placement,opacity}, textStyle?:{size,color}, showLabel? }
  *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
  *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
@@ -95,6 +95,13 @@ export const ORIENTATION_DIRECTIONS = [
 export const CYCLIC_DIRECTIONS = ['clockwise', 'counterclockwise'] as const;
 export const ALIGN_DIRECTIONS = ['horizontal', 'vertical'] as const;
 export const EDGE_STYLES = ['solid', 'dashed', 'dotted'] as const;
+
+/**
+ * Where an atom's icon draws: `full` occupies the box (which goes transparent
+ * unless a fill was asked for), `badge` is a small top-right marker beside the
+ * label. Mirrors `IconPlacement` in `layout/style/atom-style-spec.ts`.
+ */
+export const ICON_PLACEMENTS = ['full', 'badge'] as const;
 
 /**
  * Text-size tiers for a label line, relative to the node label. `large` renders
@@ -621,7 +628,9 @@ const icon: ItemDefinition = {
   kind: 'directive',
   type: 'icon',
   label: 'Icon',
-  description: 'Render matching atoms with an icon.',
+  description: "Deprecated — use Atom style (atomStyle) with an 'iconStyle' block. Still parsed/rendered for back-compat (showLabels splits into showLabel + iconStyle.placement).",
+  deprecated: true,
+  deprecatedInFavorOf: 'atomStyle',
   fields: [
     {
       key: 'path',
@@ -705,6 +714,18 @@ const BORDER_STYLE_FIELDS: readonly FieldSpec[] = [
   { key: 'width', kind: 'number', label: 'Width' },
 ];
 
+/**
+ * Shared `iconStyle` block children — an atom's icon, its geometry, and its
+ * alpha. No defaults (sparse): the engine treats an absent `placement` as
+ * `full`, and seeding it here would emit it as an authored value and break the
+ * resolver's compose / collision rules.
+ */
+const ICON_STYLE_FIELDS: readonly FieldSpec[] = [
+  { key: 'path', kind: 'iconPath', label: 'Icon', placeholder: 'e.g. person, bi:person-fill, https://…' },
+  { key: 'placement', kind: 'enum', options: ICON_PLACEMENTS, label: 'Placement' },
+  { key: 'opacity', kind: 'number', label: 'Opacity', help: '0–1. Fade a full-bleed icon to use it as a watermark behind the label.' },
+];
+
 const edgeStyle: ItemDefinition = {
   kind: 'directive',
   type: 'edgeStyle',
@@ -733,12 +754,14 @@ const atomStyle: ItemDefinition = {
   kind: 'directive',
   type: 'atomStyle',
   label: 'Atom style',
-  description: 'Style matching atoms — fill, border, and label.',
+  description: 'Style matching atoms — fill, border, icon, and label.',
   fields: [
     { key: 'selector', kind: 'selector', label: 'Selector', selectorArity: 'unary' },
     { key: 'fillStyle', kind: 'group', label: 'Fill style', children: FILL_STYLE_FIELDS },
     { key: 'borderStyle', kind: 'group', label: 'Border style', children: BORDER_STYLE_FIELDS },
+    { key: 'iconStyle', kind: 'group', label: 'Icon style', children: ICON_STYLE_FIELDS },
     { key: 'textStyle', kind: 'group', label: 'Text style', children: TEXT_STYLE_FIELDS },
+    { key: 'showLabel', kind: 'boolean', label: 'Show label' },
   ],
   summary(params) {
     const fill = (params.fillStyle ?? {}) as Record<string, unknown>;

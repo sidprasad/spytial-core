@@ -2,7 +2,7 @@ import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
 import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
 import type { LineStyle } from './style/edge-style-spec';
-import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule } from './style/atom-style-spec';
+import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule, iconToAtomStyleRule } from './style/atom-style-spec';
 import { parseTextStyle } from './style/text-style';
 import type { TextStyle } from './style/text-style';
 
@@ -990,15 +990,29 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
 
     // CURRENTLY NO SUGAR HERE!
 
-    let icons : AtomIconDirective[] = typedDirectives.filter(d => d.icon)
-                .map(d => {
-
-                    return {
-                        path: d.icon.path,
-                        selector: d.icon.selector,
-                        showLabels: d.icon.showLabels || false 
-                    }
-                });
+    // icon is the deprecated flat form of atomStyle's `iconStyle` block. Its one
+    // `showLabels` boolean conflated label visibility with icon geometry; the
+    // desugar splits it into `showLabel` + `iconStyle.placement` (see
+    // iconToAtomStyleRule for the exact, behavior-preserving mapping) so icons
+    // resolve through the single atomStyle path — composing, inheriting, and
+    // colliding by the same rules as every other atom style.
+    // `icons` is kept empty only to satisfy the DirectivesBlock shape.
+    const rawIcons = typedDirectives.filter(d => d.icon);
+    if (rawIcons.length > 0) {
+        deprecate(
+            'icon',
+            "[spytial] 'icon' is deprecated and will be removed in a future major; " +
+            "use 'atomStyle' with an 'iconStyle' block ({ path, placement: full | badge, opacity }), " +
+            "and atomStyle's own 'showLabel' to control the atom's label."
+        );
+    }
+    // A selectorless or pathless icon desugars to null and is dropped — it drew
+    // nothing before, and must not become a graph-wide icon now that an absent
+    // atomStyle selector means "every atom".
+    const desugaredIcons: AtomStyleRule[] = rawIcons
+        .map(d => iconToAtomStyleRule(d.icon))
+        .filter((rule): rule is AtomStyleRule => rule !== null);
+    let icons : AtomIconDirective[] = [];
     // atomColor is the deprecated flat form of atomStyle. Desugar each into an
     // AtomStyleRule (border-preserving: value→borderStyle.color, so existing
     // diagrams stay outlined exactly as before) and resolve through the one
@@ -1125,16 +1139,17 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
     // Desugared legacy edgeColor rules join the native ones — one resolution path.
     edgeStyles = [...edgeStyles, ...desugaredEdgeColors];
 
-    // atomStyle (composite: fillStyle + borderStyle + textStyle), keyed by an
-    // optional unary selector. Native rules plus desugared legacy atomColor rules
-    // resolve through the one atomStyle path.
+    // atomStyle (composite: fillStyle + borderStyle + textStyle + iconStyle, plus
+    // the showLabel behavior flag), keyed by an optional unary selector. Native
+    // rules plus desugared legacy atomColor / icon rules resolve through the one
+    // atomStyle path.
     let atomStyles : AtomStyleRule[] = typedDirectives.filter(d => d.atomStyle).map(d => {
         return {
             selector: d.atomStyle.selector,
             style: parseAtomStyleSpec(d.atomStyle)
         }
     });
-    atomStyles = [...atomStyles, ...desugaredAtomColors];
+    atomStyles = [...atomStyles, ...desugaredAtomColors, ...desugaredIcons];
 
     return {
         atomColors,

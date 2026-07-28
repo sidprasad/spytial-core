@@ -153,6 +153,17 @@ With a domain present you get:
 - **Relation / type dropdowns**: fields of kind `relationName` and `typeName`
   render as combo boxes (free text plus a dropdown of known names) instead of
   plain text inputs.
+
+Domain-independent, so available with or without a `domain`:
+
+- **Icon browser**: `atomStyle`'s `iconStyle.path` (kind `iconPath`) renders a
+  text input plus a button that opens a searchable grid of the icons bundled
+  with the package, previewed from their inlined data URIs. Picking one writes
+  the bundled *name* (`person`), not the resolved data URI, so the spec stays
+  readable. Typing stays authoritative — URLs, relative paths, and `pack:name`
+  references are unaffected. CDN packs are listed as guidance (prefix, name,
+  example) rather than thumbnails, since previewing them would need a network
+  round-trip.
 - **Soft warnings**: `relationName`/`typeName` values not present in the
   instance, and selector identifiers that match no domain type/relation/atom,
   surface as `source: 'domain'` diagnostics. **All domain diagnostics are
@@ -560,8 +571,14 @@ An `ItemDefinition` has:
 - `label`, optional `description`: shown in the add menu.
 - optional `deprecated`: parse/render but hide from the add menu.
 - `fields: FieldSpec[]`: the form. Each `FieldSpec` is
-  `{ key, kind, label, required?, options?, multiple?, default?, placeholder?, help?, selectorArity? }`.
-  `kind` is one of `selector | relationName | typeName | enum | number | color | text | boolean`.
+  `{ key, kind, label, required?, options?, multiple?, default?, placeholder?, help?, selectorArity?, children? }`.
+  `kind` is one of
+  `selector | relationName | typeName | enum | number | color | text | iconPath | boolean | group`.
+  `group` renders its `children` recursively as a nested block (`lineStyle`,
+  `textStyle`, `iconStyle`, …); `iconPath` renders a text input plus a browser
+  for the bundled icons. Fields inside a style block must not declare a
+  `default` — a seeded value would emit as authored YAML and break the style
+  resolver's compose / collision rules.
 - `summary(params)`: the one-line collapsed-row text.
 - optional `validate(params)`: extra structural diagnostics beyond required-field
   checks.

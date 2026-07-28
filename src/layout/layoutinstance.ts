@@ -2,7 +2,6 @@ import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
-import { resolveIconPath } from './icon-registry';
 import type { SelectorErrorDetail, LayoutWarning } from './error-state';
 
 
@@ -23,7 +22,7 @@ import {
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
-import { resolveAtomStyle } from './style/atom-style-spec';
+import { resolveAtomStyle, iconToAtomStyleRule } from './style/atom-style-spec';
 import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
 import type { TextStyle } from './style/text-style';
 
@@ -289,6 +288,58 @@ class LayoutNodePath {
     static areEquivalent(p1: LayoutNodePath, p2: LayoutNodePath): boolean {
         return p1.isSubpathOf(p2) && p2.isSubpathOf(p1);
     }
+}
+
+
+/**
+ * Desugar any legacy directives still sitting on a {@link LayoutSpec} into the
+ * `atomStyle` rules the layout actually reads.
+ *
+ * `parseLayoutSpec` already does this for YAML, leaving `icons`/`atomColors`
+ * empty — but a `LayoutSpec` can also arrive as an object, via the
+ * `setupLayout(spec: LayoutSpec, ...)` overload or `new LayoutInstance(spec)`
+ * directly. Those paths never touch the parser, so a programmatically-built
+ * spec would populate `directives.icons` and have it silently ignored: nothing
+ * reads those arrays any more.
+ *
+ * `atomColors` carries the same latent hole — nothing has read it since the
+ * legacy color desugar landed — so it is normalized here too. Note these arrays
+ * hold *parsed* directives, not raw YAML: an {@link AtomColorDirective} spells
+ * its color `color`, where the YAML form (which `atomColorToAtomStyleRule`
+ * consumes) spells it `value`. Hence the mapping below rather than a reuse of
+ * that parser-side helper. {@link AtomIconDirective} happens to match the YAML
+ * shape exactly, so it can go through {@link iconToAtomStyleRule} directly.
+ *
+ * Idempotent by construction — a parsed spec has empty legacy arrays, so this
+ * is a no-op and returns the spec untouched. Only a spec that actually carries
+ * legacy directives is copied (shallowly, so the caller's object isn't
+ * mutated). Selectorless/pathless entries drop, matching the parser exactly.
+ */
+export function normalizeLegacyDirectives(spec: LayoutSpec): LayoutSpec {
+    const legacyIcons = spec.directives?.icons ?? [];
+    const legacyAtomColors = spec.directives?.atomColors ?? [];
+    if (legacyIcons.length === 0 && legacyAtomColors.length === 0) return spec;
+
+    const fromAtomColors: (AtomStyleRule | null)[] = legacyAtomColors.map((d) => {
+        if (!d.selector || d.selector.trim().length === 0) return null;
+        if (typeof d.color !== 'string' || d.color.length === 0) return null;
+        return { selector: d.selector, style: { borderStyle: { color: d.color } } };
+    });
+
+    const desugared: AtomStyleRule[] = [
+        ...fromAtomColors,
+        ...legacyIcons.map(iconToAtomStyleRule),
+    ].filter((rule): rule is AtomStyleRule => rule !== null);
+
+    return {
+        ...spec,
+        directives: {
+            ...spec.directives,
+            atomStyles: [...spec.directives.atomStyles, ...desugared],
+            icons: [],
+            atomColors: [],
+        },
+    };
 }
 
 
@@ -662,7 +713,7 @@ export class LayoutInstance {
     ) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
-        this._layoutSpec = layoutSpec;
+        this._layoutSpec = normalizeLegacyDirectives(layoutSpec);
 
         // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
         // Otherwise, convert boolean addAlignmentEdges to strategy
@@ -1615,10 +1666,8 @@ export class LayoutInstance {
 
         this.ensureNoExtraNodes(g, a, groups);
 
-        // Recompute visual maps after graph mutations (inferred edges / node removal)
-        let nodeIconMap = this.getNodeIconMap(g);
-        // Resolve atomStyle once: it feeds both the border color (via the color
-        // map) and the node's fill / border-width / label styling below.
+        // Resolve atomStyle once: it feeds the border color (via the color map)
+        // and the node's fill / border-width / label / icon styling below.
         let atomStyleMap = this.getAtomStyleMap(g, ai);
         let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai, atomStyleMap);
 
@@ -1647,10 +1696,6 @@ export class LayoutInstance {
             let colorSource = explicitlyColored.has(nodeId)
                 ? ColorSource.Directive
                 : ColorSource.DefaultPalette;
-            let iconDetails = nodeIconMap[nodeId];
-            let iconPath = iconDetails.path;
-            let showLabels = iconDetails.showLabels;
-
             let { height, width } = nodeSizeMap[nodeId];
 
             const mostSpecificType = this.getMostSpecificType(nodeId, a);
@@ -1670,9 +1715,17 @@ export class LayoutInstance {
                 nodeLabels = atom.labels;
             }
 
-            // Fill / border-width / label styling from the resolved atomStyle
-            // (border *color* already flowed through nodeColorMap → color above).
+            // Fill / border-width / label / icon styling from the resolved
+            // atomStyle (border *color* already flowed through nodeColorMap →
+            // color above).
             const atomStyle = atomStyleMap[nodeId];
+            const iconStyle = atomStyle?.iconStyle;
+            // An atom shows its label unless a rule says otherwise; the legacy
+            // `icon` directive desugars an explicit false for its icon-only default.
+            const showLabels = atomStyle?.showLabel ?? true;
+            // Placement only matters once there is a path to draw; `full` is the
+            // default so a bare `iconStyle: { path }` reads as "this icon IS the atom".
+            const iconPlacement = iconStyle?.placement ?? 'full';
 
             return {
                 id: nodeId,
@@ -1687,7 +1740,9 @@ export class LayoutInstance {
                 attributes: nodeAttributes,
                 attributeTextStyles: nodeAttributeTextStyles,
                 labels: nodeLabels,
-                icon: iconPath,
+                icon: iconStyle?.path ?? this.DEFAULT_NODE_ICON_PATH,
+                iconPlacement: iconPlacement,
+                iconOpacity: iconStyle?.opacity,
                 height: height,
                 width: width,
                 mostSpecificType: mostSpecificType,
@@ -3229,52 +3284,6 @@ export class LayoutInstance {
         });
 
         return { colorMap: nodeColorMap, explicitlyColored };
-    }
-
-    private getNodeIconMap(g: Graph): Record<string, { path: string, showLabels: boolean }> {
-        let nodeIconMap: Record<string, { path: string, showLabels: boolean }> = {};
-        const DEFAULT_ICON = this.DEFAULT_NODE_ICON_PATH;
-
-        // Apply icon directives first
-        let iconDirectives = this._layoutSpec.directives.icons;
-        iconDirectives.forEach((iconDirective, specIndex) => {
-            let selected: string[];
-            try {
-                const selectorRes = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.acceptSelectorResult(selectorRes, iconDirective.selector, 'icon selector', 'unary', 'icon', specIndex)) {
-                    return; // Skip this directive only
-                }
-                selected = selectorRes.selectedAtoms();
-            } catch (error) {
-                this.recordSelectorError(iconDirective.selector, 'icon selector', error);
-                return; // Skip this icon directive
-            }
-            let iconPath = iconDirective.path;
-
-            selected.forEach((nodeId) => {
-                // Resolve icon path (handles bundled icons, icon packs, and URLs)
-                const resolvedPath = resolveIconPath(iconPath);
-                if (nodeIconMap[nodeId]) {
-                    const existingIcon = nodeIconMap[nodeId];
-                    if (existingIcon.path !== resolvedPath || existingIcon.showLabels !== iconDirective.showLabels) {
-                        throw new Error(
-                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: resolvedPath, showLabels: iconDirective.showLabels })}.`
-                        );
-                    }
-                }
-                nodeIconMap[nodeId] = { path: resolvedPath, showLabels: iconDirective.showLabels };
-            });
-        });
-
-        // Set default icons for nodes that do not have an icon set
-        let graphNodes = [...g.nodes()];
-        graphNodes.forEach((nodeId) => {
-            if (!nodeIconMap[nodeId]) {
-                nodeIconMap[nodeId] = { path: DEFAULT_ICON, showLabels: true };
-            }
-        });
-
-        return nodeIconMap;
     }
 
     /**
