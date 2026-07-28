@@ -32,7 +32,7 @@ The key concept to understand is **arity** — how many "columns" a selector ret
 
 A **unary selector** returns a *set of atoms*. It answers the question: **"which nodes?"**
 
-Used by: `atomStyle`, `align`, `hideAtom`, `icon`, `size`, `group` (by selector)
+Used by: `atomStyle`, `align`, `hideAtom`, `size`, `group` (by selector)
 
 ```yaml
 # All Node atoms

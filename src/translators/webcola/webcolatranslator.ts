@@ -2,6 +2,7 @@ import { Node, Group, Link, Rectangle } from 'webcola';
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import type { TextStyle } from '../../layout/style/text-style';
+import type { IconPlacement } from '../../layout/style/atom-style-spec';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
@@ -58,6 +59,10 @@ type NodeWithMetadata = Node & {
   /** Main-label styling from `atomStyle.textStyle` (only `color` consumed today; see LayoutNode). */
   textStyle?: TextStyle,
   icon: string,
+  /** Icon geometry from `atomStyle.iconStyle.placement`: 'full' | 'badge'. */
+  iconPlacement?: IconPlacement,
+  /** Icon alpha from `atomStyle.iconStyle.opacity`; absent = opaque. */
+  iconOpacity?: number,
   mostSpecificType: string,
   showLabels: boolean,
   /** Original visual width of the node (without layout padding). Use this for rendering. */
@@ -736,6 +741,8 @@ export class WebColaLayout {
       x: x,
       y: y,
       icon: node.icon || '',
+      iconPlacement: node.iconPlacement,
+      iconOpacity: node.iconOpacity,
       fixed: fixed,
       mostSpecificType: node.mostSpecificType,
       showLabels: node.showLabels,

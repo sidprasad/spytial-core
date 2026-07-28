@@ -23,18 +23,16 @@ Field-based directives now support an optional `selector` parameter that specifi
 ```yaml
 directives:
   # Color name relations red, but only for Person atoms
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'red'
       selector: 'Person'
-      style: 'dashed'
-      weight: 2
+      lineStyle: { color: 'red', pattern: 'dashed', weight: 2 }
       
   # Color name relations blue, but only for Car atoms
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'blue'
       selector: 'Car'
+      lineStyle: { color: 'blue' }
       
   # Company name relations will remain default color (black)
 ```
@@ -111,21 +109,21 @@ directives:
 
 ### Edge Color with Value Filters
 
-The `filter` parameter works on edge color directives too:
+The `filter` parameter works on edge style directives too:
 
 ```yaml
 directives:
   # Color 'active' edges green only where value is True
-  - edgeColor:
+  - edgeStyle:
       field: 'active'
-      value: 'green'
       filter: 'active & (univ -> True)'
+      lineStyle: { color: 'green' }
   
   # Color 'active' edges red only where value is False  
-  - edgeColor:
+  - edgeStyle:
       field: 'active'
-      value: 'red'
       filter: 'active & (univ -> False)'
+      lineStyle: { color: 'red' }
 ```
 
 ### Group By Field with Selectors
@@ -147,9 +145,9 @@ Directives without selectors continue to work as before:
 ```yaml
 directives:
   # This still applies to ALL name relations (legacy behavior)
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'green'
+      lineStyle: { color: 'green' }
 ```
 
 ## How It Works

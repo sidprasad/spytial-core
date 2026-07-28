@@ -3,8 +3,8 @@ constraints:
   - orientation: {selector: right, directions: [directlyRight]}
 
 directives:
-  - icon: {showLabels: false, selector: '{ x : Cell | (some x.mark) and x.mark in O}', path: tic-o}
-  - icon: {showLabels: false, selector: '{ x : Cell | (some x.mark) and x.mark in X}', path: tic-x}
+  - atomStyle: {showLabel: false, selector: '{ x : Cell | (some x.mark) and x.mark in O}', iconStyle: {path: tic-o}}
+  - atomStyle: {showLabel: false, selector: '{ x : Cell | (some x.mark) and x.mark in X}', iconStyle: {path: tic-x}}
   - hideAtom: {selector: O + X}
   - hideField: {field: down}
   - hideField: {field: right}

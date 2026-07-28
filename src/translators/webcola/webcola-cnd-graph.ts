@@ -424,17 +424,57 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Node rectangle fill. Hidden and icon-only nodes stay transparent. An
-   * explicit `atomStyle.fillStyle.color` (d.fillColor) is an opt-in real fill,
-   * preserved exactly as chosen. Otherwise Tufte: the fill matches the canvas so
-   * only stroke + label distinguish a node.
+   * Node rectangle fill. Hidden nodes, and nodes whose icon occupies the box
+   * (`placement: full`), stay transparent — real `transparent`, not the canvas
+   * color, so a group hull shows through behind the icon. An explicit
+   * `atomStyle.fillStyle.color` (d.fillColor) is an opt-in real fill and wins
+   * even under a full-bleed icon. Otherwise Tufte: the fill matches the canvas
+   * so only stroke + label distinguish a node.
+   *
+   * Note this keys off placement, not label visibility — a labelled atom with a
+   * faded full-bleed icon (the watermark idiom) gets the same see-through box as
+   * an unlabelled glyph.
    */
   private nodeFillColor(d: any): string {
-    const isHidden = this.isHiddenNode(d);
-    const hasIcon = !!d.icon;
-    const showLabels = d.showLabels;
-    if (isHidden || (hasIcon && !showLabels)) return 'transparent';
-    return d.fillColor ?? this.getCanvasBackground();
+    if (this.isHiddenNode(d)) return 'transparent';
+    if (d.fillColor) return d.fillColor;
+    if (d.icon && !this.isBadgeIcon(d)) return 'transparent';
+    return this.getCanvasBackground();
+  }
+
+  /** True when the node's icon draws as a small corner marker rather than filling the box. */
+  private isBadgeIcon(d: any): boolean {
+    return d.iconPlacement === 'badge';
+  }
+
+  /** Icon width: the full box, or a fraction of it for a badge. */
+  private iconWidth(d: any): number {
+    const vw = d.visualWidth ?? d.width;
+    return this.isBadgeIcon(d) ? vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR : vw;
+  }
+
+  /** Icon height: the full box, or a fraction of it for a badge. */
+  private iconHeight(d: any): number {
+    const vh = d.visualHeight ?? d.height;
+    return this.isBadgeIcon(d) ? vh * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR : vh;
+  }
+
+  /**
+   * Icon left edge. A badge sits against the box's top-right corner; a full icon
+   * spans the box from `fullX` (defaulting to the box's own left edge — callers
+   * that track WebCola bounds pass those instead).
+   */
+  private iconX(d: any, fullX?: number): number {
+    const vw = d.visualWidth ?? d.width;
+    if (this.isBadgeIcon(d)) return d.x + vw / 2 - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
+    return fullX ?? d.x - vw / 2;
+  }
+
+  /** Icon top edge — the box's top edge in both placements (see {@link iconX} for `fullY`). */
+  private iconY(d: any, fullY?: number): number {
+    const vh = d.visualHeight ?? d.height;
+    if (this.isBadgeIcon(d)) return d.y - vh / 2;
+    return fullY ?? d.y - vh / 2;
   }
 
   /** Edge stroke (themed): preserves chosen colors, themes the implicit default. */
@@ -4123,51 +4163,35 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /**
    * Adds icon images to nodes that have icon properties.
-   * Handles scaling and positioning based on label visibility.
-   * Includes error handling for failed icon loads.
-   * 
+   * Geometry comes from `atomStyle.iconStyle.placement` (full vs badge) and alpha
+   * from its `opacity`. Includes error handling for failed icon loads.
+   *
    * @param nodeSelection - D3 selection of node groups
    */
   private setupNodeIcons(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
-    
-    
-    nodeSelection
+    const images = nodeSelection
       .filter((d: any) => d.icon) // Only nodes with icons
       .append("image")
       .attr("xlink:href", (d: any) => d.icon)
-      .attr("width", (d: any) => {
-        const vw = d.visualWidth ?? d.width;
-        return d.showLabels
-          ? vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : vw;
-      })
-      .attr("height", (d: any) => {
-        const vh = d.visualHeight ?? d.height;
-        return d.showLabels
-          ? vh * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR
-          : vh;
-      })
-      .attr("x", (d: any) => {
-        const width = d.visualWidth ?? d.width;
-        if (d.showLabels) {
-          // Position in top-right corner when labels are shown
-          return d.x + width - (width * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
-        }
-        // Center horizontally when no labels
-        return d.x - width / 2;
-      })
-      .attr("y", (d: any) => {
-        const height = d.visualHeight ?? d.height;
-        // Always align with top edge
-        return d.y - height / 2;
-      })
-      .append("title")
-      .text((d: any) => d.label || d.name || d.id || "Node")
-      .on("error", function(this: any, event: any, d: any) {
+      .attr("width", (d: any) => this.iconWidth(d))
+      .attr("height", (d: any) => this.iconHeight(d))
+      .attr("x", (d: any) => this.iconX(d))
+      .attr("y", (d: any) => this.iconY(d))
+      // Set on the <image> itself, so the morph animation's group-level opacity
+      // composes with it rather than being overwritten.
+      .attr("opacity", (d: any) => d.iconOpacity ?? null);
 
-        d3.select(this).attr("xlink:href", "img/default.png");
-        console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
-      });
+    // Bound to the <image>, not to the <title> appended below: chaining `.on`
+    // after `.append("title")` would attach the handler to the title element,
+    // which never emits `error`, leaving broken icons silently blank.
+    images.on("error", function (this: SVGImageElement, _event: Event, d: any) {
+      d3.select(this).attr("xlink:href", "img/default.png");
+      console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
+    });
+
+    images
+      .append("title")
+      .text((d: any) => d.label || d.name || d.id || "Node");
   }
 
   /**
@@ -4459,16 +4483,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr('height', (d: any) => d.visualHeight ?? d.height);
 
     this.svgNodes.select('image')
-      .attr('x', (d: any) => {
-        if (d.x == null) return 0;
-        const vw = d.visualWidth ?? d.width;
-        return d.showLabels ? d.x + vw / 2 - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR) : d.x - vw / 2;
-      })
-      .attr('y', (d: any) => {
-        if (d.y == null) return 0;
-        const vh = d.visualHeight ?? d.height;
-        return d.y - vh / 2;
-      });
+      .attr('x', (d: any) => d.x == null ? 0 : this.iconX(d))
+      .attr('y', (d: any) => d.y == null ? 0 : this.iconY(d));
 
     this.svgNodes.select('.mostSpecificTypeLabel')
       .attr('x', (d: any) => d.x != null ? d.x - ((d as any).visualWidth ?? d.width ?? 0) / 2 + 5 : 0)
@@ -4518,26 +4534,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     // Update node icons with proper positioning
     this.svgNodes.select('image')
-      .attr('x', (d: any) => {
-        const vw = d.visualWidth ?? d.width;
-        if (d.showLabels) {
-          // Move to the top-right corner
-          return d.x + vw / 2 - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
-        } else {
-          // Align with visual left edge
-          return d.x - vw / 2;
-        }
-      })
-      .attr('y', (d: any) => {
-        const vh = d.visualHeight ?? d.height;
-        if (d.showLabels) {
-          // Align with the top edge
-          return d.y - vh / 2;
-        } else {
-          // Align with visual top edge
-          return d.y - vh / 2;
-        }
-      });
+      .attr('x', (d: any) => this.iconX(d))
+      .attr('y', (d: any) => this.iconY(d));
 
     // Update most specific type labels — positioned at top-left of the node
     this.svgNodes.select('.mostSpecificTypeLabel')
@@ -4768,27 +4766,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
         .attr("height", function (d: any) { return d.bounds.height(); });
     
 
+    // A full-bleed icon tracks the WebCola bounds here (rather than the visual
+    // box) so it stays registered with the rect drawn from those same bounds.
     node.select("image")
-        .attr("x", function (d: any) {
-            const vw = d.visualWidth ?? d.width;
-            if (d.showLabels) {
-                // Move to the top-right corner
-                return d.x + (vw / 2) - (vw * WebColaCnDGraph.SMALL_IMG_SCALE_FACTOR);
-            } else {
-                // Align with d.bounds.x
-                return d.bounds.x;
-            }
-        })
-        .attr("y", function (d: any) {
-            const vh = d.visualHeight ?? d.height;
-            if (d.showLabels) {
-                // Align with the top edge
-                return d.y - vh / 2;
-            } else {
-                // Align with d.bounds.y
-                return d.bounds.y;
-            }
-        })
+        .attr("x", (d: any) => this.iconX(d, d.bounds.x))
+        .attr("y", (d: any) => this.iconY(d, d.bounds.y))
 
     mostSpecificTypeLabel
         .attr("x", function (d: any) { return d.bounds.x + 5; })

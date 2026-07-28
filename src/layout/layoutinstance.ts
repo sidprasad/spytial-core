@@ -2,7 +2,6 @@ import { Graph, Edge } from 'graphlib';
 import { IAtom, IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
-import { resolveIconPath } from './icon-registry';
 import type { SelectorErrorDetail, LayoutWarning } from './error-state';
 
 
@@ -1615,10 +1614,8 @@ export class LayoutInstance {
 
         this.ensureNoExtraNodes(g, a, groups);
 
-        // Recompute visual maps after graph mutations (inferred edges / node removal)
-        let nodeIconMap = this.getNodeIconMap(g);
-        // Resolve atomStyle once: it feeds both the border color (via the color
-        // map) and the node's fill / border-width / label styling below.
+        // Resolve atomStyle once: it feeds the border color (via the color map)
+        // and the node's fill / border-width / label / icon styling below.
         let atomStyleMap = this.getAtomStyleMap(g, ai);
         let { colorMap: nodeColorMap, explicitlyColored } = this.getNodeColorMap(g, ai, atomStyleMap);
 
@@ -1647,10 +1644,6 @@ export class LayoutInstance {
             let colorSource = explicitlyColored.has(nodeId)
                 ? ColorSource.Directive
                 : ColorSource.DefaultPalette;
-            let iconDetails = nodeIconMap[nodeId];
-            let iconPath = iconDetails.path;
-            let showLabels = iconDetails.showLabels;
-
             let { height, width } = nodeSizeMap[nodeId];
 
             const mostSpecificType = this.getMostSpecificType(nodeId, a);
@@ -1670,9 +1663,17 @@ export class LayoutInstance {
                 nodeLabels = atom.labels;
             }
 
-            // Fill / border-width / label styling from the resolved atomStyle
-            // (border *color* already flowed through nodeColorMap → color above).
+            // Fill / border-width / label / icon styling from the resolved
+            // atomStyle (border *color* already flowed through nodeColorMap →
+            // color above).
             const atomStyle = atomStyleMap[nodeId];
+            const iconStyle = atomStyle?.iconStyle;
+            // An atom shows its label unless a rule says otherwise; the legacy
+            // `icon` directive desugars an explicit false for its icon-only default.
+            const showLabels = atomStyle?.showLabel ?? true;
+            // Placement only matters once there is a path to draw; `full` is the
+            // default so a bare `iconStyle: { path }` reads as "this icon IS the atom".
+            const iconPlacement = iconStyle?.placement ?? 'full';
 
             return {
                 id: nodeId,
@@ -1687,7 +1688,9 @@ export class LayoutInstance {
                 attributes: nodeAttributes,
                 attributeTextStyles: nodeAttributeTextStyles,
                 labels: nodeLabels,
-                icon: iconPath,
+                icon: iconStyle?.path ?? this.DEFAULT_NODE_ICON_PATH,
+                iconPlacement: iconPlacement,
+                iconOpacity: iconStyle?.opacity,
                 height: height,
                 width: width,
                 mostSpecificType: mostSpecificType,
@@ -3229,52 +3232,6 @@ export class LayoutInstance {
         });
 
         return { colorMap: nodeColorMap, explicitlyColored };
-    }
-
-    private getNodeIconMap(g: Graph): Record<string, { path: string, showLabels: boolean }> {
-        let nodeIconMap: Record<string, { path: string, showLabels: boolean }> = {};
-        const DEFAULT_ICON = this.DEFAULT_NODE_ICON_PATH;
-
-        // Apply icon directives first
-        let iconDirectives = this._layoutSpec.directives.icons;
-        iconDirectives.forEach((iconDirective, specIndex) => {
-            let selected: string[];
-            try {
-                const selectorRes = this.evaluator.evaluate(iconDirective.selector, { instanceIndex: this.instanceNum });
-                if (!this.acceptSelectorResult(selectorRes, iconDirective.selector, 'icon selector', 'unary', 'icon', specIndex)) {
-                    return; // Skip this directive only
-                }
-                selected = selectorRes.selectedAtoms();
-            } catch (error) {
-                this.recordSelectorError(iconDirective.selector, 'icon selector', error);
-                return; // Skip this icon directive
-            }
-            let iconPath = iconDirective.path;
-
-            selected.forEach((nodeId) => {
-                // Resolve icon path (handles bundled icons, icon packs, and URLs)
-                const resolvedPath = resolveIconPath(iconPath);
-                if (nodeIconMap[nodeId]) {
-                    const existingIcon = nodeIconMap[nodeId];
-                    if (existingIcon.path !== resolvedPath || existingIcon.showLabels !== iconDirective.showLabels) {
-                        throw new Error(
-                            `Icon Conflict: "${nodeId}" cannot have multiple icons: ${JSON.stringify(existingIcon)}, ${JSON.stringify({ path: resolvedPath, showLabels: iconDirective.showLabels })}.`
-                        );
-                    }
-                }
-                nodeIconMap[nodeId] = { path: resolvedPath, showLabels: iconDirective.showLabels };
-            });
-        });
-
-        // Set default icons for nodes that do not have an icon set
-        let graphNodes = [...g.nodes()];
-        graphNodes.forEach((nodeId) => {
-            if (!nodeIconMap[nodeId]) {
-                nodeIconMap[nodeId] = { path: DEFAULT_ICON, showLabels: true };
-            }
-        });
-
-        return nodeIconMap;
     }
 
     /**
