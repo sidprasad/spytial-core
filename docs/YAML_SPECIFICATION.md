@@ -1,13 +1,23 @@
 # Spytial Layout Specification - YAML Reference
 
-> Note: This file is available via CDN at https://cdn.jsdelivr.net/gh/sidprasad/Spytial-core@main/docs/YAML_SPECIFICATION.md. For immutability, pin to a tag or commit, e.g., `@v1.8.0` or `@<commit-sha>`. Agents can fetch it directly, for example:
+This document describes the YAML structure for defining layout constraints and directives in the Spytial layout system. It is the prose reference, written for people.
+
+> **Generating specs from code?** Read the machine-readable contract instead. It ships with every release, carries its own version, and is tested against the engine parser on every commit — so it cannot drift from the implementation the way this page can.
+>
+> | Artifact | What it is |
+> |---|---|
+> | [`docs/spytial-language.json`](./spytial-language.json) | Every constraint and directive, its fields, requiredness, legal values, engine defaults, and what is deprecated (with the rewrite to apply). |
+> | [`docs/spytial-spec.schema.json`](./spytial-spec.schema.json) | A JSON Schema (draft 2020-12) for validating a spec document. |
+>
+> Both are pinnable per tag over jsDelivr, attached to each GitHub release, and included in the npm package:
 >
 > ```js
-> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/Spytial-core@v1.8.0/docs/YAML_SPECIFICATION.md';
-> const text = await fetch(url).then(r => r.text());
+> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json';
+> const manifest = await fetch(url).then(r => r.json());
+> manifest.languageVersion;   // the version to key your code generator off
 > ```
 >
-This document describes the YAML structure for defining layout constraints and directives in the Spytial layout system.
+> This page is mirrored at the same CDN path (`.../docs/YAML_SPECIFICATION.md`) for agents that want the prose.
 
 ## Overview
 
@@ -22,6 +32,22 @@ directives:
 ```
 
 Both sections are optional. An empty specification is valid.
+
+### What the parser does with what it doesn't recognize: nothing
+
+Each section must be a **list** of single-key entries. Anything the engine does not recognize is ignored silently — no error, no warning:
+
+- an unknown top-level key (`somethingElse:`)
+- an unknown list entry (`- bogusDirective:`) — including `- projection:`, which was removed from the language and is now a [pre-layout data transformation](./DEV_GUIDE.md)
+- an unknown field inside a known entry (a misspelled `selctor:`)
+- an out-of-range value in a style block (`pattern: squiggly`, `opacity: 5`)
+- a section written as a mapping instead of a list — the whole section is dropped
+
+A typo therefore costs you the directive, quietly. Validate against `spytial-spec.schema.json`, which is deliberately stricter than the parser, if you want those to be errors.
+
+`size` and `hideAtom` are accepted in **either** section and mean the same thing in both.
+
+Parsing also returns advisory `warnings` on the spec, each with a machine-readable `code` (currently `deprecated`) and the `specType` it concerns — that is how you detect a deprecated form without matching prose.
 
 ---
 
@@ -47,29 +73,36 @@ Specifies the relative positioning of elements selected by a binary/n-ary select
 | `directions` | ✅ Yes | array | One or more positioning directions |
 
 **Available Directions:**
-- `above` - Source is above target (with flexibility)
-- `below` - Source is below target (with flexibility)
-- `left` - Source is left of target (with flexibility)
-- `right` - Source is right of target (with flexibility)
-- `directlyAbove` - Source is directly above target (strict vertical alignment)
-- `directlyBelow` - Source is directly below target (strict vertical alignment)
-- `directlyLeft` - Source is directly left of target (strict horizontal alignment)
-- `directlyRight` - Source is directly right of target (strict horizontal alignment)
+
+Each direction says where the **target** of a `(source, target)` pair ends up relative to the **source**.
+
+- `above` - Target is above source (horizontal offset allowed)
+- `below` - Target is below source (horizontal offset allowed)
+- `left` - Target is left of source (vertical offset allowed)
+- `right` - Target is right of source (vertical offset allowed)
+- `directlyAbove` - Target is directly above source (strict vertical alignment)
+- `directlyBelow` - Target is directly below source (strict vertical alignment)
+- `directlyLeft` - Target is directly left of source (strict horizontal alignment)
+- `directlyRight` - Target is directly right of source (strict horizontal alignment)
+
+Getting this backwards is the most common spec bug. If the relation reads the other way round, transpose the selector (`~parent`) rather than flipping the direction.
 
 **Examples:**
 
 ```yaml
-# Parent nodes appear above child nodes
+# For `parent: child -> parent`, each tuple's target (the parent) is placed
+# above its source (the child) — so parents sit above their children.
 - orientation:
     selector: parent
     directions: [above]
 
-# Nodes flow left to right with strict horizontal alignment
+# For `next: node -> successor`, each successor sits directly right of its
+# predecessor, on a shared horizontal line — a left-to-right chain.
 - orientation:
     selector: next
-    directions: [directlyLeft]
+    directions: [directlyRight]
 
-# Multiple directions: source is above and to the left
+# Multiple directions: the target is above AND to the left of the source
 - orientation:
     selector: precedes
     directions: [above, left]
@@ -258,7 +291,9 @@ Groups elements based on a relational field (tuple-based grouping).
 
 ### Negation (`hold: never`)
 
-Any constraint can be negated by adding `hold: never`. By default, all constraints implicitly have `hold: always`. A negated constraint asserts that the relationship must **never** hold.
+The layout constraints — `orientation`, `cyclic`, `align`, and `group` — can be negated by adding `hold: never`. By default they implicitly have `hold: always`. A negated constraint asserts that the relationship must **never** hold.
+
+Only the exact value `never` negates: `always`, any other string, and an absent `hold` all mean the positive constraint. `size` and `hideAtom` do **not** support negation — the key parses there but is silently ignored.
 
 ```yaml
 - orientation:
@@ -340,18 +375,20 @@ Sets the width and height of nodes matching a selector. (Can also be used as a d
 
 ```yaml
 - size:
-    selector: <unary-selector>   # Required: Selector for nodes to resize
-    width: <number>              # Optional: Width in pixels
-    height: <number>             # Optional: Height in pixels
+    width: <number>              # Required: Width in pixels
+    height: <number>             # Required: Height in pixels
+    selector: <unary-selector>   # Optional: Selector for nodes to resize
 ```
 
 **Fields:**
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
-| `selector` | ✅ Yes | string | - | Unary selector for target nodes |
-| `width` | ❌ No | number | `100` | Width in pixels (must be > 0) |
-| `height` | ❌ No | number | `60` | Height in pixels (must be > 0) |
+| `width` | ✅ Yes | number | - | Width in pixels. Must be a number greater than 0 — a missing, zero, negative, or non-numeric width is a parse error. |
+| `height` | ✅ Yes | number | - | Height in pixels. Same rule as `width`. |
+| `selector` | ❌ No | string | all nodes | Unary selector for target nodes. Omit to resize every node. |
+
+`hold: never` is not supported here; the key parses but is ignored.
 
 **Example:**
 
@@ -705,22 +742,22 @@ A directive missing either required field draws nothing, and is dropped rather t
 
 ### Size Directive
 
-Sets node dimensions for atoms matching a selector.
+Sets node dimensions for atoms matching a selector. Identical to the [size constraint](#size-constraint) — the same form is accepted in either section.
 
 ```yaml
 - size:
-    selector: <unary-selector>   # Required: Selector for nodes
-    width: <number>              # Optional: Width in pixels
-    height: <number>             # Optional: Height in pixels
+    width: <number>              # Required: Width in pixels
+    height: <number>             # Required: Height in pixels
+    selector: <unary-selector>   # Optional: Selector for nodes
 ```
 
 **Fields:**
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|
-| `selector` | ✅ Yes | string | - | Unary selector for target nodes |
-| `width` | ❌ No | number | `100` | Width in pixels |
-| `height` | ❌ No | number | `60` | Height in pixels |
+| `width` | ✅ Yes | number | - | Width in pixels. Must be a number greater than 0. |
+| `height` | ✅ Yes | number | - | Height in pixels. Must be a number greater than 0. |
+| `selector` | ❌ No | string | all nodes | Unary selector for target nodes |
 
 **Example:**
 
@@ -973,16 +1010,13 @@ Resolution notes:
 - inferredEdge:
     name: "reachable"
     selector: "^parent"
-    color: gray
-    style: dotted
+    lineStyle: { color: gray, pattern: dotted }
 
 # Highlight computed relationships
 - inferredEdge:
     name: "sibling"
     selector: "~parent.parent - iden"
-    color: purple
-    style: dashed
-    weight: 2
+    lineStyle: { color: purple, pattern: dashed, weight: 2 }
 
 # Group-to-group: one edge per `connected` pair, drawn hull to hull.
 # (Assumes a group constraint named `regions` keyed by Region atoms.)
@@ -1123,6 +1157,7 @@ directives:
   - inferredEdge:
       name: "ancestor"
       selector: "^parent"
-      color: gray
-      style: dotted
+      lineStyle:
+        color: gray
+        pattern: dotted
 ```

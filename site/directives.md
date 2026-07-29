@@ -389,75 +389,26 @@ directives:
 
 ---
 
-## Projection
+## Projection — *not a directive*
 
-Projects over a type (signature), showing **one atom at a time** with navigation controls. This is commonly used to step through time steps, states, or other sequential structures.
+Projection is **not** part of the spec language. A `- projection:` entry in a `directives:` block parses without complaint and then does nothing — the engine ignores it.
 
-```yaml
-- projection:
-    sig: <signature-name>        # Required
-    orderBy: <binary-selector>   # Optional
+Projections are a **pre-layout data transformation**: you rewrite the data instance before handing it to the layout, rather than asking the layout to do it.
+
+```typescript
+import { applyProjectionTransform } from 'spytial-core';
+
+const { instance, choices } = applyProjectionTransform(
+  originalInstance,
+  [{ sig: 'Time', orderBy: 'next' }],
+  selections,                       // type → chosen atom id
+  { evaluateOrderBy: (sel) => evaluator.evaluate(sel) },
+);
 ```
 
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `sig` | Yes | string | Name of the type to project over |
-| `orderBy` | No | string | Binary selector defining ordering between atoms |
+Without `orderBy`, atoms are ordered alphabetically by id; with it, the selector returns pairs `(a, b)` meaning "a comes before b" and atoms are topologically sorted, breaking cycles lexicographically. `evaluateOrderBy` is required for `orderBy` to have any effect.
 
-### Ordering
-
-- **Without `orderBy`**: Atoms are sorted alphabetically by their ID.
-- **With `orderBy`**: The selector should return pairs `(a, b)` meaning "a comes before b". Atoms are sorted using topological sort. Cycles are broken by lexicographic order.
-
-### Examples
-
-```yaml
-# Step through Time atoms alphabetically
-- projection:
-    sig: Time
-
-# Step through Time atoms in order defined by 'next'
-# If next = {(T0, T1), (T1, T2)}, order is: T0 → T1 → T2
-- projection:
-    sig: Time
-    orderBy: "next"
-
-# Use transitive closure for derived ordering
-- projection:
-    sig: State
-    orderBy: "^next"
-```
-
-<div class="spytial-diagram" data-height="380" data-caption="Live: Time is projected (orderBy: next). Use the navigation controls to step T0 → T1 → T2.">
-<template class="data">
-{
-  "atoms": [
-    {"id": "t0", "type": "Time",  "label": "T0"},
-    {"id": "t1", "type": "Time",  "label": "T1"},
-    {"id": "t2", "type": "Time",  "label": "T2"},
-    {"id": "a",  "type": "Light", "label": "Light"}
-  ],
-  "relations": [
-    {"id": "next", "name": "next", "types": ["Time", "Time"],
-     "tuples": [
-       {"atoms": ["t0", "t1"], "types": ["Time", "Time"]},
-       {"atoms": ["t1", "t2"], "types": ["Time", "Time"]}
-     ]},
-    {"id": "state", "name": "state", "types": ["Time", "Light"],
-     "tuples": [
-       {"atoms": ["t0", "a"], "types": ["Time", "Light"]},
-       {"atoms": ["t2", "a"], "types": ["Time", "Light"]}
-     ]}
-  ]
-}
-</template>
-<template class="spec">
-directives:
-  - projection: { sig: Time, orderBy: "next" }
-</template>
-</div>
-
-> **How it works:** When a type is projected, Spytial hides all atoms of that type and removes edges involving atoms not currently selected. The navigation controls let you step forward and backward through the atoms.
+For the interactive version — a type/atom picker plus navigation — use the `ProjectionOrchestrator` React component, which wraps the transform and the controls together. See the [API Reference](api-reference.md#projection-transform).
 
 ---
 
