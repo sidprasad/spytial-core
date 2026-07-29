@@ -14,8 +14,10 @@ This document describes the YAML structure for defining layout constraints and d
 > ```js
 > const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json';
 > const manifest = await fetch(url).then(r => r.json());
-> manifest.languageVersion;   // the version to key your code generator off
+> manifest.languageVersion;   // the spytial-core release this describes
 > ```
+>
+> The language ships with the engine and is versioned with it, so pinning a core version pins the language exactly. Diff two releases' manifests to see whether the language moved between them.
 >
 > This page is mirrored at the same CDN path (`.../docs/YAML_SPECIFICATION.md`) for agents that want the prose.
 

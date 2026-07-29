@@ -1,11 +1,10 @@
 {
   "language": "spytial-layout-spec",
-  "languageVersion": "1.0.0",
-  "spytialCoreVersion": "4.2.0",
-  "versionPolicy": {
-    "major": "A spec that parsed before no longer parses, or the same spec now means something different. Removing a deprecated form lands here.",
-    "minor": "New constraint, directive, field, or accepted value; or an existing form becomes deprecated (it still parses and still means what it did). Additive — old specs are unaffected.",
-    "patch": "Wording, descriptions, or examples only. No change to what the engine accepts or does."
+  "languageVersion": "4.2.0",
+  "versioning": {
+    "scheme": "tracks-spytial-core",
+    "note": "The spec language ships with the engine and is versioned with it: `languageVersion` is the spytial-core release that produced this manifest. Pinning a core version therefore pins the language exactly. To see whether the language moved between two releases, diff their manifests — every accepted form is described here, so a language change is always a diff in this file.",
+    "deprecations": "A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release. Each entry in `deprecations` names its replacement and the rewrite to apply, so a generator can migrate mechanically ahead of that."
   },
   "document": {
     "sections": [

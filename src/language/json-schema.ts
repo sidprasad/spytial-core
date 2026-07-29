@@ -7,7 +7,7 @@
  * language server at it gives spec authors completion and inline errors:
  *
  * ```yaml
- * # yaml-language-server: $schema=https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-spec.schema.json
+ * # yaml-language-server: $schema=https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json
  * ```
  *
  * The schema is deliberately STRICTER than `parseLayoutSpec`. The parser
@@ -235,11 +235,10 @@ export function buildJsonSchema(manifest: LanguageManifest): JsonSchemaNode {
     title: 'Spytial layout specification',
     description:
       'A Spytial spec: constraints (structural layout) and directives (presentation). ' +
-      `Language version ${manifest.languageVersion}, generated from spytial-core ${manifest.spytialCoreVersion}. ` +
+      `Spec language ${manifest.languageVersion} — the spytial-core release this was generated from. ` +
       'This schema is stricter than the engine parser, which silently ignores anything it does not recognize — ' +
       'validating here is how a misspelled key or an out-of-range value gets caught at all.',
     'x-spytial-language-version': manifest.languageVersion,
-    'x-spytial-core-version': manifest.spytialCoreVersion,
     type: 'object',
     properties: {
       constraints: sectionSchema(manifest, 'constraints'),

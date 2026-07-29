@@ -26,7 +26,7 @@
     }
   },
   "versioning": {
-    "note": "The spec language is versioned independently of the spytial-core package. Read `languageVersion` from the manifest and key code generation off that; `spytialCoreVersion` records which release produced the artifact.",
+    "note": "The spec language ships with the engine and is versioned with it: `languageVersion` is the spytial-core release that produced the artifact, so pinning a core version pins the language exactly. Diff two releases' manifests to see whether the language moved. A deprecated form keeps parsing until a major release.",
     "field": "languageVersion"
   }
 }

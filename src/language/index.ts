@@ -10,7 +10,9 @@
  *  - `spytial-language.json`    — this manifest, serialized.
  *  - `spytial-spec.schema.json` — a JSON Schema for validating a spec document.
  *
- * Both carry the same `languageVersion`. From TypeScript you can also build the
+ * Both carry the `languageVersion`, which is the `spytial-core` release version:
+ * the language ships with the engine and versions with it, so pinning a core
+ * version pins the language exactly. From TypeScript you can also build the
  * manifest at runtime with {@link getLanguageManifest}.
  */
 
@@ -31,7 +33,7 @@ export type {
 
 export {
   LANGUAGE_VERSION,
-  LANGUAGE_VERSION_POLICY,
+  LANGUAGE_VERSIONING,
   getLanguageBlocks,
   getLanguageItem,
   getLanguageItems,

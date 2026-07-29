@@ -212,14 +212,13 @@ export interface LanguageManifest {
   /** The language this describes. */
   language: 'spytial-layout-spec';
   /**
-   * Semantic version of the *language*, independent of the `spytial-core`
-   * package version. See `LANGUAGE_VERSION_POLICY`.
+   * The version of the language, which is the `spytial-core` release version —
+   * the language ships with the engine and versions with it, so pinning one
+   * pins the other. See {@link LanguageManifest.versioning}.
    */
   languageVersion: string;
-  /** The `spytial-core` release this manifest was generated from. */
-  spytialCoreVersion: string;
-  /** How `languageVersion` moves. */
-  versionPolicy: Readonly<Record<'major' | 'minor' | 'patch', string>>;
+  /** How the language is versioned, and what a deprecation promises. */
+  versioning: Readonly<Record<'scheme' | 'note' | 'deprecations', string>>;
   document: DocumentRules;
   hold: HoldRules;
   blocks: readonly LanguageBlock[];
