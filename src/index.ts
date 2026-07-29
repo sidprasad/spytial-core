@@ -231,7 +231,8 @@ export type {
 } from './evaluation';
 
 // The spec-language contract: a machine-readable description of the YAML spec
-// language, versioned with the package (the language ships with the engine).
+// language, versioned by the date it last changed (LANGUAGE_VERSION), which
+// moves independently of this package's version.
 // Integrations that GENERATE specs should read this rather than the prose
 // reference — it is pinned to the parser by tests/language-manifest.test.ts.
 // The same data ships as `docs/spytial-language.json` (plus a JSON Schema) for
