@@ -211,14 +211,12 @@ export interface LanguageManifest {
   $schema?: string;
   /** The language this describes. */
   language: 'spytial-layout-spec';
-  /**
-   * The version of the language, which is the `spytial-core` release version —
-   * the language ships with the engine and versions with it, so pinning one
-   * pins the other. See {@link LanguageManifest.versioning}.
-   */
+  /** The date the language last changed, as `YYYY-MM-DD`. */
   languageVersion: string;
+  /** The `spytial-core` release that produced this manifest. */
+  spytialCoreVersion: string;
   /** How the language is versioned, and what a deprecation promises. */
-  versioning: Readonly<Record<'scheme' | 'note' | 'deprecations', string>>;
+  versioning: Readonly<Record<'note' | 'deprecations', string>>;
   document: DocumentRules;
   hold: HoldRules;
   blocks: readonly LanguageBlock[];

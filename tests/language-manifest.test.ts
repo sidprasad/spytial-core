@@ -29,8 +29,6 @@ import { describe, expect, it } from 'vitest';
 import {
   MANIFEST_PATH,
   SCHEMA_PATH,
-  VERSION_PATH,
-  readPackageVersion,
   renderArtifacts,
 } from '../scripts/generate-language-artifacts';
 import { buildJsonSchema } from '../src/language/json-schema';
@@ -50,7 +48,7 @@ import {
 } from '../src/spec-editor/core/registry';
 import type { FieldSpec } from '../src/spec-editor/core/types';
 
-const manifest: LanguageManifest = getLanguageManifest();
+const manifest: LanguageManifest = getLanguageManifest('0.0.0-test');
 
 /** Silence the deprecation warnings the parser writes straight to the console. */
 function quietly<T>(fn: () => T): T {
@@ -423,31 +421,21 @@ describe('spec JSON Schema', () => {
 
 describe('published artifacts', () => {
   it('the checked-in artifacts match what the generator produces', () => {
-    const {
-      manifest: expectedManifest,
-      schema: expectedSchema,
-      versionModule: expectedVersion,
-    } = renderArtifacts();
+    const { manifest: expectedManifest, schema: expectedSchema } = renderArtifacts();
     expect(readFileSync(MANIFEST_PATH, 'utf8'), 'run `npm run build:language`').toBe(expectedManifest);
     expect(readFileSync(SCHEMA_PATH, 'utf8'), 'run `npm run build:language`').toBe(expectedSchema);
-    expect(readFileSync(VERSION_PATH, 'utf8'), 'run `npm run build:language`').toBe(expectedVersion);
   });
 
-  it('the language version is the package version', () => {
-    // The language ships with the engine and versions with it, so a package
-    // bump that skips `npm run build:language` must fail here rather than
-    // publish a manifest stamped with the previous release.
-    expect(LANGUAGE_VERSION).toBe(readPackageVersion());
-  });
-
-  it('both artifacts carry that same version', () => {
+  it('both artifacts carry the same language version', () => {
     const published = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')) as LanguageManifest;
     const schema = JSON.parse(readFileSync(SCHEMA_PATH, 'utf8')) as Record<string, unknown>;
     expect(published.languageVersion).toBe(LANGUAGE_VERSION);
     expect(schema['x-spytial-language-version']).toBe(LANGUAGE_VERSION);
   });
 
-  it('the language version is a semver triple', () => {
-    expect(LANGUAGE_VERSION).toMatch(/^\d+\.\d+\.\d+/);
+  it('the language version is a plain ISO date', () => {
+    expect(LANGUAGE_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // A real calendar date, not just the right shape.
+    expect(new Date(`${LANGUAGE_VERSION}T00:00:00Z`).toISOString().slice(0, 10)).toBe(LANGUAGE_VERSION);
   });
 });

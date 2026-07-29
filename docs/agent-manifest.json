@@ -26,7 +26,7 @@
     }
   },
   "versioning": {
-    "note": "The spec language ships with the engine and is versioned with it: `languageVersion` is the spytial-core release that produced the artifact, so pinning a core version pins the language exactly. Diff two releases' manifests to see whether the language moved. A deprecated form keeps parsing until a major release.",
+    "note": "`languageVersion` is a plain ISO date (YYYY-MM-DD): the day the language last changed. If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced the artifact. A deprecated form keeps parsing until a major release.",
     "field": "languageVersion"
   }
 }

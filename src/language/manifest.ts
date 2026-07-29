@@ -36,25 +36,27 @@ import type {
   LanguageItem,
   LanguageManifest,
 } from './types';
-import { LANGUAGE_VERSION } from './version';
-
-export { LANGUAGE_VERSION };
 
 /**
- * How the language is versioned. Shipped in the manifest so a consumer can rely
- * on it rather than inferring it.
+ * The date the spec language last changed, as `YYYY-MM-DD`.
+ *
+ * A date rather than a semver: the language is a vocabulary, not an API surface
+ * with a compatibility contract to encode, and dating it says the one thing a
+ * consumer actually needs — whether what they generated against is still
+ * current. Bump it in the same commit that changes the language; leave it alone
+ * for wording and example fixes.
  */
+export const LANGUAGE_VERSION = '2026-07-28';
+
+/** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
-  scheme: 'tracks-spytial-core',
   note:
-    'The spec language ships with the engine and is versioned with it: `languageVersion` is the ' +
-    'spytial-core release that produced this manifest. Pinning a core version therefore pins the ' +
-    'language exactly. To see whether the language moved between two releases, diff their manifests ' +
-    '— every accepted form is described here, so a language change is always a diff in this file.',
+    '`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since ' +
+    'the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` ' +
+    'records which release produced this file.',
   deprecations:
-    'A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release. ' +
-    'Each entry in `deprecations` names its replacement and the rewrite to apply, so a generator ' +
-    'can migrate mechanically ahead of that.',
+    'A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of ' +
+    'spytial-core. Each entry in `deprecations` names its replacement and the rewrite to apply.',
 } as const;
 
 // ---- shared style blocks -------------------------------------------------
@@ -968,14 +970,15 @@ const DOCUMENTATION = {
 /**
  * Build the language manifest.
  *
- * @param languageVersion overrides the version stamped on the manifest. Defaults
- *   to {@link LANGUAGE_VERSION}, which is the `spytial-core` release version —
- *   the language ships with the engine and versions with it.
+ * @param spytialCoreVersion the package version to record on the manifest — the
+ *   generator passes `package.json`'s version so the artifact says which release
+ *   produced it.
  */
-export function getLanguageManifest(languageVersion: string = LANGUAGE_VERSION): LanguageManifest {
+export function getLanguageManifest(spytialCoreVersion: string): LanguageManifest {
   return {
     language: 'spytial-layout-spec',
-    languageVersion,
+    languageVersion: LANGUAGE_VERSION,
+    spytialCoreVersion,
     versioning: LANGUAGE_VERSIONING,
     document: DOCUMENT,
     hold: HOLD,

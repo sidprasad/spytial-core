@@ -235,10 +235,11 @@ export function buildJsonSchema(manifest: LanguageManifest): JsonSchemaNode {
     title: 'Spytial layout specification',
     description:
       'A Spytial spec: constraints (structural layout) and directives (presentation). ' +
-      `Spec language ${manifest.languageVersion} — the spytial-core release this was generated from. ` +
+      `Spec language ${manifest.languageVersion}, from spytial-core ${manifest.spytialCoreVersion}. ` +
       'This schema is stricter than the engine parser, which silently ignores anything it does not recognize — ' +
       'validating here is how a misspelled key or an out-of-range value gets caught at all.',
     'x-spytial-language-version': manifest.languageVersion,
+    'x-spytial-core-version': manifest.spytialCoreVersion,
     type: 'object',
     properties: {
       constraints: sectionSchema(manifest, 'constraints'),

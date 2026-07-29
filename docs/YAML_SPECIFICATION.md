@@ -14,10 +14,10 @@ This document describes the YAML structure for defining layout constraints and d
 > ```js
 > const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json';
 > const manifest = await fetch(url).then(r => r.json());
-> manifest.languageVersion;   // the spytial-core release this describes
+> manifest.languageVersion;   // e.g. "2026-07-28" — the date the language last changed
 > ```
 >
-> The language ships with the engine and is versioned with it, so pinning a core version pins the language exactly. Diff two releases' manifests to see whether the language moved between them.
+> `languageVersion` is a plain ISO date. If it has not moved since the manifest you generated against, nothing you emit needs revisiting.
 >
 > This page is mirrored at the same CDN path (`.../docs/YAML_SPECIFICATION.md`) for agents that want the prose.
 

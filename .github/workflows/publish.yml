@@ -35,17 +35,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The language versions with the package, so the artifacts describe
-          # exactly this tag. Fail rather than publish a release whose manifest
-          # was stamped with some other version.
           LANGUAGE_VERSION=$(node -p "require('./docs/spytial-language.json').languageVersion")
-          if [ "v${LANGUAGE_VERSION}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::spytial-language.json says ${LANGUAGE_VERSION} but the tag is ${GITHUB_REF_NAME}. Run 'npm run build:language' and commit."
-            exit 1
-          fi
           gh release create "${GITHUB_REF_NAME}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
-            --notes "**Spec language ${LANGUAGE_VERSION}** — attached: \`spytial-language.json\` (every constraint and directive, its fields, and what is deprecated) and \`spytial-spec.schema.json\` (JSON Schema for validating a spec). The language versions with the package, so pinning \`${GITHUB_REF_NAME}\` pins the language exactly." \
+            --notes "**Spec language \`${LANGUAGE_VERSION}\`** (the date it last changed) — attached: \`spytial-language.json\` (every constraint and directive, its fields, and what is deprecated) and \`spytial-spec.schema.json\` (JSON Schema for validating a spec). Same date as the last release means nothing you generate needs revisiting." \
             docs/spytial-language.json \
             docs/spytial-spec.schema.json

@@ -106,16 +106,16 @@ If your integration **generates** specs, don't scrape the Markdown. Every releas
 https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag-or-sha>/docs/spytial-language.json
 ```
 
-The language ships with the engine and is versioned with it — `languageVersion` is the `spytial-core` release that produced the manifest, so pinning a core version pins the language exactly:
+The language is versioned by **the date it last changed**:
 
 ```js
 const manifest = await fetch(url).then(r => r.json());
-manifest.languageVersion;   // e.g. "4.2.0" — the release this describes
-manifest.versioning;        // how the language is versioned, and what a deprecation promises
-manifest.deprecations;      // every deprecated form, with the rewrite that replaces it
+manifest.languageVersion;      // e.g. "2026-07-28" — when the language last moved
+manifest.spytialCoreVersion;   // e.g. "4.2.0" — the release that produced this file
+manifest.deprecations;         // every deprecated form, with the rewrite that replaces it
 ```
 
-To find out whether the language moved between two releases, diff their manifests: every accepted form is described in there, so a language change is always a diff in that file. A deprecated form keeps parsing and keeps its meaning; it is removed only in a major.
+A date, not a semver: the language is a vocabulary, not an API surface with a compatibility contract to encode, and the date answers the one question a code generator has — *is what I generated against still current?* If it hasn't moved since the manifest you built against, nothing you emit needs revisiting. A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of `spytial-core`.
 
 From TypeScript the same data is available without a fetch:
 
