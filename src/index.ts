@@ -229,3 +229,32 @@ export type {
   ChangeEmphasisSeparation,
   PairwiseDistanceOracleOptions,
 } from './evaluation';
+
+// The spec-language contract: a machine-readable description of the YAML spec
+// language, versioned independently of the package. Integrations that GENERATE
+// specs should read this rather than the prose reference — it is pinned to the
+// parser by tests/language-manifest.test.ts. The same data ships as
+// `docs/spytial-language.json` (plus a JSON Schema) for non-JS consumers.
+export {
+  LANGUAGE_VERSION,
+  LANGUAGE_VERSION_POLICY,
+  getLanguageManifest,
+  getLanguageItems,
+  getLanguageItem,
+  getLanguageBlocks,
+  buildJsonSchema,
+} from './language';
+export type {
+  LanguageManifest,
+  LanguageItem,
+  LanguageField,
+  LanguageBlock,
+  ItemDeprecation,
+  FieldDeprecation,
+  SpecSection,
+  FieldType,
+  SelectorArity,
+  Enforcement,
+  DocumentRules,
+  HoldRules,
+} from './language';

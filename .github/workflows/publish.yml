@@ -9,7 +9,9 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # `contents: write` so the release that carries the spec-language
+      # artifacts can be created from this same tag push.
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v5
@@ -25,3 +27,18 @@ jobs:
       - run: npm run build:all
 
       - run: npm publish --access public --provenance
+
+      # Every release carries a machine-readable description of the spec
+      # language, so an integration can pin the exact language its generated
+      # specs target instead of scraping the Markdown reference.
+      - name: Attach the spec-language artifacts to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LANGUAGE_VERSION=$(node -p "require('./docs/spytial-language.json').languageVersion")
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --notes "Spec language version: \`${LANGUAGE_VERSION}\` — see the attached \`spytial-language.json\` (what the language accepts, and what is deprecated) and \`spytial-spec.schema.json\` (JSON Schema for validating a spec)." \
+            docs/spytial-language.json \
+            docs/spytial-spec.schema.json

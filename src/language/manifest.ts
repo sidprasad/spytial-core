@@ -1,0 +1,1005 @@
+/**
+ * The Spytial spec-language manifest: a machine-readable description of every
+ * constraint and directive the YAML spec language accepts, what each field
+ * means, what is deprecated, and what to write instead.
+ *
+ * ## Why this file exists
+ *
+ * Integrations generate specs. A Python, Rust, or Pyret binding emitting YAML
+ * needs to know the language's shape as *data* — otherwise the only source of
+ * truth is prose in `docs/YAML_SPECIFICATION.md`, which drifts. This module is
+ * that data, it ships with every release, and it is pinned to the real parser
+ * by `tests/language-manifest.test.ts`: every claim below (requiredness,
+ * enforcement, enum membership, deprecation warnings) is asserted against
+ * `parseLayoutSpec` and against the spec-editor registry. A statement here that
+ * the engine does not honour is a test failure, not a stale comment.
+ *
+ * ## Relationship to the other surfaces
+ *
+ * `src/layout/layoutspec.ts` is the authoritative parser — this manifest
+ * describes it, it does not define it. `src/spec-editor/core/registry.ts`
+ * describes the same language for the *editor* (labels, widgets, defaults to
+ * seed a new item with). The two are cross-checked in the same test file, so
+ * neither can quietly diverge.
+ *
+ * ## Editing
+ *
+ * Add or change a form here whenever you add or change one in the parser, then
+ * run `npm run build:language` to refresh the generated artifacts under
+ * `docs/`. The test suite fails if the checked-in artifacts are stale.
+ */
+
+import type {
+  HoldRules,
+  LanguageBlock,
+  LanguageField,
+  LanguageItem,
+  LanguageManifest,
+} from './types';
+
+/**
+ * Semantic version of the spec *language*, deliberately independent of the
+ * `spytial-core` package version: the package ships fixes and perf work far
+ * more often than the language changes, and a consumer generating specs should
+ * only have to react when the language itself moves.
+ *
+ * Bump it per {@link LANGUAGE_VERSION_POLICY} in the same commit that changes
+ * the language.
+ */
+export const LANGUAGE_VERSION = '1.0.0';
+
+/** How {@link LANGUAGE_VERSION} moves. Shipped in the manifest so consumers can rely on it. */
+export const LANGUAGE_VERSION_POLICY = {
+  major:
+    'A spec that parsed before no longer parses, or the same spec now means something different. ' +
+    'Removing a deprecated form lands here.',
+  minor:
+    'New constraint, directive, field, or accepted value; or an existing form becomes deprecated ' +
+    '(it still parses and still means what it did). Additive — old specs are unaffected.',
+  patch: 'Wording, descriptions, or examples only. No change to what the engine accepts or does.',
+} as const;
+
+// ---- shared style blocks -------------------------------------------------
+
+const TEXT_STYLE_BLOCK: LanguageBlock = {
+  name: 'textStyle',
+  description:
+    "Styling for a label. Reused by every form that renders text — an atom's own label, " +
+    'attribute and tag lines, edge labels, and a group label.',
+  fields: [
+    {
+      name: 'size',
+      type: 'enum',
+      values: ['small', 'normal', 'large'],
+      enforcement: 'value-ignored',
+      default: 'normal',
+      description:
+        'Font-size tier relative to the node label: `large` renders bigger than the label, ' +
+        '`normal` smaller, `small` smaller still.',
+    },
+    {
+      name: 'color',
+      type: 'color',
+      description: 'Any CSS color. Unset inherits the node label color, so dark mode still adapts.',
+    },
+  ],
+};
+
+const LINE_STYLE_BLOCK: LanguageBlock = {
+  name: 'lineStyle',
+  description: "Styling for an edge's drawn line. Reused by edgeStyle, inferredEdge, and a group's addEdge connector.",
+  fields: [
+    { name: 'color', type: 'color', description: 'Any CSS color.' },
+    {
+      name: 'pattern',
+      type: 'enum',
+      values: ['solid', 'dashed', 'dotted'],
+      enforcement: 'value-ignored',
+      description: 'Dash pattern of the line.',
+    },
+    {
+      name: 'weight',
+      type: 'number',
+      exclusiveMinimum: 0,
+      enforcement: 'value-ignored',
+      description: 'Line thickness in pixels. Must be > 0; a non-positive or non-numeric weight is dropped.',
+    },
+    {
+      name: 'highlight',
+      type: 'color',
+      description: 'A wider, translucent underlay drawn beneath the line. Orthogonal to color and pattern.',
+    },
+  ],
+};
+
+const FILL_STYLE_BLOCK: LanguageBlock = {
+  name: 'fillStyle',
+  description:
+    "An atom's interior fill. Opt-in: the default look is unfilled, with only the border and label marking the node.",
+  fields: [{ name: 'color', type: 'color', description: 'Any CSS color.' }],
+};
+
+const BORDER_STYLE_BLOCK: LanguageBlock = {
+  name: 'borderStyle',
+  description: "An atom's outline.",
+  fields: [
+    { name: 'color', type: 'color', description: 'Any CSS color.' },
+    {
+      name: 'width',
+      type: 'number',
+      exclusiveMinimum: 0,
+      enforcement: 'value-ignored',
+      description: 'Outline thickness in pixels. Must be > 0; anything else is dropped.',
+    },
+  ],
+};
+
+const ICON_STYLE_BLOCK: LanguageBlock = {
+  name: 'iconStyle',
+  description:
+    "An icon drawn on an atom. Every leaf is optional, including `path`, so a supertype rule can supply the icon " +
+    'and a subtype rule tune only its opacity.',
+  fields: [
+    {
+      name: 'path',
+      type: 'icon-path',
+      description:
+        'A bundled icon name (`person`), an icon-pack reference (`bi:person-fill`), a URL, or a path. ' +
+        'Resolved to a concrete URL or data URI at parse time. An iconStyle with no path draws nothing.',
+    },
+    {
+      name: 'placement',
+      type: 'enum',
+      values: ['full', 'badge'],
+      enforcement: 'value-ignored',
+      default: 'full',
+      description:
+        '`full` — the icon occupies the box, which stays transparent unless a fillStyle.color is given. ' +
+        '`badge` — a small marker in the top-right corner, secondary to the label.',
+    },
+    {
+      name: 'opacity',
+      type: 'number',
+      minimum: 0,
+      maximum: 1,
+      enforcement: 'value-ignored',
+      default: 1,
+      description: 'Alpha in [0,1]. Out-of-range values are dropped rather than clamped. Fade a `full` icon to use it as a watermark behind the label.',
+    },
+  ],
+};
+
+const BLOCKS: readonly LanguageBlock[] = [
+  TEXT_STYLE_BLOCK,
+  LINE_STYLE_BLOCK,
+  FILL_STYLE_BLOCK,
+  BORDER_STYLE_BLOCK,
+  ICON_STYLE_BLOCK,
+];
+
+// ---- field helpers -------------------------------------------------------
+
+const blockField = (name: string, description: string): LanguageField => ({
+  name,
+  type: 'block',
+  block: name,
+  description,
+});
+
+/** The optional unary selector that narrows which source atoms a directive applies to. */
+const SOURCE_SELECTOR: LanguageField = {
+  name: 'selector',
+  type: 'selector',
+  arity: 'unary',
+  description: 'Apply only to edges whose source atom is in this set. Omit to apply to every source atom.',
+};
+
+/** The optional tuple filter shared by the field-scoped directives. */
+const TUPLE_FILTER: LanguageField = {
+  name: 'filter',
+  type: 'selector',
+  arity: 'n-ary',
+  description:
+    'Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to ' +
+    'part of a relation, e.g. only the tuples whose value is True.',
+};
+
+// ---- constraints ---------------------------------------------------------
+
+const ORIENTATION: LanguageItem = {
+  id: 'orientation',
+  yamlKey: 'orientation',
+  label: 'Orientation',
+  description: 'Place the two ends of each selected tuple relative to one another.',
+  sections: ['constraints'],
+  valueShape: 'mapping',
+  supportsHold: true,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'binary',
+      required: true,
+      enforcement: 'parse-error',
+      description: 'Returns (source, target) pairs. The constraint applies to each pair.',
+    },
+    {
+      name: 'directions',
+      type: 'enum-list',
+      values: [
+        'above',
+        'below',
+        'left',
+        'right',
+        'directlyAbove',
+        'directlyBelow',
+        'directlyLeft',
+        'directlyRight',
+      ],
+      required: true,
+      enforcement: 'parse-error',
+      description:
+        'Where the TARGET sits relative to the SOURCE. `directions: [above]` on selector `parent` places ' +
+        "each tuple's target above its source. The `directly*` variants additionally enforce axis alignment.",
+      note:
+        'The direction is target-relative-to-source. Getting this backwards is the most common spec bug — ' +
+        'transpose the selector (`~parent`) rather than flipping the direction if the relation reads the other way.',
+    },
+  ],
+  example: { selector: 'parent', directions: ['above'] },
+  note:
+    'Contradictory direction sets are rejected at parse time: `above` with `below`, `left` with `right`, and a ' +
+    '`directly*` variant combined with anything other than its own non-direct counterpart. Values outside the ' +
+    'listed set are NOT rejected — they parse and then match nothing.',
+};
+
+const CYCLIC: LanguageItem = {
+  id: 'cyclic',
+  yamlKey: 'cyclic',
+  label: 'Cyclic',
+  description: 'Arrange the selected atoms around the perimeter of a circle, in the order the selector defines.',
+  sections: ['constraints'],
+  valueShape: 'mapping',
+  supportsHold: true,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'binary',
+      required: true,
+      enforcement: 'parse-error',
+      description: 'Returns (a, b) pairs meaning "b follows a around the circle".',
+    },
+    {
+      name: 'direction',
+      type: 'enum',
+      values: ['clockwise', 'counterclockwise'],
+      default: 'clockwise',
+      enforcement: 'unchecked',
+      description: 'Which way the cycle runs.',
+    },
+  ],
+  example: { selector: 'nextState', direction: 'clockwise' },
+  note:
+    'Two cyclic constraints on the same selector with different directions is a parse error. An unrecognized ' +
+    'direction string is not rejected at parse time.',
+};
+
+const ALIGN: LanguageItem = {
+  id: 'align',
+  yamlKey: 'align',
+  label: 'Align',
+  description: 'Put the selected atoms on a shared horizontal or vertical line.',
+  sections: ['constraints'],
+  valueShape: 'mapping',
+  supportsHold: true,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'binary',
+      required: true,
+      enforcement: 'parse-error',
+      description: 'Returns the pairs of atoms to align with one another.',
+    },
+    {
+      name: 'direction',
+      type: 'enum',
+      values: ['horizontal', 'vertical'],
+      required: true,
+      enforcement: 'parse-error',
+      description:
+        '`horizontal` gives the atoms a shared Y coordinate; `vertical` a shared X coordinate. ' +
+        'An unrecognized value is a parse error.',
+    },
+  ],
+  example: { selector: 'siblings', direction: 'horizontal' },
+};
+
+const GROUP_BY_SELECTOR: LanguageItem = {
+  id: 'group',
+  yamlKey: 'group',
+  label: 'Group (by selector)',
+  description: 'Draw a hull around a set of atoms. For tuples (a, b), (a, c), … the group is keyed by `a` and contains {b, c, …}.',
+  sections: ['constraints'],
+  valueShape: 'mapping',
+  discriminator: { field: 'field', present: false },
+  supportsHold: true,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'binary',
+      required: true,
+      enforcement: 'unchecked',
+      description:
+        'First column is the group key, second the members. A unary selector builds a single unkeyed group.',
+      note:
+        'A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. ' +
+        'That is the one case where omitting this field is not an error but a no-op.',
+    },
+    {
+      name: 'name',
+      type: 'string',
+      required: true,
+      enforcement: 'parse-error',
+      description:
+        'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
+        'Required unless the constraint is negated (`hold: never`), where a name is generated.',
+    },
+    {
+      name: 'addEdge',
+      type: 'enum',
+      values: ['none', 'togroup', 'fromgroup'],
+      default: 'none',
+      enforcement: 'value-ignored',
+      description:
+        'Draw a connector between the group key and the group: `togroup` points key → group, ' +
+        '`fromgroup` points group → key, `none` draws nothing.',
+      alternativeForm: {
+        type: 'block',
+        description:
+          'Block form also styles the connector, which is an edge and so takes the shared edge blocks: ' +
+          '`{ points: <direction>, lineStyle: {…}, textStyle: {…} }`.',
+        fields: [
+          {
+            name: 'points',
+            type: 'enum',
+            values: ['none', 'togroup', 'fromgroup'],
+            default: 'none',
+            description: 'The connector direction — the same value the bare string form carries.',
+          },
+          blockField('lineStyle', "The connector's line."),
+          blockField('textStyle', "The connector's label."),
+        ],
+      },
+      note: 'The legacy boolean `true` is still accepted and means `togroup`.',
+    },
+    blockField('textStyle', "The group's own label. Only `color` applies today — group labels auto-fit their box, so `size` is reserved."),
+  ],
+  example: { selector: 'Team.members', name: 'Team' },
+};
+
+const GROUP_BY_FIELD: LanguageItem = {
+  id: 'group.byField',
+  yamlKey: 'group',
+  label: 'Group (by field)',
+  description: 'Group by indexing into the tuples of a relation.',
+  sections: ['constraints'],
+  valueShape: 'mapping',
+  discriminator: { field: 'field', present: true },
+  supportsHold: true,
+  deprecated: {
+    replacedBy: 'group',
+    reason:
+      'A binary selector whose first column is the key and whose second is the members says the same thing ' +
+      'without tuple indices.',
+    mapping: {
+      // `field` + the two indices collapse into one transposed-or-not selector;
+      // there is no key-for-key rewrite, so the mapping names the target shape.
+      field: 'selector',
+      groupOn: 'selector (column order)',
+      addToGroup: 'selector (column order)',
+      selector: 'selector',
+    },
+    warningSpecType: 'group',
+  },
+  fields: [
+    {
+      name: 'field',
+      type: 'relation',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector.',
+      note:
+        'Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a ' +
+        'group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.',
+    },
+    {
+      name: 'groupOn',
+      type: 'integer',
+      required: true,
+      enforcement: 'parse-error',
+      description: '0-based index of the tuple column to use as the group key.',
+    },
+    {
+      name: 'addToGroup',
+      type: 'integer',
+      required: true,
+      enforcement: 'parse-error',
+      description: '0-based index of the tuple column whose atom joins the group.',
+    },
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      description: 'Restrict which atoms this grouping applies to.',
+    },
+  ],
+  example: { field: 'worksIn', groupOn: 1, addToGroup: 0 },
+  note:
+    'To migrate: over `worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` keys on Department, ' +
+    'so it becomes `selector: ~worksIn` plus the `name` that form requires.',
+};
+
+const SIZE: LanguageItem = {
+  id: 'size',
+  yamlKey: 'size',
+  label: 'Size',
+  description: 'Set the width and height of matching nodes, in pixels.',
+  sections: ['constraints', 'directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'width',
+      type: 'number',
+      required: true,
+      enforcement: 'parse-error',
+      exclusiveMinimum: 0,
+      description: 'Node width in pixels. Required, and must be a number greater than 0.',
+    },
+    {
+      name: 'height',
+      type: 'number',
+      required: true,
+      enforcement: 'parse-error',
+      exclusiveMinimum: 0,
+      description: 'Node height in pixels. Required, and must be a number greater than 0.',
+    },
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      description: 'Which nodes to resize. Omit to resize every node.',
+    },
+  ],
+  example: { selector: 'ImportantNode', width: 150, height: 80 },
+  note:
+    'Accepted in either section, with identical meaning. `hold: never` is not supported and is silently ignored.',
+};
+
+const HIDE_ATOM: LanguageItem = {
+  id: 'hideAtom',
+  yamlKey: 'hideAtom',
+  label: 'Hide atom',
+  description: 'Remove matching atoms from the diagram.',
+  sections: ['constraints', 'directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'Which atoms to hide.',
+    },
+  ],
+  example: { selector: 'HelperNode' },
+  note:
+    'Accepted in either section, with identical meaning. `hold: never` is not supported and is silently ignored. ' +
+    'Hiding an atom that a layout constraint places, or that a group contains, makes the spec unsatisfiable: ' +
+    'the layout reports a hidden-node conflict and draws a counterfactual with the conflicting atoms outlined. ' +
+    "Hiding a keyed group's key is fine — the key is not inside the group.",
+};
+
+// ---- directives ----------------------------------------------------------
+
+const FLAG: LanguageItem = {
+  id: 'flag',
+  yamlKey: 'flag',
+  label: 'Flag',
+  description: 'Toggle a whole-diagram rendering behaviour.',
+  sections: ['directives'],
+  valueShape: 'scalar',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'flag',
+      type: 'enum',
+      values: ['hideDisconnected', 'hideDisconnectedBuiltIns'],
+      required: true,
+      enforcement: 'unchecked',
+      description:
+        '`hideDisconnected` hides every atom with no edges; `hideDisconnectedBuiltIns` hides only the ' +
+        'disconnected built-in atoms (Int, String, …). Any other value is silently ignored.',
+    },
+  ],
+  example: { flag: 'hideDisconnectedBuiltIns' },
+  note: 'Written as a bare scalar: `- flag: hideDisconnected`, not a mapping.',
+};
+
+const ATOM_STYLE: LanguageItem = {
+  id: 'atomStyle',
+  yamlKey: 'atomStyle',
+  label: 'Atom style',
+  description:
+    'Style matching atoms. An atom is a composite of an interior fill, an outline, an icon, and its label, ' +
+    'so each is its own block.',
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      description: 'Which atoms to style. Omit to style every atom.',
+    },
+    blockField('fillStyle', "The node's interior fill."),
+    blockField('borderStyle', "The node's outline."),
+    blockField('iconStyle', 'An icon drawn on the node.'),
+    blockField('textStyle', "The node's own label."),
+    {
+      name: 'showLabel',
+      type: 'boolean',
+      default: true,
+      description: "Whether the atom's label is drawn. Independent of the icon: `iconStyle.placement` controls the icon's geometry, this controls the label.",
+    },
+  ],
+  example: { selector: 'Person', borderStyle: { color: '#0369a1' } },
+  note:
+    'Rules compose: a supertype selector already returns subtype atoms, so a `Node` rule and a `RedNode` rule ' +
+    'both apply to a RedNode atom and their set properties gap-fill each other. Two rules setting the SAME ' +
+    'property to DIFFERENT values is a hard error at layout time — styles never silently override.',
+};
+
+const EDGE_STYLE: LanguageItem = {
+  id: 'edgeStyle',
+  yamlKey: 'edgeStyle',
+  label: 'Edge style',
+  description: "Style the edges of a relation: the drawn line, the label, and visibility.",
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'field',
+      type: 'relation',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The relation whose edges this styles.',
+    },
+    SOURCE_SELECTOR,
+    TUPLE_FILTER,
+    blockField('lineStyle', 'The drawn line.'),
+    blockField('textStyle', 'The edge label.'),
+    { name: 'showLabel', type: 'boolean', default: true, description: 'Whether the edge label is drawn.' },
+    { name: 'hidden', type: 'boolean', default: false, description: 'Hide the edge entirely while keeping the relation in the data.' },
+  ],
+  example: { field: 'parent', lineStyle: { color: 'blue', pattern: 'dashed' } },
+  note: 'Like atomStyle, overlapping rules compose and a genuine disagreement is an error rather than a silent override.',
+};
+
+const ATTRIBUTE: LanguageItem = {
+  id: 'attribute',
+  yamlKey: 'attribute',
+  label: 'Attribute',
+  description: "Render a relation as a key-value line on its source node instead of as an edge.",
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'field',
+      type: 'relation',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The relation to fold into the source node. Its edges are removed from the graph.',
+    },
+    { ...SOURCE_SELECTOR, description: 'Apply only to these source atoms. Omit to apply to every source atom.' },
+    TUPLE_FILTER,
+    blockField('textStyle', "This attribute line's own styling."),
+  ],
+  example: { field: 'age', selector: 'Person' },
+  note: 'Multiple targets for the same source become a list. Unlike `tag`, this removes the edge.',
+};
+
+const TAG: LanguageItem = {
+  id: 'tag',
+  yamlKey: 'tag',
+  label: 'Tag',
+  description: 'Add a computed key-value line to matching nodes, without touching the graph structure.',
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'toTag',
+      type: 'selector',
+      arity: 'unary',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'Which atoms receive the tag.',
+    },
+    {
+      name: 'name',
+      type: 'string',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The label shown before the value.',
+    },
+    {
+      name: 'value',
+      type: 'selector',
+      arity: 'n-ary',
+      required: true,
+      enforcement: 'unchecked',
+      description:
+        'Evaluated per tagged atom; its result becomes the value. A unary result shows as `name: value`; ' +
+        'an n-ary result shows one line per tuple, as `name[k1][k2]: value`.',
+    },
+    blockField('textStyle', "This tag line's own styling."),
+  ],
+  example: { toTag: 'Person', name: 'age', value: 'age' },
+  note: 'Unlike `attribute`, tags do not remove edges.',
+};
+
+const HIDE_FIELD: LanguageItem = {
+  id: 'hideField',
+  yamlKey: 'hideField',
+  label: 'Hide field',
+  description: "Hide a relation's edges.",
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'field',
+      type: 'relation',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The relation to hide.',
+    },
+    SOURCE_SELECTOR,
+    { ...TUPLE_FILTER, description: 'Hide only the tuples this selector returns.' },
+  ],
+  example: { field: 'internal' },
+};
+
+const INFERRED_EDGE: LanguageItem = {
+  id: 'inferredEdge',
+  yamlKey: 'inferredEdge',
+  label: 'Inferred edge',
+  description: 'Draw an edge that is not in the data, computed from a selector.',
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  fields: [
+    {
+      name: 'name',
+      type: 'string',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'The label drawn on the edge.',
+    },
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'binary',
+      required: true,
+      enforcement: 'unchecked',
+      description:
+        'Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom ' +
+        'then feeds both ends.',
+    },
+    {
+      name: 'draw',
+      type: 'string',
+      enforcement: 'parse-error',
+      description:
+        "Reinterpret what each end attaches to, as `<end> -> <end>`. Each end is `_` (the atom itself, the " +
+        "default) or the name of a `group` constraint, in which case the end attaches to that group's hull. " +
+        'The left end applies to the first atom of each tuple, the right end to the last.',
+      note:
+        'Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse ' +
+        'error, as is a group name that no `group` constraint defines. `draw` never reorders — transpose the ' +
+        'selector (`~connected`) to flip an edge.',
+    },
+    blockField('lineStyle', 'The drawn line.'),
+    blockField('textStyle', 'The edge label.'),
+    {
+      name: 'color',
+      type: 'color',
+      description: 'Legacy inline line color.',
+      deprecated: { replacedBy: 'lineStyle.color' },
+    },
+    {
+      name: 'style',
+      type: 'enum',
+      values: ['solid', 'dashed', 'dotted'],
+      description: 'Legacy inline dash pattern.',
+      deprecated: { replacedBy: 'lineStyle.pattern' },
+    },
+    {
+      name: 'weight',
+      type: 'number',
+      exclusiveMinimum: 0,
+      description: 'Legacy inline line thickness.',
+      deprecated: { replacedBy: 'lineStyle.weight' },
+    },
+    {
+      name: 'highlight',
+      type: 'color',
+      description: 'Legacy inline highlight underlay.',
+      deprecated: { replacedBy: 'lineStyle.highlight' },
+    },
+  ],
+  example: { name: 'reachable', selector: '^parent', lineStyle: { color: 'gray', pattern: 'dotted' } },
+  note:
+    'Using any of the legacy inline `color`/`style`/`weight`/`highlight` keys raises a deprecation warning with ' +
+    "specType `inferredEdge`. The block form wins when both are given. If an end's atom keys no group of that " +
+    'name in a given instance, that one edge is skipped with a console warning — data-dependent, not a spec error.',
+};
+
+// ---- deprecated directives ----------------------------------------------
+
+const ICON: LanguageItem = {
+  id: 'icon',
+  yamlKey: 'icon',
+  label: 'Icon',
+  description: 'Assign an icon to matching atoms.',
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  deprecated: {
+    replacedBy: 'atomStyle',
+    reason:
+      "The single `showLabels` boolean drove label visibility and icon geometry at once. atomStyle splits those " +
+      'into two independent knobs, which is what makes a faded watermark, or a hidden label with no icon, expressible.',
+    mapping: {
+      path: 'iconStyle.path',
+      selector: 'selector',
+      'showLabels: false': 'showLabel: false + iconStyle.placement: full',
+      'showLabels: true': 'showLabel: true + iconStyle.placement: badge',
+    },
+    warningSpecType: 'icon',
+  },
+  fields: [
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'Which atoms get the icon. Omitting it drops the directive entirely — it never means "every atom".',
+    },
+    {
+      name: 'path',
+      type: 'icon-path',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'Bundled name, icon-pack reference, URL, or path. Omitting it drops the directive.',
+    },
+    {
+      name: 'showLabels',
+      type: 'boolean',
+      default: false,
+      description: "Whether the atom's label is drawn alongside the icon.",
+    },
+  ],
+  example: { selector: 'Person', path: 'person', showLabels: true },
+};
+
+const ATOM_COLOR: LanguageItem = {
+  id: 'atomColor',
+  yamlKey: 'atomColor',
+  label: 'Atom color',
+  description: 'Set the color of matching atoms.',
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  deprecated: {
+    replacedBy: 'atomStyle',
+    reason:
+      'atomStyle expresses the same recolor and also reaches the fill, the icon, and the label. The rewrite is ' +
+      'border-preserving, so an existing diagram is unchanged.',
+    mapping: { value: 'borderStyle.color', selector: 'selector' },
+    warningSpecType: 'atomColor',
+  },
+  fields: [
+    {
+      name: 'value',
+      type: 'color',
+      required: true,
+      enforcement: 'unchecked',
+      description: "Any CSS color. Applies to the node's outline, not its fill.",
+    },
+    {
+      name: 'selector',
+      type: 'selector',
+      arity: 'unary',
+      required: true,
+      enforcement: 'unchecked',
+      description: 'Which atoms to recolor. Omitting it drops the directive — it never means "every atom".',
+    },
+  ],
+  example: { selector: 'Person', value: '#ff5733' },
+};
+
+const EDGE_COLOR: LanguageItem = {
+  id: 'edgeColor',
+  yamlKey: 'edgeColor',
+  label: 'Edge color',
+  description: "Style a relation's edges with flat, inline keys.",
+  sections: ['directives'],
+  valueShape: 'mapping',
+  supportsHold: false,
+  deprecated: {
+    replacedBy: 'edgeStyle',
+    reason: 'edgeStyle groups the same knobs into the shared lineStyle/textStyle blocks that every other form uses.',
+    mapping: {
+      value: 'lineStyle.color',
+      style: 'lineStyle.pattern',
+      weight: 'lineStyle.weight',
+      highlight: 'lineStyle.highlight',
+      field: 'field',
+      selector: 'selector',
+      filter: 'filter',
+      showLabel: 'showLabel',
+      hidden: 'hidden',
+    },
+    warningSpecType: 'edgeColor',
+  },
+  fields: [
+    { name: 'field', type: 'relation', required: true, enforcement: 'unchecked', description: 'The relation whose edges this styles.' },
+    { name: 'value', type: 'color', required: true, enforcement: 'unchecked', description: 'Line color.' },
+    SOURCE_SELECTOR,
+    TUPLE_FILTER,
+    {
+      name: 'style',
+      type: 'enum',
+      values: ['solid', 'dashed', 'dotted'],
+      enforcement: 'value-ignored',
+      description: 'Dash pattern. Trimmed and lowercased before matching, unlike `lineStyle.pattern`.',
+    },
+    { name: 'weight', type: 'number', exclusiveMinimum: 0, enforcement: 'value-ignored', description: 'Line thickness in pixels.' },
+    { name: 'highlight', type: 'color', description: 'A wider, translucent underlay beneath the line.' },
+    { name: 'showLabel', type: 'boolean', default: true, description: 'Whether the edge label is drawn.' },
+    { name: 'hidden', type: 'boolean', default: false, description: 'Hide the edge entirely.' },
+  ],
+  example: { field: 'parent', value: 'blue' },
+};
+
+// ---- assembly ------------------------------------------------------------
+
+const ITEMS: readonly LanguageItem[] = [
+  // constraints
+  ORIENTATION,
+  CYCLIC,
+  ALIGN,
+  GROUP_BY_SELECTOR,
+  GROUP_BY_FIELD,
+  SIZE,
+  HIDE_ATOM,
+  // directives
+  FLAG,
+  ATOM_STYLE,
+  EDGE_STYLE,
+  ATTRIBUTE,
+  TAG,
+  HIDE_FIELD,
+  INFERRED_EDGE,
+  ICON,
+  ATOM_COLOR,
+  EDGE_COLOR,
+];
+
+const HOLD: HoldRules = {
+  field: 'hold',
+  values: ['always', 'never'],
+  default: 'always',
+  supportedBy: ITEMS.filter((i) => i.supportsHold).map((i) => i.id),
+  note:
+    "`hold: never` negates a constraint: it asserts the relationship must not hold. Only the value `never` has " +
+    'an effect — `always`, any other string, and an absent field all mean the positive constraint. Double ' +
+    'negation is not supported. `size` and `hideAtom` accept the key syntactically but ignore it.',
+};
+
+const DOCUMENT = {
+  sections: ['constraints', 'directives'] as const,
+  unknownKeys: 'ignored' as const,
+  sectionShape: 'list' as const,
+  notes: [
+    'Both sections are optional; an empty document is valid and yields an empty spec.',
+    'Each section must be a YAML list of single-key mappings. A section written as a mapping instead of a list ' +
+      'is ignored wholesale, without an error.',
+    'Unrecognized top-level keys, unrecognized list items, and unrecognized fields inside a known item are all ' +
+      'ignored silently. Nothing in the parser will tell you about a typo — validate against this manifest first.',
+    '`size` and `hideAtom` are accepted in either section and mean the same thing in both.',
+    'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
+    'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
+      'a `specType` naming the form, so a consumer can surface them without matching prose.',
+  ],
+};
+
+const DEPRECATIONS: LanguageManifest['deprecations'] = [
+  ...ITEMS.filter((item) => item.deprecated).map((item) => ({
+    id: item.id,
+    kind: 'item' as const,
+    path: item.yamlKey,
+    ...item.deprecated!,
+  })),
+  ...ITEMS.flatMap((item) =>
+    item.fields
+      .filter((field) => field.deprecated)
+      .map((field) => ({
+        id: `${item.id}.${field.name}`,
+        kind: 'field' as const,
+        path: `${item.yamlKey}.${field.name}`,
+        replacedBy: `${item.yamlKey}.${field.deprecated!.replacedBy}`,
+        reason: field.deprecated!.reason ?? `Superseded by ${field.deprecated!.replacedBy}.`,
+        mapping: { [field.name]: field.deprecated!.replacedBy },
+        warningSpecType: item.yamlKey,
+      })),
+  ),
+];
+
+const DOCUMENTATION = {
+  reference: 'https://github.com/sidprasad/spytial-core/blob/main/docs/YAML_SPECIFICATION.md',
+  constraints: 'https://sidprasad.github.io/spytial-core/#/constraints',
+  directives: 'https://sidprasad.github.io/spytial-core/#/directives',
+  selectors: 'https://sidprasad.github.io/spytial-core/#/selectors',
+  jsonSchema:
+    'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json',
+  manifest: 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-language.json',
+};
+
+/**
+ * Build the language manifest.
+ *
+ * @param spytialCoreVersion the package version to stamp on the manifest —
+ *   the generator passes `package.json`'s version so the artifact records which
+ *   release produced it.
+ */
+export function getLanguageManifest(spytialCoreVersion: string): LanguageManifest {
+  return {
+    language: 'spytial-layout-spec',
+    languageVersion: LANGUAGE_VERSION,
+    spytialCoreVersion,
+    versionPolicy: LANGUAGE_VERSION_POLICY,
+    document: DOCUMENT,
+    hold: HOLD,
+    blocks: BLOCKS,
+    items: ITEMS,
+    deprecations: DEPRECATIONS,
+    documentation: DOCUMENTATION,
+  };
+}
+
+/** Every item in the language, in canonical order (constraints, then directives). */
+export function getLanguageItems(): readonly LanguageItem[] {
+  return ITEMS;
+}
+
+/** Look up an item by its manifest id (`group.byField`, `atomStyle`, …). */
+export function getLanguageItem(id: string): LanguageItem | undefined {
+  return ITEMS.find((item) => item.id === id);
+}
+
+/** The shared style blocks, in canonical order. */
+export function getLanguageBlocks(): readonly LanguageBlock[] {
+  return BLOCKS;
+}
