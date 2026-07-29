@@ -114,11 +114,31 @@ describe('language manifest — conformance with the parser', () => {
 
   it.each(
     manifest.items
-      .filter((item) => item.sections.length > 1)
-      .flatMap((item) => item.sections.map((section) => [item.id, section, item] as const)),
-  )('%s is accepted in the %s section', (id, section, item) => {
+      .filter((item) => item.deprecatedSections?.length)
+      .flatMap((item) => item.deprecatedSections!.map((section) => [item.id, section, item] as const)),
+  )('%s still parses in the deprecated %s section, and warns', (id, section, item) => {
     const spec = quietly(() => parseLayoutSpec(specFor(item, item.example, section)));
+
+    // Identical meaning — the whole point of deprecating rather than removing.
     expect(landsIn[id](spec)).toBeGreaterThan(0);
+
+    const warnings = spec.warnings ?? [];
+    expect(warnings.map((w) => w.code)).toContain('deprecated');
+    expect(warnings.map((w) => w.specType)).toContain(item.sectionDeprecation!.warningSpecType);
+    expect(
+      warnings.some((w) => w.message.includes(section) && w.message.includes(item.sections[0])),
+      'the warning should name both the section it is in and the one to move it to',
+    ).toBe(true);
+  });
+
+  it('size and hideAtom are constraints', () => {
+    // Called out explicitly: they were historically documented as directives,
+    // and the classification is the thing this pair of tests protects.
+    for (const id of ['size', 'hideAtom']) {
+      const item = manifest.items.find((i) => i.id === id)!;
+      expect(item.sections).toEqual(['constraints']);
+      expect(item.deprecatedSections).toEqual(['directives']);
+    }
   });
 });
 
@@ -259,10 +279,11 @@ describe('language manifest — deprecations', () => {
     }
   });
 
-  it('the flat deprecations list covers every deprecated item and field', () => {
+  it('the flat deprecations list covers every deprecated item, field and placement', () => {
     const expected = [
       ...manifest.items.filter((i) => i.deprecated).map((i) => i.id),
       ...manifest.items.flatMap((i) => i.fields.filter((f) => f.deprecated).map((f) => `${i.id}.${f.name}`)),
+      ...manifest.items.flatMap((i) => (i.deprecatedSections ?? []).map((s) => `${i.id}@${s}`)),
     ];
     expect(manifest.deprecations.map((d) => d.id).sort()).toEqual(expected.sort());
   });

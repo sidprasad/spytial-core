@@ -46,7 +46,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-07-28';
+export const LANGUAGE_VERSION = '2026-07-29';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -447,7 +447,15 @@ const SIZE: LanguageItem = {
   yamlKey: 'size',
   label: 'Size',
   description: 'Set the width and height of matching nodes, in pixels.',
-  sections: ['constraints', 'directives'],
+  sections: ['constraints'],
+  deprecatedSections: ['directives'],
+  sectionDeprecation: {
+    reason:
+      "Size fixes a node's geometry, which is what the layout solves over — not presentation layered " +
+      'on a solved layout. It is a constraint. The directives section still accepts it, identically, ' +
+      'behind a deprecation warning.',
+    warningSpecType: 'size',
+  },
   valueShape: 'mapping',
   supportsHold: false,
   fields: [
@@ -475,8 +483,7 @@ const SIZE: LanguageItem = {
     },
   ],
   example: { selector: 'ImportantNode', width: 150, height: 80 },
-  note:
-    'Accepted in either section, with identical meaning. `hold: never` is not supported and is silently ignored.',
+  note: '`hold: never` is not supported and is silently ignored.',
 };
 
 const HIDE_ATOM: LanguageItem = {
@@ -484,7 +491,15 @@ const HIDE_ATOM: LanguageItem = {
   yamlKey: 'hideAtom',
   label: 'Hide atom',
   description: 'Remove matching atoms from the diagram.',
-  sections: ['constraints', 'directives'],
+  sections: ['constraints'],
+  deprecatedSections: ['directives'],
+  sectionDeprecation: {
+    reason:
+      'Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against ' +
+      'the other constraints — it is a constraint, not presentation. The directives section still ' +
+      'accepts it, identically, behind a deprecation warning.',
+    warningSpecType: 'hideAtom',
+  },
   valueShape: 'mapping',
   supportsHold: false,
   fields: [
@@ -499,7 +514,7 @@ const HIDE_ATOM: LanguageItem = {
   ],
   example: { selector: 'HelperNode' },
   note:
-    'Accepted in either section, with identical meaning. `hold: never` is not supported and is silently ignored. ' +
+    '`hold: never` is not supported and is silently ignored. ' +
     'Hiding an atom that a layout constraint places, or that a group contains, makes the spec unsatisfiable: ' +
     'the layout reports a hidden-node conflict and draws a counterfactual with the conflicting atoms outlined. ' +
     "Hiding a keyed group's key is fine — the key is not inside the group.",
@@ -928,7 +943,9 @@ const DOCUMENT = {
       'is ignored wholesale, without an error.',
     'Unrecognized top-level keys, unrecognized list items, and unrecognized fields inside a known item are all ' +
       'ignored silently. Nothing in the parser will tell you about a typo — validate against this manifest first.',
-    '`size` and `hideAtom` are accepted in either section and mean the same thing in both.',
+    '`size` and `hideAtom` are constraints. Both are still accepted among the directives, with identical ' +
+      'meaning, but that placement is deprecated and warns — emit them under `constraints`. Each item lists ' +
+      'where to write it in `sections`, and any tolerated-but-deprecated placement in `deprecatedSections`.',
     'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
     'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
       'a `specType` naming the form, so a consumer can surface them without matching prose.',
@@ -942,6 +959,18 @@ const DEPRECATIONS: LanguageManifest['deprecations'] = [
     path: item.yamlKey,
     ...item.deprecated!,
   })),
+  // A deprecated *placement*: the form is current, the section it sits in is not.
+  ...ITEMS.filter((item) => item.deprecatedSections?.length).flatMap((item) =>
+    item.deprecatedSections!.map((section) => ({
+      id: `${item.id}@${section}`,
+      kind: 'placement' as const,
+      path: `${section}[].${item.yamlKey}`,
+      replacedBy: `${item.sections[0]}[].${item.yamlKey}`,
+      reason: item.sectionDeprecation!.reason,
+      mapping: { [`${section}[].${item.yamlKey}`]: `${item.sections[0]}[].${item.yamlKey}` },
+      warningSpecType: item.sectionDeprecation!.warningSpecType,
+    })),
+  ),
   ...ITEMS.flatMap((item) =>
     item.fields
       .filter((field) => field.deprecated)

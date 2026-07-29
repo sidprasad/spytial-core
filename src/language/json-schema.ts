@@ -196,7 +196,12 @@ function itemSchema(item: LanguageItem): JsonSchemaNode {
 
 /** The `oneOf` of everything accepted in one section. */
 function sectionSchema(manifest: LanguageManifest, section: SpecSection): JsonSchemaNode {
-  const items = manifest.items.filter((item) => item.sections.includes(section));
+  const canonical = manifest.items.filter((item) => item.sections.includes(section));
+  // Still parsed here, but deprecated: `$ref` the one definition and annotate
+  // the reference, so `size` under `directives` is flagged while the same form
+  // under `constraints` is not.
+  const tolerated = manifest.items.filter((item) => item.deprecatedSections?.includes(section));
+
   return {
     // `null` is the empty section a bare `constraints:` line produces, which
     // the engine accepts.
@@ -205,7 +210,18 @@ function sectionSchema(manifest: LanguageManifest, section: SpecSection): JsonSc
       section === 'constraints'
         ? 'Structural layout: where nodes end up relative to one another.'
         : 'Presentation: how nodes and edges look, and what is shown at all.',
-    items: { oneOf: items.map((item) => ({ $ref: `#/$defs/${defName(item)}` })) },
+    items: {
+      oneOf: [
+        ...canonical.map((item) => ({ $ref: `#/$defs/${defName(item)}` })),
+        ...tolerated.map((item) => ({
+          $ref: `#/$defs/${defName(item)}`,
+          deprecated: true,
+          description:
+            `\`${item.yamlKey}\` here is deprecated — write it under \`${item.sections[0]}\`. ` +
+            `${item.sectionDeprecation!.reason}`,
+        })),
+      ],
+    },
   };
 }
 

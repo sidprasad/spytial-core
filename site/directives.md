@@ -346,24 +346,20 @@ directives:
 
 ---
 
-## Size Directive
+## Size — *a constraint, not a directive*
 
-Sets node dimensions. Identical to the [size constraint](constraints.md#size) — can appear in either section.
+`size` fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It belongs in `constraints:`. See [Size](constraints.md#size).
 
-```yaml
-- size:
-    selector: <unary-selector>   # Required
-    width: <number>              # Optional (default: 100)
-    height: <number>             # Optional (default: 60)
-```
-
-### Example
+The `directives:` section still accepts it, with identical fields and meaning, but that placement is **deprecated** and raises a warning. Move it; nothing else changes.
 
 ```yaml
-- size:
-    selector: LargeNode
-    width: 200
-    height: 100
+# Deprecated
+directives:
+  - size: { selector: LargeNode, width: 200, height: 100 }
+
+# Supported
+constraints:
+  - size: { selector: LargeNode, width: 200, height: 100 }
 ```
 
 <div class="spytial-diagram" data-height="300" data-caption="Live: LargeNode is sized 200×100 next to a default-sized Node.">
@@ -382,7 +378,7 @@ Sets node dimensions. Identical to the [size constraint](constraints.md#size) �
 }
 </template>
 <template class="spec">
-directives:
+constraints:
   - size: { selector: LargeNode, width: 200, height: 100 }
 </template>
 </div>
@@ -616,20 +612,20 @@ directives:
 
 ---
 
-## Hiding Atoms (Directive)
+## Hiding Atoms — *a constraint, not a directive*
 
-Hides atoms matching a selector. Identical to the [hideAtom constraint](constraints.md#hiding-atoms) — including the conflict rule: hiding an atom that a layout constraint references (or that a group contains) makes the spec unsatisfiable, and the diagram draws the atom anyway with a dashed outline alongside the error.
+`hideAtom` changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — hiding an atom that a layout constraint references (or that a group contains) is a conflict, and the diagram draws the atom anyway with a dashed outline alongside the error. It belongs in `constraints:`. See [Hiding Atoms](constraints.md#hiding-atoms).
 
-```yaml
-- hideAtom:
-    selector: <unary-selector>   # Required
-```
-
-### Example
+The `directives:` section still accepts it, with identical fields and meaning, but that placement is **deprecated** and raises a warning. Move it; nothing else changes.
 
 ```yaml
-- hideAtom:
-    selector: HelperNode
+# Deprecated
+directives:
+  - hideAtom: { selector: HelperNode }
+
+# Supported
+constraints:
+  - hideAtom: { selector: HelperNode }
 ```
 
 <div class="spytial-diagram" data-height="300" data-caption="Live: HelperNode atoms (and their edges) disappear; only Nodes remain.">
@@ -655,7 +651,7 @@ Hides atoms matching a selector. Identical to the [hideAtom constraint](constrai
 }
 </template>
 <template class="spec">
-directives:
+constraints:
   - hideAtom: { selector: HelperNode }
 </template>
 </div>

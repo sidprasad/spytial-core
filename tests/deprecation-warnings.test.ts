@@ -77,6 +77,9 @@ describe('Deprecation warnings', () => {
                 'group',
                 'constraints:\n  - group: { field: next, groupOn: 0, addToGroup: 1 }',
             ],
+            // Right form, wrong section: size and hideAtom are constraints.
+            ['size', 'directives:\n  - size: { selector: Node, width: 10, height: 10 }'],
+            ['hideAtom', 'directives:\n  - hideAtom: { selector: Node }'],
         ];
 
         for (const [specType, yaml] of cases) {
@@ -104,6 +107,26 @@ describe('Deprecation warnings', () => {
                 'constraints:\n  - group: { selector: next, name: g }',
             );
             expect(spec.warnings).toEqual([]);
+        });
+
+        it('size and hideAtom under constraints are the supported placement', () => {
+            const spec = parseQuietly(
+                'constraints:\n' +
+                '  - size: { selector: Node, width: 10, height: 10 }\n' +
+                '  - hideAtom: { selector: Node }',
+            );
+            expect(spec.warnings).toEqual([]);
+            // Deprecating the placement must not change what either one does.
+            expect(spec.directives.sizes).toHaveLength(1);
+            expect(spec.directives.hiddenAtoms).toHaveLength(1);
+        });
+
+        it('names the section to move to when they sit among the directives', () => {
+            const warnings = parseQuietly(
+                'directives:\n  - size: { selector: Node, width: 10, height: 10 }',
+            ).warnings!;
+            expect(warnings[0].message).toMatch(/constraints/);
+            expect(warnings[0].message).toMatch(/directives/);
         });
     });
 
@@ -275,6 +298,24 @@ describe('Deprecation warnings', () => {
                 ),
             );
             expect(diags).toHaveLength(0);
+        });
+
+        it('flags a constraint parked in the directives section', () => {
+            // `kind` is the section the YAML put it in; the registry knows what
+            // it actually is. The builder never produces this — it comes from a
+            // hand-written spec, which is exactly who needs telling.
+            for (const [type, params] of [
+                ['size', { selector: 'Node', width: 10, height: 10 }],
+                ['hideAtom', { selector: 'Node' }],
+            ] as const) {
+                const diags = validateItem(item(type, params, 'directive'));
+                const deprecated = diags.filter((d) => d.code === 'deprecated');
+                expect(deprecated).toHaveLength(1);
+                expect(deprecated[0].message).toMatch(/constraints/);
+
+                // Same item under constraints is clean.
+                expect(validateItem(item(type, params, 'constraint'))).toHaveLength(0);
+            }
         });
     });
 });

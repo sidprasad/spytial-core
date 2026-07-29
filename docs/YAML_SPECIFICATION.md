@@ -47,7 +47,7 @@ Each section must be a **list** of single-key entries. Anything the engine does 
 
 A typo therefore costs you the directive, quietly. Validate against `spytial-spec.schema.json`, which is deliberately stricter than the parser, if you want those to be errors.
 
-`size` and `hideAtom` are accepted in **either** section and mean the same thing in both.
+`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Both are still accepted among the `directives:` for backwards compatibility, with identical meaning, but that placement is deprecated and raises a warning. Write them under `constraints:`.
 
 Parsing also returns advisory `warnings` on the spec, each with a machine-readable `code` (currently `deprecated`) and the `specType` it concerns — that is how you detect a deprecated form without matching prose.
 
@@ -373,7 +373,7 @@ For groups, `hold: never` asserts that no axis-aligned rectangle can contain exa
 
 ### Size Constraint
 
-Sets the width and height of nodes matching a selector. (Can also be used as a directive.)
+Sets the width and height of nodes matching a selector.
 
 ```yaml
 - size:
@@ -405,7 +405,7 @@ Sets the width and height of nodes matching a selector. (Can also be used as a d
 
 ### Hide Atom Constraint
 
-Hides atoms matching a selector from the visualization. (Can also be used as a directive.)
+Hides atoms matching a selector from the visualization.
 
 ```yaml
 - hideAtom:
@@ -742,32 +742,18 @@ A directive missing either required field draws nothing, and is dropped rather t
 
 ---
 
-### Size Directive
+### Size Directive — *legacy placement*
 
-Sets node dimensions for atoms matching a selector. Identical to the [size constraint](#size-constraint) — the same form is accepted in either section.
-
-```yaml
-- size:
-    width: <number>              # Required: Width in pixels
-    height: <number>             # Required: Height in pixels
-    selector: <unary-selector>   # Optional: Selector for nodes
-```
-
-**Fields:**
-
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `width` | ✅ Yes | number | - | Width in pixels. Must be a number greater than 0. |
-| `height` | ✅ Yes | number | - | Height in pixels. Must be a number greater than 0. |
-| `selector` | ❌ No | string | all nodes | Unary selector for target nodes |
-
-**Example:**
+> **Deprecated:** `size` is a [constraint](#size-constraint). It fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. Writing it in the `directives:` section still parses, with identical fields and meaning, but raises a deprecation warning. Move it to `constraints:`; nothing else changes.
 
 ```yaml
-- size:
-    selector: LargeNode
-    width: 200
-    height: 100
+# Deprecated
+directives:
+  - size: { selector: LargeNode, width: 200, height: 100 }
+
+# Supported
+constraints:
+  - size: { selector: LargeNode, width: 200, height: 100 }
 ```
 
 ---
@@ -922,29 +908,19 @@ Hides edges for a specific field/relation.
 
 ---
 
-### Hide Atom Directive
+### Hide Atom Directive — *legacy placement*
 
-Hides atoms matching a selector from the visualization.
-
-```yaml
-- hideAtom:
-    selector: <unary-selector>   # Required: Selector for atoms to hide
-```
-
-**Fields:**
-
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `selector` | ✅ Yes | string | Unary selector for atoms to hide |
-
-**Example:**
+> **Deprecated:** `hideAtom` is a [constraint](#hide-atom-constraint). Removing an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints. Writing it in the `directives:` section still parses, with identical fields and meaning, but raises a deprecation warning. Move it to `constraints:`; nothing else changes.
 
 ```yaml
-- hideAtom:
-    selector: HelperNode
-```
+# Deprecated
+directives:
+  - hideAtom: { selector: HelperNode }
 
-Hiding an atom that a layout constraint references (or that a group contains) makes the spec unsatisfiable — see [Hide Atom Constraint](#hide-atom-constraint) for how the conflict is reported and drawn.
+# Supported
+constraints:
+  - hideAtom: { selector: HelperNode }
+```
 
 ---
 
@@ -1110,6 +1086,15 @@ constraints:
       directions: [above]
       hold: never
 
+  # Geometry and visibility are structural, so they live here too
+  - size:
+      selector: ImportantNode
+      width: 150
+      height: 80
+
+  - hideAtom:
+      selector: HelperNode
+
 directives:
   # Visual styling
   - atomStyle:
@@ -1149,9 +1134,6 @@ directives:
   # Hide clutter
   - hideField:
       field: internal
-  
-  - hideAtom:
-      selector: HelperNode
   
   - flag: hideDisconnectedBuiltIns
   

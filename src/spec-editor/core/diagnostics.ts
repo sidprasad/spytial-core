@@ -250,6 +250,22 @@ export function validateItem(item: SpecItem): Diagnostic[] {
     return out;
   }
 
+  // Right form, wrong section. `item.kind` comes from the section the YAML put
+  // it in; `def.kind` is what it actually is. They diverge for `size` and
+  // `hideAtom` written among the directives — both are constraints (they change
+  // what the layout has to place, not how a solved layout looks), and the engine
+  // still accepts them there behind its own deprecation warning. Flag it here
+  // too, since the editor is where someone would fix it.
+  if (item.kind !== def.kind) {
+    out.push({
+      severity: 'warning',
+      code: 'deprecated',
+      message: `"${def.label}" is a ${def.kind}. Writing it under "${item.kind}s" is deprecated — move it to the "${def.kind}s" section.`,
+      itemId: item.id,
+      source: 'structure',
+    });
+  }
+
   // Deprecated type: still parses and renders, but nudge toward its replacement.
   // A distinct `code` so consumers can treat it apart from typo-style warnings.
   if (def.deprecated) {

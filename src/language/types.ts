@@ -136,8 +136,22 @@ export interface LanguageItem {
   id: string;
   label: string;
   description: string;
-  /** Sections this item is accepted in. `size` and `hideAtom` are accepted in both. */
+  /** The section(s) to write this item under. Emit here. */
   sections: readonly SpecSection[];
+  /**
+   * Section(s) where the item is still parsed, identically, but deprecated —
+   * writing it there raises a deprecation warning. `size` and `hideAtom` are
+   * constraints that were historically also accepted among the directives.
+   * A generator should treat these as read-only: migrate what it finds, never
+   * emit here.
+   */
+  deprecatedSections?: readonly SpecSection[];
+  /** Set when `deprecatedSections` is: why, and the warning it raises. */
+  sectionDeprecation?: {
+    reason: string;
+    /** The `specType` carried on the {@link ParseWarning}. */
+    warningSpecType: string;
+  };
   /**
    * How the item's value is written. Nearly everything is a `mapping`
    * (`- orientation: { selector: …, … }`); `flag` is a bare `scalar`
@@ -221,8 +235,15 @@ export interface LanguageManifest {
   hold: HoldRules;
   blocks: readonly LanguageBlock[];
   items: readonly LanguageItem[];
-  /** Every deprecated form in one list, for a migration pass. */
-  deprecations: readonly (ItemDeprecation & { id: string; kind: 'item' | 'field'; path: string })[];
+  /**
+   * Every deprecated form in one list, for a migration pass — a whole item, a
+   * single field, or a placement (the right form written in the wrong section).
+   */
+  deprecations: readonly (ItemDeprecation & {
+    id: string;
+    kind: 'item' | 'field' | 'placement';
+    path: string;
+  })[];
   /** Prose documentation, for humans following up on something here. */
   documentation: Readonly<Record<string, string>>;
 }

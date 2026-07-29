@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-07-28, from spytial-core 4.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all.",
-  "x-spytial-language-version": "2026-07-28",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-07-29, from spytial-core 4.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all.",
+  "x-spytial-language-version": "2026-07-29",
   "x-spytial-core-version": "4.2.0",
   "type": "object",
   "properties": {
@@ -48,12 +48,6 @@
       "items": {
         "oneOf": [
           {
-            "$ref": "#/$defs/size"
-          },
-          {
-            "$ref": "#/$defs/hideAtom"
-          },
-          {
             "$ref": "#/$defs/flag"
           },
           {
@@ -82,6 +76,16 @@
           },
           {
             "$ref": "#/$defs/edgeColor"
+          },
+          {
+            "$ref": "#/$defs/size",
+            "deprecated": true,
+            "description": "`size` here is deprecated — write it under `constraints`. Size fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It is a constraint. The directives section still accepts it, identically, behind a deprecation warning."
+          },
+          {
+            "$ref": "#/$defs/hideAtom",
+            "deprecated": true,
+            "description": "`hideAtom` here is deprecated — write it under `constraints`. Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — it is a constraint, not presentation. The directives section still accepts it, identically, behind a deprecation warning."
           }
         ]
       }

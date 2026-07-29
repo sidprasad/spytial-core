@@ -258,7 +258,7 @@ constraints:
 
 Sets the width and height of nodes matching a selector.
 
-> **Note:** `size` can appear in either the `constraints` or `directives` section — it works the same either way.
+> **Note:** `size` is a constraint — it fixes geometry the layout solves over. The `directives` section still accepts it, identically, but that placement is deprecated and warns.
 
 ```yaml
 - size:
@@ -311,7 +311,7 @@ constraints:
 
 Removes atoms from the visualization entirely. The atom and all its edges disappear.
 
-> **Note:** `hideAtom` can appear in either the `constraints` or `directives` section.
+> **Note:** `hideAtom` is a constraint — it changes what the layout has to place. The `directives` section still accepts it, identically, but that placement is deprecated and warns.
 
 > **Conflicts:** an atom cannot be both hidden and placed. If an `orientation`, `align`, or `cyclic` constraint references a hidden atom, or a `group` contains one as a member, the spec is unsatisfiable — the layout reports a hidden-node conflict error, and the diagram shows a counterfactual in which the conflicting atoms are drawn anyway with a dashed outline. Hiding a keyed group's *key* is fine: the key is not inside the group.
 
