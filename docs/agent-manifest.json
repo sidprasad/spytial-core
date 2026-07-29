@@ -1,9 +1,32 @@
 {
-  "name": "YAML_SPECIFICATION",
-  "description": "Canonical YAML specification for CnD layout",
-  "file": "docs/YAML_SPECIFICATION.md",
-  "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@main/docs/YAML_SPECIFICATION.md",
-  "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/cnd-core@v1.9.0/docs/YAML_SPECIFICATION.md",
-  "content_type": "text/markdown",
-  "version": "1.9.0"
+  "name": "spytial-core-spec-language",
+  "description": "Where to find the Spytial spec-language contract. Prefer the machine-readable artifacts over the prose reference when generating specs — they are versioned and tested against the engine parser.",
+  "repository": "sidprasad/spytial-core",
+  "artifacts": {
+    "manifest": {
+      "description": "Every constraint and directive, its fields, requiredness, legal values, engine defaults, and deprecations with their rewrites.",
+      "file": "docs/spytial-language.json",
+      "content_type": "application/json",
+      "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-language.json",
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json"
+    },
+    "json_schema": {
+      "description": "JSON Schema (draft 2020-12) for validating a spec document. Stricter than the parser, which ignores what it does not recognize.",
+      "file": "docs/spytial-spec.schema.json",
+      "content_type": "application/schema+json",
+      "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json",
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-spec.schema.json"
+    },
+    "prose_reference": {
+      "description": "Human-readable reference with examples and rationale.",
+      "file": "docs/YAML_SPECIFICATION.md",
+      "content_type": "text/markdown",
+      "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/YAML_SPECIFICATION.md",
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/YAML_SPECIFICATION.md"
+    }
+  },
+  "versioning": {
+    "note": "`languageVersion` is a plain ISO date (YYYY-MM-DD): the day the language last changed. If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced the artifact. A deprecated form keeps parsing until a major release.",
+    "field": "languageVersion"
+  }
 }

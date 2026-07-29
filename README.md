@@ -92,13 +92,38 @@ Full export surface: [API Reference](./site/api-reference.md).
 
 ---
 
-## Stable references
+## The spec language, as data
 
-The YAML spec is mirrored to a CDN-stable URL for use by integrators / agents that want to pin a copy:
+If your integration **generates** specs, don't scrape the Markdown. Every release ships a machine-readable description of the spec language — attached to the GitHub release, included in the npm package, and pinnable per tag over jsDelivr:
+
+| Artifact | What it is |
+|---|---|
+| `docs/spytial-language.json` | Every constraint and directive: fields, requiredness, legal values, engine defaults, and each deprecated form with the rewrite that replaces it. |
+| `docs/spytial-spec.schema.json` | JSON Schema (draft 2020-12) for validating a spec document. Stricter than the parser, which silently ignores what it does not recognize. |
+| `docs/YAML_SPECIFICATION.md` | The prose reference, for humans. |
 
 ```
-https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag-or-sha>/docs/YAML_SPECIFICATION.md
+https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag-or-sha>/docs/spytial-language.json
 ```
+
+The language is versioned by **the date it last changed**:
+
+```js
+const manifest = await fetch(url).then(r => r.json());
+manifest.languageVersion;      // e.g. "2026-07-28" — when the language last moved
+manifest.spytialCoreVersion;   // e.g. "4.2.0" — the release that produced this file
+manifest.deprecations;         // every deprecated form, with the rewrite that replaces it
+```
+
+A date, not a semver: the language is a vocabulary, not an API surface with a compatibility contract to encode, and the date answers the one question a code generator has — *is what I generated against still current?* If it hasn't moved since the manifest you built against, nothing you emit needs revisiting. A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of `spytial-core`.
+
+From TypeScript the same data is available without a fetch:
+
+```typescript
+import { getLanguageManifest, LANGUAGE_VERSION } from 'spytial-core';
+```
+
+The manifest is regenerated and re-verified against the parser in CI (`npm run test:language`), so a form it describes is a form the engine actually implements.
 
 ---
 

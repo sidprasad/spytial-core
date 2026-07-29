@@ -9,7 +9,9 @@ jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # `contents: write` so the release that carries the spec-language
+      # artifacts can be created from this same tag push.
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v5
@@ -24,4 +26,39 @@ jobs:
       - run: npm run clean
       - run: npm run build:all
 
-      - run: npm publish --access public --provenance
+      # Both remaining steps are re-runnable. A failure in either used to strand
+      # the job: npm rejects a version it already has, so a rerun to fix the
+      # release would die before reaching it, and `gh release create` rejects a
+      # tag that already has a release.
+      - name: Publish to npm
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "spytial-core@${VERSION}" version >/dev/null 2>&1; then
+            echo "spytial-core@${VERSION} is already published — skipping."
+          else
+            npm publish --access public --provenance
+          fi
+
+      # Every release carries a machine-readable description of the spec
+      # language, so an integration can pin the exact language its generated
+      # specs target instead of scraping the Markdown reference.
+      - name: Attach the spec-language artifacts to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LANGUAGE_VERSION=$(node -p "require('./docs/spytial-language.json').languageVersion")
+          NOTES="**Spec language \`${LANGUAGE_VERSION}\`** (the date it last changed) — attached: \`spytial-language.json\` (every constraint and directive, its fields, and what is deprecated) and \`spytial-spec.schema.json\` (JSON Schema for validating a spec). Same date as the last release means nothing you generate needs revisiting."
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} exists — updating its assets."
+            gh release upload "${GITHUB_REF_NAME}" \
+              docs/spytial-language.json \
+              docs/spytial-spec.schema.json \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              --title "${GITHUB_REF_NAME}" \
+              --generate-notes \
+              --notes "${NOTES}" \
+              docs/spytial-language.json \
+              docs/spytial-spec.schema.json
+          fi

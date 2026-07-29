@@ -52,7 +52,7 @@ selector: "Node3.^(left + right)"
 
 A **binary selector** returns *pairs of atoms* — `(source, target)`. It answers: **"which edges?"**
 
-Used by: `orientation`, `cyclic`, `inferredEdge`, `projection` (`orderBy`)
+Used by: `orientation`, `cyclic`, `align`, `group`, `inferredEdge`
 
 ```yaml
 # The left relation — pairs like (Node3, Node1), (Node4, Node2)

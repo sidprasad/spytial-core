@@ -1036,7 +1036,20 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
         .filter((rule): rule is AtomStyleRule => rule !== null);
     let atomColors : AtomColorDirective[] = [];
 
-    let sizes : AtomSizeDirective[] = typedDirectives.filter(d => d.size)
+    // `size` is a constraint: it fixes a node's geometry, which is what the
+    // layout solves over — not presentation layered on top of a solved layout.
+    // It has always been accepted here too, and still is (identically), behind a
+    // deprecation warning that names the section to move it to.
+    const rawSizes = typedDirectives.filter(d => d.size);
+    if (rawSizes.length > 0) {
+        deprecate(
+            'size',
+            "[spytial] 'size' in the 'directives' section is deprecated and will be removed in a " +
+            "future major; it is a constraint — move it to the 'constraints' section. Its fields " +
+            "and meaning are unchanged."
+        );
+    }
+    let sizes : AtomSizeDirective[] = rawSizes
                 .map(d => {
                     assertValidSizeParams(d.size, "directive");
                     return {
@@ -1045,7 +1058,7 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
                         selector: d.size.selector
                     };
                 });
-    
+
     // edgeColor is the deprecated flat form of edgeStyle. Desugar each into an
     // EdgeStyleRule so both forms resolve through the one edgeStyle path (and
     // compose / collide together). Emit one deprecation warning. `edgeColors` is
@@ -1113,7 +1126,19 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
         );
     }
 
-    let hiddenAtoms : AtomHidingDirective[] = typedDirectives.filter(d => d.hideAtom).map(d => {
+    // `hideAtom` is a constraint for the same reason: removing an atom changes
+    // what the layout has to place, and it can make a spec unsatisfiable against
+    // the other constraints. Accepted here too, deprecated, unchanged in meaning.
+    const rawHiddenAtoms = typedDirectives.filter(d => d.hideAtom);
+    if (rawHiddenAtoms.length > 0) {
+        deprecate(
+            'hideAtom',
+            "[spytial] 'hideAtom' in the 'directives' section is deprecated and will be removed in a " +
+            "future major; it is a constraint — move it to the 'constraints' section. Its fields " +
+            "and meaning are unchanged."
+        );
+    }
+    let hiddenAtoms : AtomHidingDirective[] = rawHiddenAtoms.map(d => {
         return {
             selector: d.hideAtom.selector
         }

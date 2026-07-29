@@ -18,7 +18,33 @@ jobs:
 
       - run: npm install
 
-      - run: npm test -- --run --exclude tests/z3-equivalence.test.ts
+      - run: npm test -- --run --exclude tests/z3-equivalence.test.ts --exclude tests/language-manifest.test.ts
+
+  # The spec language is a published contract (docs/spytial-language.json +
+  # docs/spytial-spec.schema.json), so it gets its own job rather than riding
+  # along with the functional suite: a red mark here means the language changed
+  # or the manifest drifted from the parser, which is a different kind of
+  # failure — and a different set of people to notify — than a broken feature.
+  spec-language:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+
+      - run: npm install
+
+      # Regenerate first: this fails loudly when the checked-in artifacts are
+      # stale, instead of leaving consumers pinned to a manifest that no longer
+      # describes the engine.
+      - run: npm run build:language
+
+      - run: npm run test:language
+
+      - name: Check the published artifacts are committed
+        run: git diff --exit-code -- docs/spytial-language.json docs/spytial-spec.schema.json
 
   solver-oracle:
     runs-on: ubuntu-latest

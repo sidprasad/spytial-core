@@ -250,6 +250,36 @@ export function validateItem(item: SpecItem): Diagnostic[] {
     return out;
   }
 
+  // Right form, wrong section. `item.kind` comes from the section the YAML put
+  // it in; `def.kind` is what it actually is. Two very different outcomes hide
+  // behind that one mismatch, so they get two different diagnostics:
+  //
+  //  - The engine still reads it from there (`size`/`hideAtom` in the directives
+  //    block): a deprecation. It works today and means the same thing.
+  //  - The engine does not: the item is inert. `orientation` under `directives`
+  //    is not deprecated, it simply never runs — calling that "deprecated" would
+  //    promise a grace period the parser is not giving.
+  if (item.kind !== def.kind) {
+    const stillParsed = def.alsoAcceptedIn?.includes(item.kind) ?? false;
+    out.push(
+      stillParsed
+        ? {
+            severity: 'warning',
+            code: 'deprecated',
+            message: `"${def.label}" is a ${def.kind}. Writing it under "${item.kind}s" is deprecated — move it to the "${def.kind}s" section.`,
+            itemId: item.id,
+            source: 'structure',
+          }
+        : {
+            severity: 'error',
+            code: 'wrong-section',
+            message: `"${def.label}" is a ${def.kind} and is ignored under "${item.kind}s". Move it to the "${def.kind}s" section.`,
+            itemId: item.id,
+            source: 'structure',
+          },
+    );
+  }
+
   // Deprecated type: still parses and renders, but nudge toward its replacement.
   // A distinct `code` so consumers can treat it apart from typo-style warnings.
   if (def.deprecated) {

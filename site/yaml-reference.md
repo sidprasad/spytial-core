@@ -2,6 +2,13 @@
 
 This is a compact reference for the full Spytial YAML specification. For detailed explanations and examples, see the [Constraints](constraints.md) and [Directives](directives.md) guides.
 
+**Generating specs from a host language?** Read the machine-readable contract instead of this page — it ships with every release, carries its own version, and is tested against the engine parser:
+
+```
+https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-language.json
+https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json
+```
+
 ## Structure
 
 ```yaml
@@ -14,6 +21,8 @@ directives:
 
 Both sections are optional. An empty specification is valid.
 
+Each section must be a **list** of single-key entries. The parser ignores anything it does not recognize — an unknown directive, a misspelled field, or a section written as a mapping instead of a list all pass silently and then do nothing. Validate against `spytial-spec.schema.json` if you want a typo to be an error.
+
 ---
 
 ## Constraints at a Glance
@@ -25,7 +34,7 @@ Both sections are optional. An empty specification is valid.
 | [`align`](constraints.md#alignment) | Align elements on an axis | `selector`, `direction` |
 | [`hold: never`](constraints.md#negation-hold-never) | Negate any constraint | Add `hold: never` to any constraint |
 | [`group`](constraints.md#grouping-by-selector) | Group elements visually | `selector`, `name` |
-| [`size`](constraints.md#size) | Set node dimensions | `selector` |
+| [`size`](constraints.md#size) | Set node dimensions | `width`, `height` |
 | [`hideAtom`](constraints.md#hiding-atoms) | Remove atoms from view | `selector` |
 
 ---
@@ -34,17 +43,19 @@ Both sections are optional. An empty specification is valid.
 
 | Directive | Purpose | Required Fields |
 |-----------|---------|-----------------|
-| [`atomStyle`](directives.md#atom-styling) | Style nodes (fill, border, label) | `selector` |
+| [`atomStyle`](directives.md#atom-styling) | Style nodes (fill, border, icon, label) | — (no `selector` = every atom) |
 | [`edgeStyle`](directives.md#edge-styling) | Style edges (line, label) | `field` |
-| [`icon`](directives.md#icons) | Assign icons to nodes | `selector`, `path` |
-| [`size`](directives.md#size-directive) | Set node dimensions | `selector` |
-| [`projection`](directives.md#projection) | Project over a type | `sig` |
 | [`attribute`](directives.md#attributes) | Show edge data as node labels | `field` |
 | [`tag`](directives.md#tags) | Add computed labels to nodes | `toTag`, `name`, `value` |
 | [`hideField`](directives.md#hiding-fields) | Hide edges for a relation | `field` |
-| [`hideAtom`](directives.md#hiding-atoms-directive) | Hide matching atoms | `selector` |
 | [`inferredEdge`](directives.md#inferred-edges) | Create edges from computed selectors | `name`, `selector` |
 | [`flag`](directives.md#flags) | Global display flags | flag value |
+
+`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Writing them here still parses, identically, but is deprecated and warns.
+
+Deprecated, still parsed: [`icon`](directives.md#icons) → `atomStyle.iconStyle`, `atomColor` → `atomStyle.borderStyle`, `edgeColor` → `edgeStyle.lineStyle`, and `group`'s `field`/`groupOn`/`addToGroup` → a binary `selector`. Each raises a deprecation warning on the parsed spec.
+
+`projection` is **not** a directive — it is a [pre-layout data transformation](directives.md#projection--not-a-directive). A `projection:` entry in a spec is silently ignored.
 
 ---
 
@@ -94,6 +105,15 @@ constraints:
       directions: [above]
       hold: never
 
+  # Geometry and visibility are structural too
+  - size:
+      selector: ImportantNode
+      width: 150
+      height: 80
+
+  - hideAtom:
+      selector: HelperNode
+
 directives:
   # Visual styling
   - atomStyle:
@@ -124,18 +144,10 @@ directives:
   - hideField:
       field: internal
 
-  - hideAtom:
-      selector: HelperNode
-
   - inferredEdge:
       name: "ancestor"
       selector: "^parent"
-      color: gray
-      style: dotted
-
-  - projection:
-      sig: Time
-      orderBy: "next"
+      lineStyle: { color: gray, pattern: dotted }
 
   - flag: hideDisconnectedBuiltIns
 ```
