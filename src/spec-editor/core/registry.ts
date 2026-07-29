@@ -446,6 +446,9 @@ const size: ItemDefinition = {
   type: 'size',
   label: 'Size',
   description: 'Set the width and height of elements matching the selector.',
+  // Historically also read from the directives block. Still is, identically,
+  // behind a deprecation warning — see `alsoAcceptedIn`.
+  alsoAcceptedIn: ['directive'],
   fields: [
     {
       key: 'selector',
@@ -491,6 +494,8 @@ const hideAtom: ItemDefinition = {
   type: 'hideAtom',
   label: 'Hide atom',
   description: 'Hide elements matching the selector from the visualization.',
+  // As with `size`: still read from the directives block, behind a warning.
+  alsoAcceptedIn: ['directive'],
   fields: [
     {
       key: 'selector',

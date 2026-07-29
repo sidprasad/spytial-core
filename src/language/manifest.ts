@@ -238,6 +238,20 @@ const ORIENTATION: LanguageItem = {
       ],
       required: true,
       enforcement: 'parse-error',
+      // The contradictions the parser rejects, stated as data so the schema can
+      // reject them too rather than deferring to a throw at parse time.
+      listRules: {
+        atMostOneOf: [
+          ['above', 'below'],
+          ['left', 'right'],
+        ],
+        narrowsListTo: {
+          directlyAbove: ['above', 'directlyAbove'],
+          directlyBelow: ['below', 'directlyBelow'],
+          directlyLeft: ['left', 'directlyLeft'],
+          directlyRight: ['right', 'directlyRight'],
+        },
+      },
       description:
         'Where the TARGET sits relative to the SOURCE. `directions: [above]` on selector `parent` places ' +
         "each tuple's target above its source. The `directly*` variants additionally enforce axis alignment.",
@@ -724,6 +738,10 @@ const INFERRED_EDGE: LanguageItem = {
       name: 'draw',
       type: 'string',
       enforcement: 'parse-error',
+      // Exactly one `->`, with something non-blank on each side. Matches
+      // `parseInferredEdgeDraw` exactly (asserted in the conformance test), so
+      // a `draw` the schema accepts is one the parser accepts.
+      pattern: '^\\s*[^\\s](?:(?!->)[\\s\\S])*->(?:(?!->)[\\s\\S])*[^\\s]\\s*$',
       description:
         "Reinterpret what each end attaches to, as `<end> -> <end>`. Each end is `_` (the atom itself, the " +
         "default) or the name of a `group` constraint, in which case the end attaches to that group's hull. " +

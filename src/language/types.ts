@@ -76,6 +76,17 @@ export interface LanguageField {
   enforcement?: Enforcement;
   /** For `enum` / `enum-list`: the legal values. */
   values?: readonly string[];
+  /**
+   * For `enum-list` fields: combinations of otherwise-legal values that the
+   * parser rejects outright.
+   *  - `atMostOneOf` — at most one value from each listed set may appear.
+   *  - `narrowsListTo` — if the keyed value appears, every value in the list
+   *    must be one of the values it maps to.
+   */
+  listRules?: {
+    atMostOneOf?: readonly (readonly string[])[];
+    narrowsListTo?: Readonly<Record<string, readonly string[]>>;
+  };
   /** For `selector`: how many columns the expression should return. */
   arity?: SelectorArity;
   /**
@@ -89,6 +100,13 @@ export interface LanguageField {
   exclusiveMinimum?: number;
   minimum?: number;
   maximum?: number;
+  /**
+   * For strings the parser accepts only in a particular shape: an ECMAScript
+   * regular expression the value must match, as a source string. Present only
+   * where the parser really is that strict — a value failing this is a parse
+   * error, not a silently-dropped leaf.
+   */
+  pattern?: string;
   /** For `block`: the name of a shared block in {@link LanguageManifest.blocks}. */
   block?: string;
   /** For `block` fields that are not one of the shared blocks: their leaves. */

@@ -317,5 +317,27 @@ describe('Deprecation warnings', () => {
                 expect(validateItem(item(type, params, 'constraint'))).toHaveLength(0);
             }
         });
+
+        it('calls a misplaced item inert, not deprecated, when the engine ignores it', () => {
+            // `size`/`hideAtom` in the directives block still run. An
+            // `orientation` there never does — the parser only reads
+            // orientation from `constraints`. Calling that "deprecated" would
+            // promise a grace period that does not exist, so it is an error.
+            const diags = validateItem(
+                item('orientation', { selector: 'next', directions: ['left'] }, 'directive'),
+            );
+            expect(diags.filter((d) => d.code === 'deprecated')).toHaveLength(0);
+
+            const wrongSection = diags.filter((d) => d.code === 'wrong-section');
+            expect(wrongSection).toHaveLength(1);
+            expect(wrongSection[0].severity).toBe('error');
+            expect(wrongSection[0].message).toMatch(/ignored/);
+
+            // And the parser really does drop it, which is what makes it an error.
+            const spec = parseQuietly(
+                'directives:\n  - orientation: { selector: next, directions: [left] }',
+            );
+            expect(spec.constraints.orientation.relative).toHaveLength(0);
+        });
     });
 });

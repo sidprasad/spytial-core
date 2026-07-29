@@ -15,8 +15,17 @@
  * field, an out-of-range enum all pass silently and then quietly do nothing.
  * That is the failure mode this schema exists to catch, so it closes every
  * object (`additionalProperties: false`) and enforces every enum. A document
- * this schema accepts always parses; a document the parser accepts does not
- * always validate here, and that gap is the point.
+ * the parser accepts does not always validate here, and that gap is the point.
+ *
+ * In the other direction the schema aims to accept nothing the parser rejects,
+ * which is why it carries constraints beyond the obvious types: a required
+ * string is `minLength: 1` (the engine tests these for truthiness, so a blank
+ * one is exactly as absent as no value), `inferredEdge.draw` carries a pattern
+ * matching `parseInferredEdgeDraw`, and contradictory `orientation.directions`
+ * are excluded. What it cannot cover is anything needing more than one item:
+ * a `draw` naming a group no `group` constraint defines, or two `cyclic`
+ * constraints on one selector disagreeing about direction. Those stay parse
+ * errors, and `tests/language-manifest.test.ts` pins the boundary.
  */
 
 import type { LanguageField, LanguageItem, LanguageManifest, SpecSection } from './types';
@@ -25,7 +34,17 @@ import type { LanguageField, LanguageItem, LanguageManifest, SpecSection } from 
 type JsonSchemaNode = Record<string, unknown>;
 
 const SCHEMA_DIALECT = 'https://json-schema.org/draft/2020-12/schema';
-const SCHEMA_ID = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json';
+
+/**
+ * `$id` is an identity, not a download link, and it has to differ whenever the
+ * schema differs: a registry — or Ajv's own `$id` cache — keyed by a constant
+ * `$id` will silently serve one release's schema to another's. A URL would make
+ * that mistake easy, because the file lives at one path and every release
+ * overwrites it. So the identity is a URN carrying the language version, and
+ * the fetchable locations (which do vary by tag) stay in the description.
+ */
+const schemaId = (languageVersion: string): string =>
+  `urn:spytial:layout-spec-schema:${languageVersion}`;
 
 /** Scalar JSON types for the manifest's non-composite field types. */
 const SCALAR_TYPES: Readonly<Record<string, string>> = {
@@ -70,11 +89,34 @@ function fieldSchema(field: LanguageField): JsonSchemaNode {
       node.type = 'string';
       node.enum = [...(field.values ?? [])];
       break;
-    case 'enum-list':
+    case 'enum-list': {
       node.type = 'array';
       node.minItems = 1;
       node.items = { type: 'string', enum: [...(field.values ?? [])] };
+      // Value combinations the parser throws on — encoded rather than left to
+      // the parse, so a contradictory list fails validation like any other bad
+      // value would.
+      const rules: JsonSchemaNode[] = [];
+      for (const group of field.listRules?.atMostOneOf ?? []) {
+        rules.push({
+          not: { allOf: group.map((value) => ({ contains: { const: value } })) },
+          description: `At most one of: ${group.join(', ')}.`,
+        });
+      }
+      for (const [value, allowed] of Object.entries(field.listRules?.narrowsListTo ?? {})) {
+        rules.push({
+          if: { contains: { const: value } },
+          then: { items: { enum: [...allowed] } },
+          description: `With \`${value}\`, the only other value allowed is ${allowed
+            .filter((v) => v !== value)
+            .join(', ')}.`,
+        });
+      }
+      if (rules.length > 0) {
+        node.allOf = rules;
+      }
       break;
+    }
     case 'block':
       // Shared blocks live in $defs; an inline block carries its own leaves.
       if (field.block) {
@@ -89,6 +131,17 @@ function fieldSchema(field: LanguageField): JsonSchemaNode {
       const jsonType = SCALAR_TYPES[field.type];
       if (jsonType) {
         node.type = jsonType;
+      }
+      // A required string is never allowed to be blank. The engine tests these
+      // for truthiness, so `selector: ""` is exactly as absent as no selector at
+      // all — a parse error where the field is enforced, a silently dropped rule
+      // where it isn't. Either way it is not a document worth generating, and
+      // without this the schema would accept specs the parser throws on.
+      if (jsonType === 'string' && field.required) {
+        node.minLength = 1;
+      }
+      if (field.pattern !== undefined) {
+        node.pattern = field.pattern;
       }
       break;
     }
@@ -247,13 +300,15 @@ export function buildJsonSchema(manifest: LanguageManifest): JsonSchemaNode {
 
   return {
     $schema: SCHEMA_DIALECT,
-    $id: SCHEMA_ID,
+    $id: schemaId(manifest.languageVersion),
     title: 'Spytial layout specification',
     description:
       'A Spytial spec: constraints (structural layout) and directives (presentation). ' +
       `Spec language ${manifest.languageVersion}, from spytial-core ${manifest.spytialCoreVersion}. ` +
       'This schema is stricter than the engine parser, which silently ignores anything it does not recognize — ' +
-      'validating here is how a misspelled key or an out-of-range value gets caught at all.',
+      'validating here is how a misspelled key or an out-of-range value gets caught at all. ' +
+      'Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; ' +
+      'pin a tag, since the @main path is overwritten each release.',
     'x-spytial-language-version': manifest.languageVersion,
     'x-spytial-core-version': manifest.spytialCoreVersion,
     type: 'object',

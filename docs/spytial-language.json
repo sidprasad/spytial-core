@@ -192,6 +192,36 @@
           ],
           "required": true,
           "enforcement": "parse-error",
+          "listRules": {
+            "atMostOneOf": [
+              [
+                "above",
+                "below"
+              ],
+              [
+                "left",
+                "right"
+              ]
+            ],
+            "narrowsListTo": {
+              "directlyAbove": [
+                "above",
+                "directlyAbove"
+              ],
+              "directlyBelow": [
+                "below",
+                "directlyBelow"
+              ],
+              "directlyLeft": [
+                "left",
+                "directlyLeft"
+              ],
+              "directlyRight": [
+                "right",
+                "directlyRight"
+              ]
+            }
+          },
           "description": "Where the TARGET sits relative to the SOURCE. `directions: [above]` on selector `parent` places each tuple's target above its source. The `directly*` variants additionally enforce axis alignment.",
           "note": "The direction is target-relative-to-source. Getting this backwards is the most common spec bug — transpose the selector (`~parent`) rather than flipping the direction if the relation reads the other way."
         }
@@ -808,6 +838,7 @@
           "name": "draw",
           "type": "string",
           "enforcement": "parse-error",
+          "pattern": "^\\s*[^\\s](?:(?!->)[\\s\\S])*->(?:(?!->)[\\s\\S])*[^\\s]\\s*$",
           "description": "Reinterpret what each end attaches to, as `<end> -> <end>`. Each end is `_` (the atom itself, the default) or the name of a `group` constraint, in which case the end attaches to that group's hull. The left end applies to the first atom of each tuple, the right end to the last.",
           "note": "Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse error, as is a group name that no `group` constraint defines. `draw` never reorders — transpose the selector (`~connected`) to flip an edge."
         },

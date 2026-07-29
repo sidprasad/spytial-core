@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json",
+  "$id": "urn:spytial:layout-spec-schema:2026-07-29",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-07-29, from spytial-core 4.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all.",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-07-29, from spytial-core 4.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
   "x-spytial-language-version": "2026-07-29",
   "x-spytial-core-version": "4.2.0",
   "type": "object",
@@ -204,7 +204,8 @@
           "properties": {
             "selector": {
               "description": "Returns (source, target) pairs. The constraint applies to each pair. Selector arity: binary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "directions": {
               "description": "Where the TARGET sits relative to the SOURCE. `directions: [above]` on selector `parent` places each tuple's target above its source. The `directly*` variants additionally enforce axis alignment. The direction is target-relative-to-source. Getting this backwards is the most common spec bug — transpose the selector (`~parent`) rather than flipping the direction if the relation reads the other way.",
@@ -222,7 +223,107 @@
                   "directlyLeft",
                   "directlyRight"
                 ]
-              }
+              },
+              "allOf": [
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "contains": {
+                          "const": "above"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "below"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "At most one of: above, below."
+                },
+                {
+                  "not": {
+                    "allOf": [
+                      {
+                        "contains": {
+                          "const": "left"
+                        }
+                      },
+                      {
+                        "contains": {
+                          "const": "right"
+                        }
+                      }
+                    ]
+                  },
+                  "description": "At most one of: left, right."
+                },
+                {
+                  "if": {
+                    "contains": {
+                      "const": "directlyAbove"
+                    }
+                  },
+                  "then": {
+                    "items": {
+                      "enum": [
+                        "above",
+                        "directlyAbove"
+                      ]
+                    }
+                  },
+                  "description": "With `directlyAbove`, the only other value allowed is above."
+                },
+                {
+                  "if": {
+                    "contains": {
+                      "const": "directlyBelow"
+                    }
+                  },
+                  "then": {
+                    "items": {
+                      "enum": [
+                        "below",
+                        "directlyBelow"
+                      ]
+                    }
+                  },
+                  "description": "With `directlyBelow`, the only other value allowed is below."
+                },
+                {
+                  "if": {
+                    "contains": {
+                      "const": "directlyLeft"
+                    }
+                  },
+                  "then": {
+                    "items": {
+                      "enum": [
+                        "left",
+                        "directlyLeft"
+                      ]
+                    }
+                  },
+                  "description": "With `directlyLeft`, the only other value allowed is left."
+                },
+                {
+                  "if": {
+                    "contains": {
+                      "const": "directlyRight"
+                    }
+                  },
+                  "then": {
+                    "items": {
+                      "enum": [
+                        "right",
+                        "directlyRight"
+                      ]
+                    }
+                  },
+                  "description": "With `directlyRight`, the only other value allowed is right."
+                }
+              ]
             },
             "hold": {
               "type": "string",
@@ -255,7 +356,8 @@
           "properties": {
             "selector": {
               "description": "Returns (a, b) pairs meaning \"b follows a around the circle\". Selector arity: binary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "direction": {
               "description": "Which way the cycle runs. Default when omitted: \"clockwise\".",
@@ -295,7 +397,8 @@
           "properties": {
             "selector": {
               "description": "Returns the pairs of atoms to align with one another. Selector arity: binary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "direction": {
               "description": "`horizontal` gives the atoms a shared Y coordinate; `vertical` a shared X coordinate. An unrecognized value is a parse error.",
@@ -336,11 +439,13 @@
           "properties": {
             "selector": {
               "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary. A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "name": {
               "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "addEdge": {
               "description": "Draw a connector between the group key and the group: `togroup` points key → group, `fromgroup` points group → key, `none` draws nothing. Default when omitted: \"none\". The legacy boolean `true` is still accepted and means `togroup`.",
@@ -444,7 +549,8 @@
           "properties": {
             "field": {
               "description": "The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector. Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "groupOn": {
               "description": "0-based index of the tuple column to use as the group key.",
@@ -526,7 +632,8 @@
           "properties": {
             "selector": {
               "description": "Which atoms to hide. Selector arity: unary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -610,7 +717,8 @@
           "properties": {
             "field": {
               "description": "The relation whose edges this styles.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",
@@ -658,7 +766,8 @@
           "properties": {
             "field": {
               "description": "The relation to fold into the source node. Its edges are removed from the graph.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Apply only to these source atoms. Omit to apply to every source atom. Selector arity: unary.",
@@ -694,15 +803,18 @@
           "properties": {
             "toTag": {
               "description": "Which atoms receive the tag. Selector arity: unary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "name": {
               "description": "The label shown before the value.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "value": {
               "description": "Evaluated per tagged atom; its result becomes the value. A unary result shows as `name: value`; an n-ary result shows one line per tuple, as `name[k1][k2]: value`. Selector arity: n-ary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "textStyle": {
               "description": "This tag line's own styling.",
@@ -732,7 +844,8 @@
           "properties": {
             "field": {
               "description": "The relation to hide.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",
@@ -764,15 +877,18 @@
           "properties": {
             "name": {
               "description": "The label drawn on the edge.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends. Selector arity: binary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "draw": {
               "description": "Reinterpret what each end attaches to, as `<end> -> <end>`. Each end is `_` (the atom itself, the default) or the name of a `group` constraint, in which case the end attaches to that group's hull. The left end applies to the first atom of each tuple, the right end to the last. Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse error, as is a group name that no `group` constraint defines. `draw` never reorders — transpose the selector (`~connected`) to flip an edge.",
-              "type": "string"
+              "type": "string",
+              "pattern": "^\\s*[^\\s](?:(?!->)[\\s\\S])*->(?:(?!->)[\\s\\S])*[^\\s]\\s*$"
             },
             "lineStyle": {
               "description": "The drawn line.",
@@ -831,11 +947,13 @@
           "properties": {
             "selector": {
               "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\". Selector arity: unary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "path": {
               "description": "Bundled name, icon-pack reference, URL, or path. Omitting it drops the directive.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "showLabels": {
               "description": "Whether the atom's label is drawn alongside the icon. Default when omitted: false.",
@@ -865,11 +983,13 @@
           "properties": {
             "value": {
               "description": "Any CSS color. Applies to the node's outline, not its fill.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\". Selector arity: unary.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             }
           },
           "additionalProperties": false,
@@ -895,11 +1015,13 @@
           "properties": {
             "field": {
               "description": "The relation whose edges this styles.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "value": {
               "description": "Line color.",
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "selector": {
               "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",

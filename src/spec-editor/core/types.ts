@@ -81,6 +81,8 @@ export interface Diagnostic {
     | 'deprecated'
     | 'missing-required'
     | 'invalid-value'
+    /** A known form in a section the engine does not read it from — inert, not deprecated. */
+    | 'wrong-section'
     | (string & {});
   /** ties to a builder row */
   itemId?: string;
@@ -107,6 +109,14 @@ export interface ItemDefinition {
    * for 'atomColor'). Surfaced in the deprecation diagnostic so the fix is named.
    */
   deprecatedInFavorOf?: string;
+  /**
+   * Section(s) other than this item's own `kind` where the engine still parses
+   * it, identically, behind a deprecation warning — `size` and `hideAtom` are
+   * constraints the directives block has always accepted. Absent means the item
+   * is only read from its own section: putting it anywhere else is not
+   * deprecated but inert, and the diagnostic says so.
+   */
+  alsoAcceptedIn?: readonly ItemKind[];
   fields: FieldSpec[];
   /** one-line summary for the collapsed row, e.g. "left, above · parent" */
   summary(params: Record<string, unknown>): string;

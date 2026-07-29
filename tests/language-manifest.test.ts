@@ -34,7 +34,7 @@ import {
 import { buildJsonSchema } from '../src/language/json-schema';
 import { getLanguageManifest, LANGUAGE_VERSION } from '../src/language/manifest';
 import type { LanguageItem, LanguageManifest } from '../src/language/types';
-import { GROUP_EDGE_DIRECTIONS, parseLayoutSpec } from '../src/layout/layoutspec';
+import { GROUP_EDGE_DIRECTIONS, parseInferredEdgeDraw, parseLayoutSpec } from '../src/layout/layoutspec';
 import type { LayoutSpec } from '../src/layout/layoutspec';
 import { ICON_PLACEMENTS } from '../src/layout/style/atom-style-spec';
 import { TEXT_SIZES } from '../src/layout/style/text-style';
@@ -338,6 +338,21 @@ describe('language manifest — agreement with the spec-editor registry', () => 
     }
   });
 
+  it('agrees on which section each form belongs to, and where else it is tolerated', () => {
+    // The registry drives the editor's diagnostics and the manifest drives what
+    // integrations generate. If they disagree about `size` being a constraint,
+    // one of the two is telling someone the wrong thing.
+    const sectionOf = { constraint: 'constraints', directive: 'directives' } as const;
+    for (const def of getAllDefinitions()) {
+      const item = manifest.items.find((i) => i.id === manifestId(def.type))!;
+      expect(item.sections, `${def.type} home section`).toEqual([sectionOf[def.kind]]);
+      expect(
+        (def.alsoAcceptedIn ?? []).map((k) => sectionOf[k]),
+        `${def.type} tolerated sections`,
+      ).toEqual([...(item.deprecatedSections ?? [])]);
+    }
+  });
+
   it('covers every field the editor can produce', () => {
     // One-directional: the manifest may describe more than the editor exposes
     // (legacy inline leaves the builder deliberately hides), but never less —
@@ -436,6 +451,73 @@ describe('spec JSON Schema', () => {
     const documents = manifest.items.map((item) => specFor(item, item.example));
     for (const source of documents) {
       expect(() => quietly(() => parseLayoutSpec(source))).not.toThrow();
+    }
+  });
+
+  it('rejects the single-item shapes the parser throws on', () => {
+    // Without these the schema would hand a generator a document it believes is
+    // valid and the engine refuses — the exact failure the artifact exists to
+    // prevent. Each case is asserted from both sides: schema rejects AND parser
+    // throws, so the two cannot drift apart silently.
+    const thrownOn: [string, string][] = [
+      ['malformed draw', 'directives:\n  - inferredEdge: { name: x, selector: y, draw: malformed }\n'],
+      ['draw with two arrows', 'directives:\n  - inferredEdge: { name: x, selector: y, draw: "a -> b -> c" }\n'],
+      ['draw with an empty end', 'directives:\n  - inferredEdge: { name: x, selector: y, draw: "-> b" }\n'],
+      ['blank orientation selector', 'constraints:\n  - orientation: { selector: "", directions: [above] }\n'],
+      ['blank cyclic selector', 'constraints:\n  - cyclic: { selector: "" }\n'],
+      ['blank align selector', 'constraints:\n  - align: { selector: "", direction: horizontal }\n'],
+      ['blank group name', 'constraints:\n  - group: { selector: a.b, name: "" }\n'],
+      ['above and below', 'constraints:\n  - orientation: { selector: p, directions: [above, below] }\n'],
+      ['left and right', 'constraints:\n  - orientation: { selector: p, directions: [left, right] }\n'],
+      ['directlyAbove with left', 'constraints:\n  - orientation: { selector: p, directions: [directlyAbove, left] }\n'],
+    ];
+
+    for (const [label, source] of thrownOn) {
+      expect(() => quietly(() => parseLayoutSpec(source)), `${label}: parser should throw`).toThrow();
+      expect(validate(yaml.load(source)), `${label}: schema should reject`).toBe(false);
+    }
+  });
+
+  it('still accepts the direction combinations the parser allows', () => {
+    for (const directions of [['above'], ['above', 'left'], ['directlyAbove'], ['directlyAbove', 'above'], ['directlyLeft', 'left']]) {
+      const source = `constraints:\n  - orientation: { selector: p, directions: [${directions.join(', ')}] }\n`;
+      expect(() => parseLayoutSpec(source), `${directions}: parser`).not.toThrow();
+      expect(validate(yaml.load(source)), `${directions}: schema`).toBe(true);
+    }
+  });
+
+  it("the draw pattern is exactly the parser's rule", () => {
+    const pattern = manifest.items
+      .find((i) => i.id === 'inferredEdge')!
+      .fields.find((f) => f.name === 'draw')!.pattern!;
+    const re = new RegExp(pattern);
+
+    for (const value of [
+      'regions -> regions', '_ -> regions', 'regions->_', '_->_', '  a  ->  b  ',
+      'a - b -> c', 'my group -> other group',
+      'malformed', 'a->b->c', '->b', 'a->', '', '   ->   ',
+    ]) {
+      let parses = true;
+      try {
+        parseInferredEdgeDraw(value);
+      } catch {
+        parses = false;
+      }
+      expect(re.test(value), `draw ${JSON.stringify(value)}`).toBe(parses);
+    }
+  });
+
+  it('does not claim to catch what needs more than one item', () => {
+    // Cross-item rules are outside what JSON Schema can see. They stay parse
+    // errors, and the module doc says so — this pins that boundary rather than
+    // letting the claim quietly become false.
+    const crossItem = [
+      'directives:\n  - inferredEdge: { name: x, selector: y, draw: "nosuchgroup -> _" }\n',
+      'constraints:\n  - cyclic: { selector: a, direction: clockwise }\n  - cyclic: { selector: a, direction: counterclockwise }\n',
+    ];
+    for (const source of crossItem) {
+      expect(validate(yaml.load(source)), 'schema cannot see this').toBe(true);
+      expect(() => quietly(() => parseLayoutSpec(source)), 'parser catches it').toThrow();
     }
   });
 });
