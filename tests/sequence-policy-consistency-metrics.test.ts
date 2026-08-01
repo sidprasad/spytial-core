@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import {
@@ -29,6 +29,20 @@ import {
  * `tests/sequence-policy.test.ts`; these tests are the next layer up
  * — they exercise what the *full pipeline* actually produces.
  */
+
+// This suite compares SEQUENCE POLICIES against each other, so the seeding
+// strategy must be held fixed. The constraint-aware seed (issue #427) makes
+// cold layouts a deterministic function of structure + constraints, which
+// collapses ignoreHistory's drift to ~0 on additive scenarios and erodes
+// the "stability beats ignoreHistory" premise — a real product question,
+// but not the one this suite tests. Pin the legacy DAGRE seed to isolate
+// the policy variable.
+beforeAll(() => {
+  (globalThis as any).SPYTIAL_SEED_MODE = 'dagre';
+});
+afterAll(() => {
+  delete (globalThis as any).SPYTIAL_SEED_MODE;
+});
 
 // ──────────────────────────────────────────────────────────────────
 // Layout spec & benchmark scenarios

@@ -6,6 +6,7 @@ import type { IconPlacement } from '../../layout/style/atom-style-spec';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
+import { computeConstraintAwareSeed, hasSeedableConstraints, SeedPosition } from './constraint-aware-seed';
 import * as dagre from 'dagre';
 
 /**
@@ -256,6 +257,28 @@ export interface WebColaLayoutOptions {
    * descent and alignment-edge spring forces freely re-place them.
    */
   lockUnconstrainedNodes?: boolean;
+
+  /**
+   * PROTOTYPE (issue #427): which seeding strategy computes initial node
+   * positions when no prior positions exist.
+   *
+   *   - 'constraint-aware' (default): solve the spec's separation/alignment
+   *     constraints exactly, spend the free coordinates on displayed
+   *     symmetry (see constraint-aware-seed.ts), and anchor the result as
+   *     synthetic prior positions through the stability-mode locking path
+   *     (soft weight-1000 anchors; constraint violators get unlocked for
+   *     repair). Falls back to DAGRE when there are no seedable constraints
+   *     or the system is cyclic; group-bearing layouts get the seed without
+   *     the anchoring.
+   *   - 'seed-only': the seed as bare initial positions with no anchoring.
+   *     Empirically washed out by the run-to-convergence solve — kept as an
+   *     A/B arm (see tests/seed-experiment.test.ts).
+   *   - 'dagre': the legacy edges-only DAGRE seed.
+   *
+   * Dev A/B override: setting `globalThis.SPYTIAL_SEED_MODE` to one of the
+   * above forces that mode without rebuilding.
+   */
+  seedMode?: 'constraint-aware' | 'seed-only' | 'dagre';
 }
 
 // WebCola constraint types
@@ -328,6 +351,14 @@ export class WebColaLayout {
   private lockUnconstrainedNodes: boolean;
   private collapseSymmetric: boolean;
 
+  /**
+   * Constraint-aware symmetric seed positions (issue #427 prototype).
+   * Non-null only when there are no prior positions, seedMode allows it,
+   * and the constraint system was solvable. Consulted by toColaNode()
+   * ahead of the DAGRE seed.
+   */
+  private seedPositions: Map<string, SeedPosition> | null = null;
+
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
@@ -374,7 +405,43 @@ export class WebColaLayout {
       this.dagre_graph = null;
     }
 
-
+    // Constraint-aware symmetric seed (issue #427 prototype). Only engages
+    // on a fresh layout (no priors) with at least one seedable constraint;
+    // returns null on cyclic/contradictory systems, leaving the DAGRE seed.
+    // The globalThis override is a dev A/B knob for comparing seeds live.
+    //
+    // Default mode 'constraint-aware' anchors the seed through the EXISTING
+    // stability machinery: the seed becomes synthetic prior positions with
+    // lockUnconstrainedNodes, i.e. soft weight-1000 anchors that the
+    // constraint-aware locking post-pass unfixes wherever the seed violates
+    // a constraint. Experiments (tests/seed-experiment.test.ts) show
+    // positions-only seeding is fully washed out by the solver's
+    // run-to-convergence schedule, while anchored seeds survive it exactly.
+    // Group-bearing layouts skip the anchoring (groups add solver forces the
+    // seed doesn't model) and get the positions-only seed instead.
+    const seedMode =
+      (globalThis as any)?.SPYTIAL_SEED_MODE ?? options?.seedMode ?? 'constraint-aware';
+    if (
+      seedMode !== 'dagre' &&
+      this.priorPositionMap.size === 0 &&
+      hasSeedableConstraints(instanceLayout)
+    ) {
+      try {
+        const seed = computeConstraintAwareSeed(instanceLayout, fig_width, fig_height);
+        const canAnchor =
+          seedMode === 'constraint-aware' && (instanceLayout.groups ?? []).length === 0;
+        if (seed && canAnchor) {
+          for (const [id, position] of seed) {
+            this.priorPositionMap.set(id, { id, x: position.x, y: position.y });
+          }
+          this.lockUnconstrainedNodes = true;
+        } else if (seed) {
+          this.seedPositions = seed;
+        }
+      } catch (e) {
+        console.warn('Constraint-aware seed failed, falling back to DAGRE:', e);
+      }
+    }
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
     // Build node-id -> index map. Used by getNodeIndex() to keep
@@ -710,8 +777,15 @@ export class WebColaLayout {
           y = dagre_node.y;
         }
       }
+    } else if (this.seedPositions?.has(node.id)) {
+      // Priority 2: Constraint-aware symmetric seed (issue #427 prototype).
+      // Satisfies the spec's separation/alignment constraints exactly and
+      // mirrors isomorphic subtrees; purely soft — the solver runs unchanged.
+      const seedPosition = this.seedPositions.get(node.id)!;
+      x = seedPosition.x;
+      y = seedPosition.y;
     } else if (this.dagre_graph) {
-      // Priority 2: Use DAGRE-computed position for new nodes
+      // Priority 3: Use DAGRE-computed position for new nodes
       const dagre_node = this.dagre_graph.node(node.id);
       if (dagre_node) {
         x = dagre_node.x;
