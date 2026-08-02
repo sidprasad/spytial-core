@@ -408,10 +408,18 @@ export function computeConstraintAwareSeed(
   // A parent→child pair whose x offset is already dictated by constraints
   // (e.g. a left-to-right list) should not also advance a tree rank — the
   // edge is "explained" horizontally, so the child stays on the parent's row.
+  // Raw coordinates are only comparable within one constraint component
+  // (each component has its own zero origin), so nodes pinned by unrelated
+  // constraints never count as explained.
   const xExplained = (parent: string, child: string): boolean => {
     const px = xAxis.raw.get(parent);
     const cx = xAxis.raw.get(child);
-    return px !== undefined && cx !== undefined && Math.abs(px - cx) > PIN_EPSILON;
+    return (
+      px !== undefined &&
+      cx !== undefined &&
+      xAxis.component.get(parent) === xAxis.component.get(child) &&
+      Math.abs(px - cx) > PIN_EPSILON
+    );
   };
 
   let cursorX = 0;

@@ -188,6 +188,27 @@ describe('Constraint-aware symmetric seed', () => {
     expect(seeded.colaNodes.map(n => n.fixed)).toEqual(legacy.colaNodes.map(n => n.fixed));
   });
 
+  it('does not treat unrelated x-components as explaining a parent-child edge', () => {
+    // P→C is a data edge, but the only x constraints are Left(P, Q) and
+    // Left(R, C) — two disjoint components whose raw coordinates share no
+    // origin. P and C must NOT be considered horizontally "explained"
+    // (that suppression is for chains like a left-constrained list), so C
+    // still advances a full tree rank below P.
+    const ids = ['P', 'C', 'Q', 'R'];
+    const nodes = ids.map(makeNode);
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const edges = [makeEdge(byId.get('P')!, byId.get('C')!, 'child', 'e0')];
+    const constraints = [
+      { sourceConstraint, left: byId.get('P')!, right: byId.get('Q')!, minDistance: 15 },
+      { sourceConstraint, left: byId.get('R')!, right: byId.get('C')!, minDistance: 15 },
+    ];
+    const layout: InstanceLayout = { nodes, edges, constraints, groups: [] };
+
+    const seed = computeConstraintAwareSeed(layout, 800, 800)!;
+    expect(seed).not.toBeNull();
+    expect(seed.get('C')!.y - seed.get('P')!.y).toBeGreaterThan(60);
+  });
+
   it('returns null on a cyclic constraint system', () => {
     const nodes = ['a', 'b'].map(makeNode);
     const constraints = [
