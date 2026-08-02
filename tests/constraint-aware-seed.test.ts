@@ -157,18 +157,35 @@ describe('Constraint-aware symmetric seed', () => {
     for (const node of result.colaNodes) {
       expect(node.x, `${node.id}.x should come from the seed`).toBeCloseTo(expected.get(node.id)!.x, 5);
       expect(node.y, `${node.id}.y should come from the seed`).toBeCloseTo(expected.get(node.id)!.y, 5);
-      // Default mode anchors the seed through the stability locking path;
-      // a constraint-satisfying seed keeps every node soft-locked.
-      expect(node.fixed, `${node.id} should be anchored`).toBe(1);
+      // Start positions only: the seed must never lock nodes.
+      expect(node.fixed, `${node.id} must stay free`).toBe(0);
     }
+  });
 
-    // seed-only mode: same positions, no anchoring.
-    const translatorSeedOnly = new WebColaTranslator();
-    const resultSeedOnly = await translatorSeedOnly.translate(layout, 800, 800, { seedMode: 'seed-only' });
-    for (const node of resultSeedOnly.colaNodes) {
-      expect(node.x).toBeCloseTo(expected.get(node.id)!.x, 5);
-      expect(node.fixed, `${node.id} should not be anchored in seed-only mode`).toBe(0);
-    }
+  it('adds no constraints, links, or locks beyond the legacy path', async () => {
+    // The "cannot break anything" guarantee: the seed changes initial x/y
+    // and NOTHING else. Translate the same layout with the legacy DAGRE
+    // seed and with the constraint-aware seed, and compare everything
+    // except positions.
+    const ids = ['root', 'a', 'b'];
+    const nodes = ids.map(makeNode);
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const edges = [
+      makeEdge(byId.get('root')!, byId.get('a')!, 'l', 'e0'),
+      makeEdge(byId.get('root')!, byId.get('b')!, 'r', 'e1'),
+    ];
+    const constraints = [
+      { sourceConstraint, top: byId.get('root')!, bottom: byId.get('a')!, minDistance: 20 },
+      { sourceConstraint, top: byId.get('root')!, bottom: byId.get('b')!, minDistance: 20 },
+    ];
+    const layout: InstanceLayout = { nodes, edges, constraints, groups: [] };
+
+    const legacy = await new WebColaTranslator().translate(layout, 800, 800, { seedMode: 'dagre' });
+    const seeded = await new WebColaTranslator().translate(layout, 800, 800);
+
+    expect(seeded.colaConstraints).toEqual(legacy.colaConstraints);
+    expect(seeded.colaEdges.length).toBe(legacy.colaEdges.length);
+    expect(seeded.colaNodes.map(n => n.fixed)).toEqual(legacy.colaNodes.map(n => n.fixed));
   });
 
   it('returns null on a cyclic constraint system', () => {

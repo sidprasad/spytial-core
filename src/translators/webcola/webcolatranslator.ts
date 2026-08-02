@@ -259,26 +259,22 @@ export interface WebColaLayoutOptions {
   lockUnconstrainedNodes?: boolean;
 
   /**
-   * PROTOTYPE (issue #427): which seeding strategy computes initial node
-   * positions when no prior positions exist.
+   * Which seeding strategy computes initial node positions when no prior
+   * positions exist (issue #427).
    *
    *   - 'constraint-aware' (default): solve the spec's separation/alignment
-   *     constraints exactly, spend the free coordinates on displayed
-   *     symmetry (see constraint-aware-seed.ts), and anchor the result as
-   *     synthetic prior positions through the stability-mode locking path
-   *     (soft weight-1000 anchors; constraint violators get unlocked for
-   *     repair). Falls back to DAGRE when there are no seedable constraints
-   *     or the system is cyclic; group-bearing layouts get the seed without
-   *     the anchoring.
-   *   - 'seed-only': the seed as bare initial positions with no anchoring.
-   *     Empirically washed out by the run-to-convergence solve — kept as an
-   *     A/B arm (see tests/seed-experiment.test.ts).
+   *     constraints exactly and spend the free coordinates on displayed
+   *     symmetry (see constraint-aware-seed.ts). Start positions only —
+   *     no locks, no extra links or constraints; the solver runs unchanged
+   *     and remains free to move every node. Falls back to DAGRE when
+   *     there are no seedable constraints or the system is cyclic.
    *   - 'dagre': the legacy edges-only DAGRE seed.
    *
-   * Dev A/B override: setting `globalThis.SPYTIAL_SEED_MODE` to one of the
-   * above forces that mode without rebuilding.
+   * Dev A/B fallback: when no explicit option is passed,
+   * `globalThis.SPYTIAL_SEED_MODE` selects the mode (for live comparison
+   * in demo consoles).
    */
-  seedMode?: 'constraint-aware' | 'seed-only' | 'dagre';
+  seedMode?: 'constraint-aware' | 'dagre';
 }
 
 // WebCola constraint types
@@ -352,10 +348,10 @@ export class WebColaLayout {
   private collapseSymmetric: boolean;
 
   /**
-   * Constraint-aware symmetric seed positions (issue #427 prototype).
-   * Non-null only when there are no prior positions, seedMode allows it,
-   * and the constraint system was solvable. Consulted by toColaNode()
-   * ahead of the DAGRE seed.
+   * Constraint-aware start positions (issue #427). Non-null only when
+   * there are no prior positions, seedMode allows it, and the constraint
+   * system was solvable. Consulted by toColaNode() ahead of the DAGRE
+   * seed. Start positions only — never adds locks, links, or constraints.
    */
   private seedPositions: Map<string, SeedPosition> | null = null;
 
@@ -405,41 +401,32 @@ export class WebColaLayout {
       this.dagre_graph = null;
     }
 
-    // Constraint-aware symmetric seed (issue #427 prototype). Only engages
-    // on a fresh layout (no priors) with at least one seedable constraint;
+    // Constraint-aware start positions (issue #427). Only engages on a
+    // fresh layout (no priors) with at least one seedable constraint;
     // returns null on cyclic/contradictory systems, leaving the DAGRE seed.
-    // The globalThis override is a dev A/B knob for comparing seeds live.
     //
-    // Default mode 'constraint-aware' anchors the seed through the EXISTING
-    // stability machinery: the seed becomes synthetic prior positions with
-    // lockUnconstrainedNodes, i.e. soft weight-1000 anchors that the
-    // constraint-aware locking post-pass unfixes wherever the seed violates
-    // a constraint. Experiments (tests/seed-experiment.test.ts) show
-    // positions-only seeding is fully washed out by the solver's
-    // run-to-convergence schedule, while anchored seeds survive it exactly.
-    // Group-bearing layouts skip the anchoring (groups add solver forces the
-    // seed doesn't model) and get the positions-only seed instead.
+    // These are START POSITIONS ONLY — no locks, links, or constraints are
+    // added, so the solver is exactly as free as before; a bad seed costs
+    // nothing beyond what DAGRE cost. What a good seed buys: the solve
+    // starts with every separation/alignment constraint already satisfied
+    // (constraint-projection phases begin as near-no-ops), the starting
+    // basin is deterministic and structure-respecting, and on large graphs
+    // — where renderLayout caps iterations and the solve does NOT fully
+    // re-converge — the seed genuinely shapes the final layout. On small
+    // graphs the run-to-convergence solve is seed-independent (measured in
+    // tests/seed-experiment.test.ts); that is expected and fine.
     const seedMode =
-      (globalThis as any)?.SPYTIAL_SEED_MODE ?? options?.seedMode ?? 'constraint-aware';
+      options?.seedMode ?? (globalThis as any)?.SPYTIAL_SEED_MODE ?? 'constraint-aware';
     if (
       seedMode !== 'dagre' &&
       this.priorPositionMap.size === 0 &&
       hasSeedableConstraints(instanceLayout)
     ) {
       try {
-        const seed = computeConstraintAwareSeed(instanceLayout, fig_width, fig_height);
-        const canAnchor =
-          seedMode === 'constraint-aware' && (instanceLayout.groups ?? []).length === 0;
-        if (seed && canAnchor) {
-          for (const [id, position] of seed) {
-            this.priorPositionMap.set(id, { id, x: position.x, y: position.y });
-          }
-          this.lockUnconstrainedNodes = true;
-        } else if (seed) {
-          this.seedPositions = seed;
-        }
+        this.seedPositions = computeConstraintAwareSeed(instanceLayout, fig_width, fig_height);
       } catch (e) {
         console.warn('Constraint-aware seed failed, falling back to DAGRE:', e);
+        this.seedPositions = null;
       }
     }
 
@@ -778,9 +765,10 @@ export class WebColaLayout {
         }
       }
     } else if (this.seedPositions?.has(node.id)) {
-      // Priority 2: Constraint-aware symmetric seed (issue #427 prototype).
+      // Priority 2: Constraint-aware start position (issue #427).
       // Satisfies the spec's separation/alignment constraints exactly and
-      // mirrors isomorphic subtrees; purely soft — the solver runs unchanged.
+      // mirrors isomorphic subtrees; start position only — the solver runs
+      // unchanged and stays free to move the node.
       const seedPosition = this.seedPositions.get(node.id)!;
       x = seedPosition.x;
       y = seedPosition.y;
