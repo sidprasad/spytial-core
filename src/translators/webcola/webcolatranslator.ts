@@ -6,6 +6,7 @@ import type { IconPlacement } from '../../layout/style/atom-style-spec';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
+import { computeConstraintAwareSeed, hasSeedableConstraints, SeedPosition } from './constraint-aware-seed';
 import * as dagre from 'dagre';
 
 /**
@@ -256,6 +257,24 @@ export interface WebColaLayoutOptions {
    * descent and alignment-edge spring forces freely re-place them.
    */
   lockUnconstrainedNodes?: boolean;
+
+  /**
+   * Which seeding strategy computes initial node positions when no prior
+   * positions exist (issue #427).
+   *
+   *   - 'constraint-aware' (default): solve the spec's separation/alignment
+   *     constraints exactly and spend the free coordinates on displayed
+   *     symmetry (see constraint-aware-seed.ts). Start positions only —
+   *     no locks, no extra links or constraints; the solver runs unchanged
+   *     and remains free to move every node. Falls back to DAGRE when
+   *     there are no seedable constraints or the system is cyclic.
+   *   - 'dagre': the legacy edges-only DAGRE seed.
+   *
+   * Dev A/B fallback: when no explicit option is passed,
+   * `globalThis.SPYTIAL_SEED_MODE` selects the mode (for live comparison
+   * in demo consoles).
+   */
+  seedMode?: 'constraint-aware' | 'dagre';
 }
 
 // WebCola constraint types
@@ -328,6 +347,14 @@ export class WebColaLayout {
   private lockUnconstrainedNodes: boolean;
   private collapseSymmetric: boolean;
 
+  /**
+   * Constraint-aware start positions (issue #427). Non-null only when
+   * there are no prior positions, seedMode allows it, and the constraint
+   * system was solvable. Consulted by toColaNode() ahead of the DAGRE
+   * seed. Start positions only — never adds locks, links, or constraints.
+   */
+  private seedPositions: Map<string, SeedPosition> | null = null;
+
   constructor(instanceLayout: InstanceLayout, fig_height: number = 800, fig_width: number = 800, options?: WebColaLayoutOptions) {
 
     this.FIG_HEIGHT = fig_height;
@@ -374,7 +401,34 @@ export class WebColaLayout {
       this.dagre_graph = null;
     }
 
-
+    // Constraint-aware start positions (issue #427). Only engages on a
+    // fresh layout (no priors) with at least one seedable constraint;
+    // returns null on cyclic/contradictory systems, leaving the DAGRE seed.
+    //
+    // These are START POSITIONS ONLY — no locks, links, or constraints are
+    // added, so the solver is exactly as free as before; a bad seed costs
+    // nothing beyond what DAGRE cost. What a good seed buys: the solve
+    // starts with every separation/alignment constraint already satisfied
+    // (constraint-projection phases begin as near-no-ops), the starting
+    // basin is deterministic and structure-respecting, and on large graphs
+    // — where renderLayout caps iterations and the solve does NOT fully
+    // re-converge — the seed genuinely shapes the final layout. On small
+    // graphs the run-to-convergence solve is seed-independent (measured in
+    // tests/seed-experiment.test.ts); that is expected and fine.
+    const seedMode =
+      options?.seedMode ?? (globalThis as any)?.SPYTIAL_SEED_MODE ?? 'constraint-aware';
+    if (
+      seedMode !== 'dagre' &&
+      this.priorPositionMap.size === 0 &&
+      hasSeedableConstraints(instanceLayout)
+    ) {
+      try {
+        this.seedPositions = computeConstraintAwareSeed(instanceLayout, fig_width, fig_height);
+      } catch (e) {
+        console.warn('Constraint-aware seed failed, falling back to DAGRE:', e);
+        this.seedPositions = null;
+      }
+    }
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
     // Build node-id -> index map. Used by getNodeIndex() to keep
@@ -710,8 +764,16 @@ export class WebColaLayout {
           y = dagre_node.y;
         }
       }
+    } else if (this.seedPositions?.has(node.id)) {
+      // Priority 2: Constraint-aware start position (issue #427).
+      // Satisfies the spec's separation/alignment constraints exactly and
+      // mirrors isomorphic subtrees; start position only — the solver runs
+      // unchanged and stays free to move the node.
+      const seedPosition = this.seedPositions.get(node.id)!;
+      x = seedPosition.x;
+      y = seedPosition.y;
     } else if (this.dagre_graph) {
-      // Priority 2: Use DAGRE-computed position for new nodes
+      // Priority 3: Use DAGRE-computed position for new nodes
       const dagre_node = this.dagre_graph.node(node.id);
       if (dagre_node) {
         x = dagre_node.x;
