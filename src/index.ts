@@ -50,6 +50,16 @@ export { AccessibleTranslator, buildSpatialNavigationMap } from './translators';
 // it from 'spytial-core/explorer' (npm, auto-registers the element) or load
 // spytial-core-explorer.global.js after the main bundle (CDN).
 export { StructuredInputGraph } from './translators';
+// Edge-routing registry: opt-in routers register a mode here and it appears
+// in the renderer's Routing dropdown (layoutFormat selects it by id).
+export {
+  registerRoutingMode,
+  getRoutingMode,
+  listRoutingModes,
+  type RoutingModeDefinition,
+  type EdgeRouter,
+  type RouterHost,
+} from './translators/webcola/routing';
 export {
   ignoreHistory,
   stability,
