@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 
-describe('Edge routing port distribution and crossing detection', () => {
+describe('Edge routing port distribution', () => {
   const proto = WebColaCnDGraph.prototype as any;
 
   describe('sortEdgePortsByAngle — parallel edges get distinct ports', () => {
@@ -153,73 +153,6 @@ describe('Edge routing port distribution and crossing detection', () => {
       };
       const result = proto.applyPortBasedEndpointsOrthogonal.call(fakeThis, edgeData, route);
       expect(result).toEqual(route);
-    });
-  });
-
-  describe('detectEdgeCrossings — catches crossings past a shared node', () => {
-    // Helper: build a fake "this" with a currentLayout, computedRoutes, and the
-    // exact set of methods detectEdgeCrossings depends on.
-    const buildFakeThis = (
-      links: Array<{ id: string; source: { id: string }; target: { id: string } }>,
-      routes: Map<string, Array<{ x: number; y: number }>>
-    ) => ({
-      currentLayout: { links },
-      computedRoutes: routes,
-      isAlignmentEdge: () => false,
-      routesCross: proto.routesCross,
-      segmentsIntersect: proto.segmentsIntersect,
-      cross: proto.cross,
-      getRouteLength: proto.getRouteLength
-    });
-
-    it('detects two edges sharing source A whose routes cross past A', () => {
-      // A is at (0,0). Edges go to B at (100, 50) and C at (100, -50).
-      // Buggy port assignment swaps endpoints so the routes cross around (50, 0).
-      const links = [
-        { id: 'AB', source: { id: 'A' }, target: { id: 'B' } },
-        { id: 'AC', source: { id: 'A' }, target: { id: 'C' } }
-      ];
-      const routes = new Map<string, Array<{ x: number; y: number }>>([
-        // A→B route exits A on top (toward C's region) — crossing
-        ['AB', [{ x: 0, y: -5 }, { x: 100, y: 50 }]],
-        // A→C route exits A on bottom (toward B's region) — crossing
-        ['AC', [{ x: 0, y: 5 }, { x: 100, y: -50 }]]
-      ]);
-
-      const fakeThis = buildFakeThis(links, routes);
-      const crossings = proto.detectEdgeCrossings.call(fakeThis);
-      expect(crossings.length).toBe(1);
-      const pair = crossings[0].slice().sort();
-      expect(pair).toEqual(['AB', 'AC']);
-    });
-
-    it('does not flag two edges sharing source A whose routes diverge cleanly', () => {
-      const links = [
-        { id: 'AB', source: { id: 'A' }, target: { id: 'B' } },
-        { id: 'AC', source: { id: 'A' }, target: { id: 'C' } }
-      ];
-      const routes = new Map<string, Array<{ x: number; y: number }>>([
-        ['AB', [{ x: 0, y: 5 }, { x: 100, y: 50 }]],   // exits down toward B (lower)
-        ['AC', [{ x: 0, y: -5 }, { x: 100, y: -50 }]]  // exits up toward C (higher)
-      ]);
-      const fakeThis = buildFakeThis(links, routes);
-      const crossings = proto.detectEdgeCrossings.call(fakeThis);
-      expect(crossings.length).toBe(0);
-    });
-
-    it('skips parallel edges (both endpoints shared)', () => {
-      // Two A→B edges should not be flagged here — port distribution handles them.
-      const links = [
-        { id: 'e1', source: { id: 'A' }, target: { id: 'B' } },
-        { id: 'e2', source: { id: 'A' }, target: { id: 'B' } }
-      ];
-      const routes = new Map<string, Array<{ x: number; y: number }>>([
-        ['e1', [{ x: 0, y: 0 }, { x: 100, y: 0 }]],
-        ['e2', [{ x: 0, y: 0 }, { x: 100, y: 0 }]]
-      ]);
-      const fakeThis = buildFakeThis(links, routes);
-      const crossings = proto.detectEdgeCrossings.call(fakeThis);
-      expect(crossings.length).toBe(0);
     });
   });
 });

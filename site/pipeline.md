@@ -21,7 +21,7 @@ Add the custom element that will receive the final layout:
 </webcola-cnd-graph>
 ```
 
-Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing or `layoutFormat="legacy"` for the older curved router; the Routing dropdown in the rendered toolbar switches modes at runtime.
+Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing; the Routing dropdown in the rendered toolbar switches modes at runtime. (`layoutFormat="legacy"`, the old curved router, has been removed — the value still parses but warns and routes as taut.)
 
 Load the browser bundle:
 

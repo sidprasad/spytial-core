@@ -633,8 +633,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /**
    * Configuration constants for the consolidated "taut" curved router
-   * (corner-visibility shortest path + fillet smoothing). Gated behind
-   * useTautRouter; see computeTautRoute / routeTautPolyline.
+   * (corner-visibility shortest path + fillet smoothing); see
+   * computeTautRoute / routeTautPolyline.
    */
   // Uniform clearance (px) added around each node's *visible* rectangle to form
   // the router's obstacle set. Also caps the corner-fillet radius so the
@@ -675,27 +675,21 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly TAUT_CORRIDOR_MIN_OVERLAP_PX = 40;
 
   /**
-   * Configuration constants for edge crossing optimization
-   */
-  private static readonly MAX_CROSSING_OPTIMIZATION_PASSES = 3;
-  /**
-   * Edge-count gate above which the O(E²) crossing optimizer (and the bend
-   * flattener that piggybacks on this threshold) is skipped. Raised from 15 to
-   * 50 because at this size the algorithm is still well under the wall-clock
-   * budget — at E=50 there are C(50,2)=1225 pairs × ~10 segment-segment tests
-   * each (still sub-millisecond on commodity hardware). The hard skip remains
-   * past this threshold so worst-case cost stays bounded.
+   * Edge-count gate above which the O(E²) post-routing passes (corridor
+   * separation, and the grid bend flattener that piggybacks on this
+   * threshold) are skipped. At E=50 there are C(50,2)=1225 pairs × ~10
+   * segment-segment tests each (still sub-millisecond on commodity
+   * hardware). The hard skip keeps worst-case cost bounded.
    * See MAX_CROSSING_OPTIMIZATION_BUDGET_MS for the wall-clock safety net.
    */
   private static readonly CROSSING_OPTIMIZATION_EDGE_THRESHOLD = 50;
   /**
-   * Wall-clock budget (ms) for the entire optimizeCrossings() pipeline. If
-   * detection + resolution exceeds this, we abort and accept the current
-   * routing. Acts as a safety net for pathological graphs that fall below
-   * the edge-count gate but still take long (e.g. very long polyline routes).
+   * Wall-clock budget (ms) for the corridor-separation pass. If it exceeds
+   * this, we abort and accept the current routing. Acts as a safety net for
+   * pathological graphs that fall below the edge-count gate but still take
+   * long (e.g. very long polyline routes).
    */
   private static readonly MAX_CROSSING_OPTIMIZATION_BUDGET_MS = 30;
-  private static readonly CROSSING_NUDGE_DISTANCE = 12;
   private static readonly PORT_MARGIN_FRACTION = 0.15;
   /**
    * Minimum perimeter distance (px) between adjacent ports on the same node side.
@@ -911,28 +905,26 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Resolves the layoutFormat attribute to one of the three routing modes.
+   * Resolves the layoutFormat attribute to a routing mode.
    * Taut is the default: unset, 'default', and 'taut' all resolve to 'taut'.
-   * The legacy multi-router curved path is opt-in via 'legacy'.
+   * 'legacy' (the removed multi-router curved path) is deprecated: it warns
+   * once and routes as taut. Unknown values also fall back to taut.
    */
-  private get routingMode(): 'taut' | 'legacy' | 'grid' {
+  private get routingMode(): 'taut' | 'grid' {
     const format = this.layoutFormat;
     if (format === 'grid') return 'grid';
-    if (format === 'legacy') return 'legacy';
+    if (format === 'legacy' && !this.warnedLegacyRoutingMode) {
+      this.warnedLegacyRoutingMode = true;
+      console.warn(
+        '[spytial] layoutFormat="legacy" has been removed; edges now route as "taut". ' +
+        'Remove the layoutFormat attribute (taut is the default) to silence this warning.'
+      );
+    }
     return 'taut';
   }
 
-  /**
-   * When true, the consolidated taut router (obstacle-avoiding corner-visibility
-   * shortest path + fillet smoothing) replaces the legacy multi-router curved
-   * path in computeSingleRoute. Taut is the DEFAULT routing mode: an unset
-   * layoutFormat, 'default', and 'taut' all use it. The legacy multi-router
-   * curved path is opt-in via layoutFormat === 'legacy' ("Curved (legacy)" in
-   * the Routing dropdown); 'grid' selects orthogonal routing (gridify).
-   */
-  private get useTautRouter(): boolean {
-    return this.routingMode === 'taut';
-  }
+  /** One-shot guard for the layoutFormat="legacy" deprecation warning. */
+  private warnedLegacyRoutingMode = false;
 
   /**
    * Access transition mode for layout swaps.
@@ -1453,7 +1445,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
           <label for="routing-mode">Routing:</label>
           <select id="routing-mode" title="Edge routing mode">
             <option value="taut">Taut</option>
-            <option value="legacy">Curved (legacy)</option>
             <option value="grid">Grid</option>
           </select>
         </div>
@@ -4939,36 +4930,24 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // causing edges to stop short of the visual node boundary.
       this.ensureNodeBounds(true);
 
-      // Prepare edge routing with margin. Only the legacy router uses WebCola's
-      // routeEdge (which needs this visibility-graph build); the taut router
-      // has its own obstacle model, so skip the O(N²) prep when it's active.
-      if (!this.useTautRouter && typeof (this.colaLayout as any)?.prepareEdgeRouting === 'function') {
-        (this.colaLayout as any).prepareEdgeRouting(
-          WebColaCnDGraph.VIEWBOX_PADDING / WebColaCnDGraph.EDGE_ROUTE_MARGIN_DIVISOR
-        );
-      }
-
       // Build caches for optimization before routing edges
       this.buildEdgeRoutingCaches();
 
       // Sort edge ports by angle to minimize crossings at shared nodes
       this.sortEdgePortsByAngle();
 
-      // Taut router: precompute the obstacle set once (positions are frozen now)
-      // so each edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
+      // Precompute the obstacle set once (positions are frozen now) so each
+      // edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
       // recomputation — turning per-edge obstacle work from O(E·N) into O(N)+O(E·N filter).
-      if (this.useTautRouter) this.buildRouterObstacleCache();
+      this.buildRouterObstacleCache();
 
       // Compute routes for all edges (stored in computedRoutes map)
       this.computeAllRoutes();
 
-      // Post-routing crossing optimization
-      this.optimizeCrossings();
-
-      // Taut mode: separate different-pair routes sharing a corridor
-      // (optimizeCrossings no-ops in taut mode; this is its obstacle-aware
-      // counterpart for near-parallel overlaps rather than crossings).
-      if (this.useTautRouter) this.separateTautCorridors();
+      // Separate different-pair routes sharing a corridor (near-parallel
+      // overlaps; crossings are already minimized by shortest-path routing
+      // and port-angle ordering).
+      this.separateTautCorridors();
 
       // Apply computed routes to SVG
       this.applyRoutesToSVG();
@@ -5862,54 +5841,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Returns true if two axis-aligned rectangles are within `threshold` pixels of each other.
-   */
-  private areBoundsNear(a: any, b: any, threshold: number): boolean {
-    const aLeft = a.x;
-    const aRight = a.x + a.width();
-    const aTop = a.y;
-    const aBottom = a.y + a.height();
-
-    const bLeft = b.x;
-    const bRight = b.x + b.width();
-    const bTop = b.y;
-    const bBottom = b.y + b.height();
-
-    const xGap = Math.max(0, Math.max(bLeft - aRight, aLeft - bRight));
-    const yGap = Math.max(0, Math.max(bTop - aBottom, aTop - bBottom));
-
-    const dist = Math.sqrt(xGap * xGap + yGap * yGap);
-    return dist <= threshold;
-  }
-
-  /**
-   * Chooses a boundary point (midpoint of left/right/top/bottom) on `bounds` that is farthest from `other` point.
-   */
-  private chooseBoundaryPoint(cx: number, cy: number, bounds: any, other: { x: number; y: number }): { x: number; y: number } {
-    const w = Math.max(1, bounds.width());
-    const h = Math.max(1, bounds.height());
-    const candidates = [
-      { x: bounds.x, y: bounds.y + h / 2 }, // left
-      { x: bounds.x + w, y: bounds.y + h / 2 }, // right
-      { x: bounds.x + w / 2, y: bounds.y }, // top
-      { x: bounds.x + w / 2, y: bounds.y + h } // bottom
-    ];
-
-    let best = candidates[0];
-    let bestDist = -Infinity;
-    for (const c of candidates) {
-      const dx = c.x - other.x;
-      const dy = c.y - other.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d > bestDist) {
-        bestDist = d;
-        best = c;
-      }
-    }
-    return best;
-  }
-
-  /**
    * Normalizes node bounds to a consistent format with x, y and width/height as functions.
    */
   private normalizeNodeBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
@@ -5929,262 +5860,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
       width: () => typeof bounds.width === 'function' ? bounds.width() : (bounds.X !== undefined ? bounds.X - bounds.x : vw),
       height: () => typeof bounds.height === 'function' ? bounds.height() : (bounds.Y !== undefined ? bounds.Y - bounds.y : vh)
     };
-  }
-
-  /**
-   * Checks if a line segment from p1 to p2 intersects with a rectangle.
-   * Used to detect if an edge would pass through an intermediate node.
-   */
-  private lineIntersectsRect(
-    p1: { x: number; y: number },
-    p2: { x: number; y: number },
-    rect: { x: number; y: number; width: () => number; height: () => number }
-  ): boolean {
-    const left = rect.x;
-    const right = rect.x + rect.width();
-    const top = rect.y;
-    const bottom = rect.y + rect.height();
-
-    // Check if line segment from p1 to p2 intersects the rectangle
-    // Using Cohen-Sutherland style approach
-
-    // First, check if the segment's bounding box doesn't intersect rect at all
-    const minX = Math.min(p1.x, p2.x);
-    const maxX = Math.max(p1.x, p2.x);
-    const minY = Math.min(p1.y, p2.y);
-    const maxY = Math.max(p1.y, p2.y);
-
-    if (maxX < left || minX > right || maxY < top || minY > bottom) {
-      return false;
-    }
-
-    // Check if either endpoint is inside the rectangle
-    const p1Inside = p1.x >= left && p1.x <= right && p1.y >= top && p1.y <= bottom;
-    const p2Inside = p2.x >= left && p2.x <= right && p2.y >= top && p2.y <= bottom;
-    if (p1Inside || p2Inside) {
-      return true;
-    }
-
-    // Check intersection with each edge of the rectangle
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-
-    // Helper to check line-segment intersection
-    const intersectsHorizontal = (y: number, xMin: number, xMax: number): boolean => {
-      if (dy === 0) return false;
-      const t = (y - p1.y) / dy;
-      if (t < 0 || t > 1) return false;
-      const x = p1.x + t * dx;
-      return x >= xMin && x <= xMax;
-    };
-
-    const intersectsVertical = (x: number, yMin: number, yMax: number): boolean => {
-      if (dx === 0) return false;
-      const t = (x - p1.x) / dx;
-      if (t < 0 || t > 1) return false;
-      const y = p1.y + t * dy;
-      return y >= yMin && y <= yMax;
-    };
-
-    return (
-      intersectsHorizontal(top, left, right) ||
-      intersectsHorizontal(bottom, left, right) ||
-      intersectsVertical(left, top, bottom) ||
-      intersectsVertical(right, top, bottom)
-    );
-  }
-
-  /**
-   * Finds all nodes that lie between source and target and would block a direct edge.
-   * Returns them sorted by position along the source→target axis.
-   */
-  private findBlockingNodes(
-    source: any,
-    target: any,
-    sourceId: string,
-    targetId: string
-  ): Array<{ node: any; bounds: { x: number; y: number; width: () => number; height: () => number } }> {
-    if (!this.currentLayout?.nodes) {
-      return [];
-    }
-
-    const sourceBounds = this.normalizeNodeBounds(source);
-    const targetBounds = this.normalizeNodeBounds(target);
-
-    // Compute centers
-    const sourceCenter = {
-      x: sourceBounds.x + sourceBounds.width() / 2,
-      y: sourceBounds.y + sourceBounds.height() / 2
-    };
-    const targetCenter = {
-      x: targetBounds.x + targetBounds.width() / 2,
-      y: targetBounds.y + targetBounds.height() / 2
-    };
-
-    const blocking: Array<{ node: any; bounds: any; distance: number }> = [];
-
-    for (const node of this.currentLayout.nodes) {
-      // Skip source and target
-      if (node.id === sourceId || node.id === targetId) {
-        continue;
-      }
-
-      const nodeBounds = this.normalizeNodeBounds(node);
-
-      // Check if a straight line from source center to target center would pass through this node
-      if (this.lineIntersectsRect(sourceCenter, targetCenter, nodeBounds)) {
-        // Calculate distance from source for sorting
-        const nodeCenter = {
-          x: nodeBounds.x + nodeBounds.width() / 2,
-          y: nodeBounds.y + nodeBounds.height() / 2
-        };
-        const distance = Math.sqrt(
-          Math.pow(nodeCenter.x - sourceCenter.x, 2) +
-          Math.pow(nodeCenter.y - sourceCenter.y, 2)
-        );
-        blocking.push({ node, bounds: nodeBounds, distance });
-      }
-    }
-
-    // Sort by distance from source
-    blocking.sort((a, b) => a.distance - b.distance);
-    return blocking.map(b => ({ node: b.node, bounds: b.bounds }));
-  }
-
-  /**
-   * Computes a route that goes around blocking intermediate nodes.
-   * Used when there are nodes between source and target that would hide the edge.
-   */
-  private computeRouteAroundBlockingNodes(
-    sourceBounds: { x: number; y: number; width: () => number; height: () => number },
-    targetBounds: { x: number; y: number; width: () => number; height: () => number },
-    blockingNodes: Array<{ node: any; bounds: { x: number; y: number; width: () => number; height: () => number } }>
-  ): { sourcePoint: { x: number; y: number }; targetPoint: { x: number; y: number }; middlePoints: Array<{ x: number; y: number }> } {
-    const ROUTE_OFFSET = 15;
-
-    // Compute the bounding box that contains source, target, and all blocking nodes
-    let minX = Math.min(sourceBounds.x, targetBounds.x);
-    let maxX = Math.max(sourceBounds.x + sourceBounds.width(), targetBounds.x + targetBounds.width());
-    let minY = Math.min(sourceBounds.y, targetBounds.y);
-    let maxY = Math.max(sourceBounds.y + sourceBounds.height(), targetBounds.y + targetBounds.height());
-
-    for (const { bounds } of blockingNodes) {
-      minX = Math.min(minX, bounds.x);
-      maxX = Math.max(maxX, bounds.x + bounds.width());
-      minY = Math.min(minY, bounds.y);
-      maxY = Math.max(maxY, bounds.y + bounds.height());
-    }
-
-    const sCenterX = sourceBounds.x + sourceBounds.width() / 2;
-    const sCenterY = sourceBounds.y + sourceBounds.height() / 2;
-    const tCenterX = targetBounds.x + targetBounds.width() / 2;
-    const tCenterY = targetBounds.y + targetBounds.height() / 2;
-
-    // Determine if nodes are primarily stacked vertically or horizontally
-    const dx = Math.abs(tCenterX - sCenterX);
-    const dy = Math.abs(tCenterY - sCenterY);
-
-    if (dy > dx) {
-      // Primarily vertical arrangement - route to the left or right
-      const goLeft = sCenterX <= tCenterX;
-
-      if (goLeft) {
-        const routeX = minX - ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sourceBounds.x, y: sCenterY },
-          targetPoint: { x: targetBounds.x, y: tCenterY },
-          middlePoints: [
-            { x: routeX, y: sCenterY },
-            { x: routeX, y: tCenterY }
-          ]
-        };
-      } else {
-        const routeX = maxX + ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sourceBounds.x + sourceBounds.width(), y: sCenterY },
-          targetPoint: { x: targetBounds.x + targetBounds.width(), y: tCenterY },
-          middlePoints: [
-            { x: routeX, y: sCenterY },
-            { x: routeX, y: tCenterY }
-          ]
-        };
-      }
-    } else {
-      // Primarily horizontal arrangement - route above or below
-      const goTop = sCenterY <= tCenterY;
-
-      if (goTop) {
-        const routeY = minY - ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sCenterX, y: sourceBounds.y },
-          targetPoint: { x: tCenterX, y: targetBounds.y },
-          middlePoints: [
-            { x: sCenterX, y: routeY },
-            { x: tCenterX, y: routeY }
-          ]
-        };
-      } else {
-        const routeY = maxY + ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sCenterX, y: sourceBounds.y + sourceBounds.height() },
-          targetPoint: { x: tCenterX, y: targetBounds.y + targetBounds.height() },
-          middlePoints: [
-            { x: sCenterX, y: routeY },
-            { x: tCenterX, y: routeY }
-          ]
-        };
-      }
-    }
-  }
-
-  /**
-   * Checks if two nodes are near-touching (directly or transitively via intermediate nodes)
-   * and returns a perpendicular route if so.
-   * Used by both default and grid routing modes to ensure edges are visible
-   * when nodes are close together or touching, or when intermediate nodes would block the edge.
-   * 
-   * @param edgeData - The edge data with source and target nodes
-   * @returns Array of route points if rerouting needed, null otherwise
-   */
-  private getNearTouchPerpendicularRoute(edgeData: any): Array<{ x: number; y: number }> | null {
-    if (!edgeData.source || !edgeData.target) {
-      return null;
-    }
-
-    // Skip self-loops - they're handled separately
-    if (edgeData.source.id === edgeData.target.id) {
-      return null;
-    }
-
-    const source = edgeData.source;
-    const target = edgeData.target;
-
-    const normSourceBounds = this.normalizeNodeBounds(source);
-    const normTargetBounds = this.normalizeNodeBounds(target);
-
-    const NEAR_TOUCH_THRESHOLD = 5;
-    const touchDirection = this.getTouchDirection(normSourceBounds, normTargetBounds, NEAR_TOUCH_THRESHOLD);
-
-    // Case 1: Direct near-touching - use existing logic
-    if (touchDirection !== 'none') {
-      const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
-        normSourceBounds, normTargetBounds, touchDirection
-      );
-      return [sourcePoint, ...middlePoints, targetPoint];
-    }
-
-    // Case 2: Check for intermediate blocking nodes (transitive touching)
-    const blockingNodes = this.findBlockingNodes(source, target, source.id, target.id);
-
-    if (blockingNodes.length > 0) {
-      // Route around the blocking nodes
-      const { sourcePoint, targetPoint, middlePoints } = this.computeRouteAroundBlockingNodes(
-        normSourceBounds, normTargetBounds, blockingNodes
-      );
-      return [sourcePoint, ...middlePoints, targetPoint];
-    }
-
-    return null;
   }
 
   private gridRouteToPoints(route: any[]) {
@@ -6608,7 +6283,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         // Taut router: interpolate the routed polyline exactly with bounded
         // fillets (no curveBasis bulge). Self-loops and alignment edges keep the
         // legacy smoothing — their routes are built for it / are straight.
-        if (this.useTautRouter && d.source.id !== d.target.id && !this.isAlignmentEdge(d)) {
+        if (d.source.id !== d.target.id && !this.isAlignmentEdge(d)) {
           return this.filletPath(route);
         }
         return this.lineFunction(this.addTangentGuides(route));
@@ -6694,128 +6369,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Direct-line fast path. Returns a 2-point perimeter-to-perimeter route iff:
-   *   (a) the edge has no parallel siblings between the same pair (multi-edge
-   *       logic owns those), and
-   *   (b) source and target are not near-touching (perpendicular-route logic
-   *       owns those), and
-   *   (c) no *other* node's visible rectangle intersects the source-center to
-   *       target-center line.
-   *
-   * Otherwise returns null and the caller falls back to WebCola's router.
-   * Group containers are not treated as obstacles here — edges from one group
-   * to another necessarily cross group boundaries, and the visible rectangle
-   * is the only obstacle the eye actually registers.
-   *
-   * Why this exists: empirically (Purchase 1997/2002; Huang/Hong/Eades 2008)
-   * the dominant readability cost on a clear path is *exit angle*, not bend
-   * count — an arrow that leaves a node pointing 90° away from its target
-   * reads as wrong even if the curve eventually arrives. WebCola's
-   * visibility-graph router snaps endpoints to N/S/E/W rectangle midpoints
-   * regardless of target direction, so on layouts where the inflated
-   * collision bounds form a phantom corridor, it produces routes that exit
-   * anti-parallel to the target. The fast path short-circuits those cases.
-   */
-  private tryDirectLineRoute(edgeData: any): Array<{ x: number; y: number }> | null {
-    if (!edgeData?.source || !edgeData?.target) return null;
-    if (edgeData.source.id === edgeData.target.id) return null;
-
-    // (a) Skip if there are parallel siblings — handleMultipleEdgeRouting +
-    // applyPortBasedEndpoints want to see WebCola's route to apply curvature
-    // and port distribution.
-    const siblings = this.getAllEdgesBetweenNodes(edgeData.source.id, edgeData.target.id);
-    if (siblings.length > 1) return null;
-
-    // Use the *visible* rectangle (visualWidth/visualHeight for nodes, inset
-    // bounds for groups) so the arrowhead lands on the rendered border. The
-    // alternative — normalizeNodeBounds — returns WebCola's inflated collision
-    // bounds, which are ~3 px outside the rendered rectangle; clipping to
-    // those puts the arrow tip in the padding region and lets the 12 px
-    // marker body extend back into the node fill (which then covers it since
-    // renderNodes appends after renderLinks).
-    const sourceBounds = this.getRenderedBounds(edgeData.source);
-    const targetBounds = this.getRenderedBounds(edgeData.target);
-
-    // (b) Skip if near-touching — getNearTouchPerpendicularRoute handles those
-    // with a U-bend that the direct line would skip entirely.
-    const NEAR_TOUCH_THRESHOLD = 5;
-    if (this.getTouchDirection(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD) !== 'none') {
-      return null;
-    }
-
-    const sourceCenter = {
-      x: sourceBounds.x + sourceBounds.width() / 2,
-      y: sourceBounds.y + sourceBounds.height() / 2
-    };
-    const targetCenter = {
-      x: targetBounds.x + targetBounds.width() / 2,
-      y: targetBounds.y + targetBounds.height() / 2
-    };
-
-    // (c) Bail if any other node's visible rectangle intersects the line.
-    if (this.currentLayout?.nodes) {
-      for (const node of this.currentLayout.nodes) {
-        if (node.id === edgeData.source.id || node.id === edgeData.target.id) continue;
-        const nb = this.normalizeNodeBounds(node);
-        if (this.lineIntersectsRect(sourceCenter, targetCenter, nb)) return null;
-      }
-    }
-
-    // Clip endpoints to perimeters so arrowheads land on the rendered boundary
-    // rather than at the node centers (which would put them behind the fill).
-    const sourcePoint = this.clipLineToRectExit(sourceCenter, targetCenter, sourceBounds);
-    const targetPoint = this.clipLineToRectExit(targetCenter, sourceCenter, targetBounds);
-
-    return [sourcePoint, targetPoint];
-  }
-
-  /**
-   * Run port distribution on a direct-line fast-path route while preserving
-   * the invariant that endpoints sit on their nodes' visible perimeters.
-   *
-   * applyPortBasedEndpoints distributes endpoints along the dominant-direction
-   * side (height for horizontal-axis edges, width for vertical-axis edges).
-   * For purely cardinal edges (target directly N/S/E/W of source) my fast-path
-   * clip already exits on that side, so distribution slides cleanly along it.
-   * For diagonal edges in the 31–45° band (or whatever the rect's
-   * aspect-ratio-corner band is), the natural line-intersection clip can hit
-   * the bottom/top while dominant direction expects left/right — distribution
-   * would then shift the endpoint *inside* the rectangle.
-   *
-   * Strategy: try distribution; if either endpoint leaves the perimeter, fall
-   * back to the un-distributed clip. The un-distributed clip already provides
-   * meaningful endpoint separation via the line-geometry difference between
-   * sibling edges (their target directions differ → their clip points differ),
-   * so the worst case is "less spread" rather than "wrong attachment."
-   */
-  private applyPortBasedEndpointsToDirectRoute(
-    edgeData: any,
-    route: Array<{ x: number; y: number }>
-  ): Array<{ x: number; y: number }> {
-    const hasSourcePort = edgeData._sourcePortCount > 1;
-    const hasTargetPort = edgeData._targetPortCount > 1;
-    if (!hasSourcePort && !hasTargetPort) return route;
-
-    const distributed = this.applyPortBasedEndpoints(
-      edgeData,
-      route.map(p => ({ ...p }))
-    );
-
-    // Validate against rendered bounds (matches what tryDirectLineRoute
-    // clipped against — using inflated bounds here would let an endpoint that
-    // shifted into the padding region pass the check).
-    const sourceBounds = this.getRenderedBounds(edgeData.source);
-    const targetBounds = this.getRenderedBounds(edgeData.target);
-    if (
-      this.isPointOnRectPerimeter(distributed[0], sourceBounds) &&
-      this.isPointOnRectPerimeter(distributed[distributed.length - 1], targetBounds)
-    ) {
-      return distributed;
-    }
-    return route;
-  }
-
-  /**
    * Returns the *rendered* rectangle of a node — what the user actually sees,
    * not WebCola's inflated collision bounds. Prefers getVisibleBounds (which
    * applies visualWidth/visualHeight and the group inset) and falls back to
@@ -6868,7 +6421,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * least farther along the ray direction), returns the point where the line
    * from `inside` toward `outside` exits the rectangle.
    *
-   * Used by tryDirectLineRoute to clip the source-center → target-center line
+   * Used by the taut router to clip the source-center → target-center line
    * to the source and target rectangle perimeters so the arrowhead lands on
    * the rendered boundary.
    */
@@ -6938,78 +6491,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       return this.createSelfLoopRoute(edgeData);
     }
 
-    // Consolidated taut router (the default). The legacy multi-router path
-    // below runs only when layoutFormat === 'legacy'.
-    if (this.useTautRouter) {
-      return this.computeTautRoute(edgeData);
-    }
-
-    // Direct-line fast path: when nothing visible sits between source and target
-    // and there are no parallel siblings or near-touch conditions, WebCola's
-    // visibility-graph router still occasionally produces snake-shaped routes
-    // (its obstacle set includes the *inflated* collision bounds, not the
-    // visible rectangles, so clear-looking corridors register as blocked).
-    // Bypass it for these cases — the result is a straight diagonal that
-    // exits the source pointing at the target, which is what the eye expects.
-    //
-    // Port distribution still applies to fast-path edges: edges that share a
-    // node side with siblings (multiple incoming arrows on a BDD terminal,
-    // multiple outgoing arrows from a hub) need their endpoints spread along
-    // the side or they cluster at the natural line-intersection point.
-    if (!this.hasGroupEndpoints(edgeData)) {
-      const direct = this.tryDirectLineRoute(edgeData);
-      if (direct) {
-        return this.applyPortBasedEndpointsToDirectRoute(edgeData, direct);
-      }
-    }
-
-    const defaultRoute = [
-      { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
-      { x: edgeData.target.x || 0, y: edgeData.target.y || 0 }
-    ];
-    let route: Array<{ x: number; y: number }>;
-
-    // Get initial route from WebCola
-    if (typeof (this.colaLayout as any)?.routeEdge === 'function') {
-      try {
-        route = (this.colaLayout as any).routeEdge(edgeData);
-
-        // Error check the route
-        if (!route || !Array.isArray(route) || route.length < 2 ||
-            !route[0] || !route[1] || route[0].x === undefined || route[0].y === undefined) {
-                throw new Error(`WebCola failed to route edge ${edgeData.id} from ${edgeData.source.id} to ${edgeData.target.id}`);
-        }
-      } catch (e) {
-        console.log("Error routing edge", edgeData.id, `from ${edgeData.source.id} to ${edgeData.target.id}`);
-        console.error(e);
-        return defaultRoute;
-      }
-    } else {
-      // Fallback route
-      route = defaultRoute;
-    }
-
-    // Handle group edges: snap the group-attached end(s) to the group boundary.
-    // After this, skip getNearTouchPerpendicularRoute — it uses raw node positions
-    // and would override the group boundary snap with a member-node-center route.
-    if (edgeData.id?.startsWith('_g_') || edgeData.sourceGroupId || edgeData.targetGroupId) {
-      return this.routeGroupEdge(edgeData, route);
-    }
-    // Handle multiple edges between same nodes
-    route = this.handleMultipleEdgeRouting(edgeData, route);
-
-    // Apply port-based endpoint distribution for ALL edges (not just multi-edges
-    // between the same pair). This spreads edges that share the same node side
-    // across the side length to reduce crossings and overlapping anchors.
-    route = this.applyPortBasedEndpoints(edgeData, route);
-
-    // Check for near-touching nodes and reroute via perpendicular sides if needed
-    const nearTouchRoute = this.getNearTouchPerpendicularRoute(edgeData);
-    if (nearTouchRoute) {
-      return nearTouchRoute;
-    }
-
-    return route;
+    return this.computeTautRoute(edgeData);
   }
 
   // ── Taut edge router (consolidated curved routing) ──────────────────
@@ -7019,7 +6501,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   // router (corner-visibility shortest path), one interpolating smoother
   // (filletPath). Replaces the legacy stack of WebCola routeEdge + direct-line
   // fast path + perpendicular reroute + curveBasis/tangent-guides, all of which
-  // disagreed about where nodes are. Gated behind useTautRouter.
+  // disagreed about where nodes are.
 
   /**
    * Entry point for the consolidated curved router. Group edges keep their
@@ -7104,7 +6586,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // applyPortBasedEndpoints by seeding a 2-point route and reading back the
     // relevant end. The dominant-direction vs natural-clip side mismatch can
     // push the distributed point inside the rect — validate and fall back to the
-    // base clip if so (mirrors applyPortBasedEndpointsToDirectRoute).
+    // base clip if so.
     const portCount = end === 'source' ? edgeData._sourcePortCount : edgeData._targetPortCount;
     if (portCount !== undefined && portCount > 1) {
       const seed = end === 'source'
@@ -7694,457 +7176,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const obstacles = this.buildRouterObstacles(edge);
     if (this.routePolylineClips(bowed, obstacles)) return null;
     return this.simplifyCollinear(bowed);
-  }
-
-  // ── Edge Crossing Optimization ──────────────────────────────────────
-
-  /**
-   * Orchestrates post-routing crossing detection and resolution.
-   * Runs up to MAX_CROSSING_OPTIMIZATION_PASSES iterations, each pass
-   * detecting crossings and attempting local fixes.
-   *
-   * Performance guardrails (Tier 1.5):
-   *   - Skip entirely if edge count exceeds CROSSING_OPTIMIZATION_EDGE_THRESHOLD
-   *     (50 — keeps the worst case bounded by graph size).
-   *   - Wall-clock budget MAX_CROSSING_OPTIMIZATION_BUDGET_MS (30ms) — if
-   *     detection+resolution overruns, abort and accept current routing. This
-   *     covers pathological graphs that fall below the edge-count gate but
-   *     have, e.g., very long polyline routes or many crossings.
-   */
-  private optimizeCrossings(): void {
-    // The taut router already minimizes crossings (shortest-path routing +
-    // port-angle ordering) and its routes are obstacle-aware. The legacy
-    // crossing resolvers (rerouteAroundEdge / tryResolveByPortSwap) rewrite a
-    // route's geometry WITHOUT re-running the obstacle-aware router, so they can
-    // push a clean route straight through a node (e.g. turning a clear diagonal
-    // into an orthogonal Z that clips an intervening rectangle). Skip them in
-    // taut mode — a residual crossing is far cheaper than an edge through a node.
-    if (this.useTautRouter) return;
-
-    // Need at least 2 non-alignment edges to have a crossing
-    if (this.computedRoutes.size < 2) return;
-
-    // Skip O(E²) crossing optimization on dense graphs — the base routing
-    // (port angle sorting + blocking-node avoidance) is good enough.
-    let candidateEdges = 0;
-    if (this.currentLayout?.links) {
-      for (const edge of this.currentLayout.links as EdgeWithMetadata[]) {
-        if (this.isAlignmentEdge(edge)) continue;
-        if (edge.source.id === edge.target.id) continue;
-        if (!this.computedRoutes.get(edge.id)) continue;
-        candidateEdges++;
-      }
-    }
-    if (candidateEdges > WebColaCnDGraph.CROSSING_OPTIMIZATION_EDGE_THRESHOLD) return;
-
-    const budgetMs = WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_BUDGET_MS;
-    const startedAt = (typeof performance !== 'undefined' && typeof performance.now === 'function')
-      ? performance.now()
-      : Date.now();
-    const elapsed = (): number => (
-      (typeof performance !== 'undefined' && typeof performance.now === 'function')
-        ? performance.now()
-        : Date.now()
-    ) - startedAt;
-
-    for (let pass = 0; pass < WebColaCnDGraph.MAX_CROSSING_OPTIMIZATION_PASSES; pass++) {
-      if (elapsed() > budgetMs) {
-        console.warn(`[optimizeCrossings] Budget (${budgetMs}ms) exceeded after pass ${pass}; accepting current routing.`);
-        return;
-      }
-      const crossings = this.detectEdgeCrossings();
-      if (crossings.length === 0) break;
-      if (elapsed() > budgetMs) {
-        console.warn(`[optimizeCrossings] Budget exceeded after detection on pass ${pass}; accepting current routing.`);
-        return;
-      }
-      const improved = this.resolveEdgeCrossings(crossings);
-      if (!improved) break;
-    }
-  }
-
-  /**
-   * Detects edge-edge crossings in the computed routes using segment-segment
-   * intersection tests (cross-product method).
-   *
-   * Skips alignment edges and self-loops. For pairs that share an endpoint
-   * node, drops the segments incident to the shared node before testing for
-   * intersection — touching at a shared node is unavoidable, but a *real*
-   * crossing past the shared node is fixable (typically by a port swap).
-   *
-   * @returns Array of [edgeId1, edgeId2] crossing pairs, sorted by severity
-   *          (longer total edge length = more severe crossing)
-   */
-  private detectEdgeCrossings(): Array<[string, string]> {
-    const edgeIds: string[] = [];
-    const edgeRoutes: Array<Array<{ x: number; y: number }>> = [];
-    const edgeEndpoints: Array<{ sourceId: string; targetId: string }> = [];
-
-    // Collect non-excluded edges
-    if (this.currentLayout?.links) {
-      for (const edge of this.currentLayout.links as EdgeWithMetadata[]) {
-        if (this.isAlignmentEdge(edge)) continue;
-        if (edge.source.id === edge.target.id) continue; // self-loop
-        const route = this.computedRoutes.get(edge.id);
-        if (!route || route.length < 2) continue;
-        edgeIds.push(edge.id);
-        edgeRoutes.push(route);
-        edgeEndpoints.push({ sourceId: edge.source.id, targetId: edge.target.id });
-      }
-    }
-
-    const crossings: Array<[string, string, number]> = []; // [id1, id2, severity]
-
-    for (let i = 0; i < edgeIds.length; i++) {
-      for (let j = i + 1; j < edgeIds.length; j++) {
-        const ei = edgeEndpoints[i];
-        const ej = edgeEndpoints[j];
-        const sharedAtSourceI = ei.sourceId === ej.sourceId || ei.sourceId === ej.targetId;
-        const sharedAtTargetI = ei.targetId === ej.sourceId || ei.targetId === ej.targetId;
-        // Parallel edges (both endpoints shared) only ever touch at endpoints —
-        // skip them (port distribution handles their separation).
-        if (sharedAtSourceI && sharedAtTargetI) continue;
-
-        // For all other pairs (including those sharing one node) the strict
-        // proper-intersection test in segmentsIntersect rules out touches at
-        // the shared endpoint, so the full routes can be tested directly.
-        if (this.routesCross(edgeRoutes[i], edgeRoutes[j])) {
-          const severity = this.getRouteLength(edgeRoutes[i]) + this.getRouteLength(edgeRoutes[j]);
-          crossings.push([edgeIds[i], edgeIds[j], severity]);
-        }
-      }
-    }
-
-    // Sort by severity descending (worst crossings first)
-    crossings.sort((a, b) => b[2] - a[2]);
-    return crossings.map(([id1, id2]) => [id1, id2]);
-  }
-
-  /**
-   * Tests whether two polyline routes cross each other using
-   * segment-segment intersection (cross-product method).
-   */
-  private routesCross(
-    routeA: Array<{ x: number; y: number }>,
-    routeB: Array<{ x: number; y: number }>
-  ): boolean {
-    for (let i = 0; i < routeA.length - 1; i++) {
-      for (let j = 0; j < routeB.length - 1; j++) {
-        if (this.segmentsIntersect(routeA[i], routeA[i + 1], routeB[j], routeB[j + 1])) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Tests whether two line segments (p1-p2) and (p3-p4) properly intersect
-   * (cross each other, not just touch at endpoints).
-   */
-  private segmentsIntersect(
-    p1: { x: number; y: number },
-    p2: { x: number; y: number },
-    p3: { x: number; y: number },
-    p4: { x: number; y: number }
-  ): boolean {
-    const d1 = this.cross(p3, p4, p1);
-    const d2 = this.cross(p3, p4, p2);
-    const d3 = this.cross(p1, p2, p3);
-    const d4 = this.cross(p1, p2, p4);
-
-    if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
-        ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
-      return true;
-    }
-    return false;
-  }
-
-  /** Cross product of vectors (b-a) and (c-a). */
-  private cross(
-    a: { x: number; y: number },
-    b: { x: number; y: number },
-    c: { x: number; y: number }
-  ): number {
-    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-  }
-
-  /**
-   * Attempts to resolve detected edge crossings using local strategies.
-   *
-   * Strategy 1: Control point nudge — add/adjust an intermediate waypoint
-   * perpendicular to the crossing, pushing one edge away from the other.
-   *
-   * @returns true if any route was modified
-   */
-  private resolveEdgeCrossings(crossings: Array<[string, string]>): boolean {
-    let modified = false;
-
-    for (const [id1, id2] of crossings) {
-      const route1 = this.computedRoutes.get(id1);
-      const route2 = this.computedRoutes.get(id2);
-      if (!route1 || !route2) continue;
-
-      // Strategy 0: if the two crossing edges share an endpoint node, try
-      // swapping their port indices at that node. This is the canonical fix
-      // for "two edges left the same side in the wrong angular order" and is
-      // cheaper than nudging or rerouting.
-      const edge1 = this.findEdgeById(id1);
-      const edge2 = this.findEdgeById(id2);
-      const sharedNodeId = edge1 && edge2 ? this.findSharedNodeId(edge1, edge2) : null;
-      if (edge1 && edge2 && sharedNodeId) {
-        if (this.tryResolveByPortSwap(edge1, edge2, sharedNodeId)) {
-          modified = true;
-          continue;
-        }
-      }
-
-      // Find the exact crossing point and which segments cross
-      const crossingInfo = this.findCrossingSegments(route1, route2);
-      if (!crossingInfo) continue;
-
-      // Nudge the shorter route to avoid the crossing.
-      const len1 = this.getRouteLength(route1);
-      const len2 = this.getRouteLength(route2);
-      const [targetRoute, targetId] = len1 <= len2 ? [route1, id1] : [route2, id2];
-      const otherRoute = targetRoute === route1 ? route2 : route1;
-      const segIdx = targetRoute === route1 ? crossingInfo.segIdxA : crossingInfo.segIdxB;
-
-      // Strategy 1: Small perpendicular nudge (works for near-miss crossings)
-      const seg = { dx: targetRoute[segIdx + 1].x - targetRoute[segIdx].x, dy: targetRoute[segIdx + 1].y - targetRoute[segIdx].y };
-      const segLen = Math.sqrt(seg.dx * seg.dx + seg.dy * seg.dy);
-      if (segLen < 1) continue;
-
-      const perpX = -seg.dy / segLen;
-      const perpY = seg.dx / segLen;
-
-      let resolved = false;
-      const nudgeDist = WebColaCnDGraph.CROSSING_NUDGE_DISTANCE;
-      for (const sign of [1, -1]) {
-        const midX = (targetRoute[segIdx].x + targetRoute[segIdx + 1].x) / 2 + perpX * nudgeDist * sign;
-        const midY = (targetRoute[segIdx].y + targetRoute[segIdx + 1].y) / 2 + perpY * nudgeDist * sign;
-
-        const candidate = [...targetRoute];
-        candidate.splice(segIdx + 1, 0, { x: midX, y: midY });
-
-        if (!this.routesCross(candidate, otherRoute)) {
-          this.computedRoutes.set(targetId, candidate);
-          modified = true;
-          resolved = true;
-          break;
-        }
-      }
-
-      // Strategy 2: Route around the blocking edge by going to one side of its bounding box
-      if (!resolved) {
-        const rerouteResult = this.rerouteAroundEdge(targetRoute, otherRoute);
-        if (rerouteResult && !this.routesCross(rerouteResult, otherRoute)) {
-          this.computedRoutes.set(targetId, rerouteResult);
-          modified = true;
-        }
-      }
-    }
-
-    return modified;
-  }
-
-  /** Look up an edge in the current layout by its id. */
-  private findEdgeById(edgeId: string): EdgeWithMetadata | null {
-    if (!this.currentLayout?.links) return null;
-    for (const e of this.currentLayout.links as EdgeWithMetadata[]) {
-      if (e.id === edgeId) return e;
-    }
-    return null;
-  }
-
-  /**
-   * Returns the id of the node both edges have in common, or null if they
-   * don't share an endpoint. Two parallel edges (sharing both endpoints) are
-   * treated as no shared-node fixable case — port distribution handles those.
-   */
-  private findSharedNodeId(a: EdgeWithMetadata, b: EdgeWithMetadata): string | null {
-    const aSrc = a.source.id;
-    const aTgt = a.target.id;
-    const bSrc = b.source.id;
-    const bTgt = b.target.id;
-    const sharedAtA1 = aSrc === bSrc || aSrc === bTgt;
-    const sharedAtA2 = aTgt === bSrc || aTgt === bTgt;
-    if (sharedAtA1 && sharedAtA2) return null; // parallel
-    if (sharedAtA1) return aSrc;
-    if (sharedAtA2) return aTgt;
-    return null;
-  }
-
-  /**
-   * Swap the port indices of two edges at their shared node, recompute the
-   * relevant endpoints, and accept the swap only if it reduces or removes the
-   * crossing between them. Reverts otherwise.
-   */
-  private tryResolveByPortSwap(
-    edge1: EdgeWithMetadata,
-    edge2: EdgeWithMetadata,
-    sharedNodeId: string
-  ): boolean {
-    const e1: any = edge1;
-    const e2: any = edge2;
-    const route1Before = this.computedRoutes.get(edge1.id);
-    const route2Before = this.computedRoutes.get(edge2.id);
-    if (!route1Before || !route2Before) return false;
-
-    const isSrc1 = edge1.source.id === sharedNodeId;
-    const isSrc2 = edge2.source.id === sharedNodeId;
-    const idxKey1 = isSrc1 ? '_sourcePortIndex' : '_targetPortIndex';
-    const cntKey1 = isSrc1 ? '_sourcePortCount' : '_targetPortCount';
-    const idxKey2 = isSrc2 ? '_sourcePortIndex' : '_targetPortIndex';
-    const cntKey2 = isSrc2 ? '_sourcePortCount' : '_targetPortCount';
-
-    const i1 = e1[idxKey1];
-    const i2 = e2[idxKey2];
-    const c1 = e1[cntKey1];
-    const c2 = e2[cntKey2];
-
-    // Need both edges to have port info on the same node and same port-count
-    // bucket (same side of the shared node).
-    if (i1 === undefined || i2 === undefined || c1 === undefined || c2 === undefined) return false;
-    if (c1 !== c2) return false;
-    if (i1 === i2) return false;
-
-    // Swap and recompute routes via the same pipeline used at routing time.
-    e1[idxKey1] = i2;
-    e2[idxKey2] = i1;
-
-    const route1After = this.applyPortBasedEndpoints(e1, route1Before.map(p => ({ ...p })));
-    const route2After = this.applyPortBasedEndpoints(e2, route2Before.map(p => ({ ...p })));
-
-    if (this.routesCross(route1After, route2After)) {
-      // Revert
-      e1[idxKey1] = i1;
-      e2[idxKey2] = i2;
-      return false;
-    }
-
-    this.computedRoutes.set(edge1.id, route1After);
-    this.computedRoutes.set(edge2.id, route2After);
-    return true;
-  }
-
-  /**
-   * Reroutes an edge to go around a blocking edge's bounding box.
-   *
-   * Determines which side of the blocking route the start and end points are on,
-   * and routes via waypoints that stay clear of the blocking path.
-   */
-  private rerouteAroundEdge(
-    route: Array<{ x: number; y: number }>,
-    blockingRoute: Array<{ x: number; y: number }>
-  ): Array<{ x: number; y: number }> | null {
-    // Compute bounding box of the blocking route
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of blockingRoute) {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    }
-
-    const MARGIN = WebColaCnDGraph.CROSSING_NUDGE_DISTANCE;
-    const start = route[0];
-    const end = route[route.length - 1];
-    const blockW = maxX - minX;
-    const blockH = maxY - minY;
-
-    const candidates: Array<Array<{ x: number; y: number }>> = [];
-
-    if (blockH >= blockW) {
-      // Blocking route is tall/vertical — route left or right of it
-      const leftX = minX - MARGIN;
-      const rightX = maxX + MARGIN;
-
-      // For each side, build a path: start → waypoint1 → waypoint2 → end
-      // that stays entirely on that side of the blocking route.
-      for (const sideX of [leftX, rightX]) {
-        const candidate = [
-          start,
-          { x: sideX, y: start.y },
-          { x: sideX, y: end.y },
-          end
-        ];
-        if (!this.routesCross(candidate, blockingRoute)) {
-          candidates.push(candidate);
-        }
-      }
-
-      // If simple L-routes don't work (start/end are on opposite sides),
-      // try a Z-route that crosses the blocking route above or below its extent
-      if (candidates.length === 0) {
-        for (const crossY of [minY - MARGIN, maxY + MARGIN]) {
-          const candidate = [
-            start,
-            { x: start.x, y: crossY },
-            { x: end.x, y: crossY },
-            end
-          ];
-          if (!this.routesCross(candidate, blockingRoute)) {
-            candidates.push(candidate);
-          }
-        }
-      }
-    } else {
-      // Blocking route is wide/horizontal — route above or below
-      const topY = minY - MARGIN;
-      const bottomY = maxY + MARGIN;
-
-      for (const sideY of [topY, bottomY]) {
-        const candidate = [
-          start,
-          { x: start.x, y: sideY },
-          { x: end.x, y: sideY },
-          end
-        ];
-        if (!this.routesCross(candidate, blockingRoute)) {
-          candidates.push(candidate);
-        }
-      }
-
-      // Z-route fallback: cross to the left or right of the blocking extent
-      if (candidates.length === 0) {
-        for (const crossX of [minX - MARGIN, maxX + MARGIN]) {
-          const candidate = [
-            start,
-            { x: crossX, y: start.y },
-            { x: crossX, y: end.y },
-            end
-          ];
-          if (!this.routesCross(candidate, blockingRoute)) {
-            candidates.push(candidate);
-          }
-        }
-      }
-    }
-
-    if (candidates.length === 0) return null;
-
-    // Pick the shortest candidate
-    candidates.sort((a, b) => this.getRouteLength(a) - this.getRouteLength(b));
-    return candidates[0];
-  }
-
-  /**
-   * Finds the specific segment indices where two routes cross.
-   * Returns the first crossing found, or null if none.
-   */
-  private findCrossingSegments(
-    routeA: Array<{ x: number; y: number }>,
-    routeB: Array<{ x: number; y: number }>
-  ): { segIdxA: number; segIdxB: number } | null {
-    for (let i = 0; i < routeA.length - 1; i++) {
-      for (let j = 0; j < routeB.length - 1; j++) {
-        if (this.segmentsIntersect(routeA[i], routeA[i + 1], routeB[j], routeB[j + 1])) {
-          return { segIdxA: i, segIdxB: j };
-        }
-      }
-    }
-    return null;
   }
 
   /**
