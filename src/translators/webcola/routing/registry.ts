@@ -6,10 +6,19 @@ import type { RoutingModeDefinition } from './types';
  * register themselves on import.
  *
  * Re-registering an existing id replaces it — that is the upgrade-in-place
- * mechanism (e.g. a future libavoid entry can take over 'grid' so existing
- * specs get better orthogonal routing without changing their layoutFormat).
+ * mechanism (e.g. the libavoid entry takes over 'grid' so existing specs get
+ * better orthogonal routing without changing their layoutFormat).
+ *
+ * The store lives on globalThis (Symbol.for key) rather than in module scope:
+ * opt-in router entries are built as separate bundles that inline their own
+ * copy of this module, and a module-scoped Map would give each copy a private
+ * registry — registrations from `spytial-core/routers/*` (or a second script
+ * tag) would be invisible to the copy the renderer reads. One process, one
+ * registry, no matter how many bundle copies of this file are loaded.
  */
-const modes = new Map<string, RoutingModeDefinition>();
+const REGISTRY_KEY = Symbol.for('spytial-core.routing-modes');
+const modes: Map<string, RoutingModeDefinition> =
+  ((globalThis as any)[REGISTRY_KEY] ??= new Map<string, RoutingModeDefinition>());
 
 export function registerRoutingMode(def: RoutingModeDefinition): void {
   modes.set(def.id, def);

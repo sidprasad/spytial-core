@@ -68,12 +68,13 @@ export interface RouterHost {
  * A pluggable edge router for the standard pipeline. Routes one node-to-node
  * edge at a time; self-loops and group edges never reach it.
  */
+/**
+ * Routers must be ready to route synchronously from the moment their mode is
+ * registered — the routing pass never awaits. Routers with asynchronous setup
+ * (e.g. WASM init) must finish it BEFORE calling registerRoutingMode, the way
+ * the libavoid entry does.
+ */
 export interface EdgeRouter {
-  /**
-   * Resolves when the router is ready to route (e.g. WASM init). Undefined
-   * means the router is synchronous and always ready.
-   */
-  readonly ready?: Promise<void>;
   /**
    * Optional batch hook, called once at the start of each routing pass with
    * positions frozen. Routers whose quality comes from routing all edges
