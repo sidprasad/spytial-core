@@ -10,6 +10,7 @@ import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker'
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
+  type RoutingModeDefinition,
   getRoutingMode,
   listRoutingModes,
   TautRouter,
@@ -877,8 +878,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const format = this.layoutFormat;
     if (!format || format === 'default') return 'taut';
     if (getRoutingMode(format)) return format;
-    if (!this.warnedRoutingModeFallback) {
-      this.warnedRoutingModeFallback = true;
+    if (!this.warnedRoutingModeFallbacks.has(format)) {
+      this.warnedRoutingModeFallbacks.add(format);
       console.warn(format === 'legacy'
         ? '[spytial] layoutFormat="legacy" has been removed; edges now route as "taut". ' +
           'Remove the layoutFormat attribute (taut is the default) to silence this warning.'
@@ -889,24 +890,28 @@ export class WebColaCnDGraph extends HTMLElementBase {
     return 'taut';
   }
 
-  /** One-shot guard for routing-mode fallback warnings (legacy/unknown). */
-  private warnedRoutingModeFallback = false;
+  /** Warn-once-per-value guard for routing-mode fallbacks (legacy/unknown). */
+  private warnedRoutingModeFallbacks = new Set<string>();
 
   /** True when the resolved routing mode uses the bespoke grid (orthogonal) pipeline. */
   private get useGridPipeline(): boolean {
     return getRoutingMode(this.routingMode)?.pipeline === 'grid';
   }
 
-  /** Router instance for the standard pipeline, cached per resolved mode. */
+  /**
+   * Router instance for the standard pipeline, cached per registry
+   * DEFINITION (not per mode id): re-registering an id replaces its
+   * definition object, so upgrade-in-place reaches elements that already
+   * routed in that mode on their next pass.
+   */
   private activeRouter: SpytialEdgeRouter | null = null;
-  private activeRouterModeId: string | null = null;
+  private activeRouterDef: RoutingModeDefinition | null = null;
 
   private get edgeRouter(): SpytialEdgeRouter {
-    const modeId = this.routingMode;
-    if (this.activeRouterModeId !== modeId || !this.activeRouter) {
-      const def = getRoutingMode(modeId);
+    const def = getRoutingMode(this.routingMode) ?? null;
+    if (!this.activeRouter || this.activeRouterDef !== def) {
       this.activeRouter = def?.createRouter?.() ?? new TautRouter();
-      this.activeRouterModeId = modeId;
+      this.activeRouterDef = def;
     }
     return this.activeRouter;
   }

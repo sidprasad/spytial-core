@@ -14,10 +14,12 @@ import { EDGE_CLEARANCE_PX } from './taut-router';
  * processTransaction. routeEdge is then a cache lookup. Every wasm-side
  * object is destroyed before beginPass returns; nothing lives across passes.
  *
- * LICENSE NOTE: libavoid-js is LGPL-2.1-or-later. It is an optional peer
- * dependency — consumers who import this entry install it themselves, so
- * spytial-core does not redistribute LGPL code. (Decision pending on
- * shipping a self-contained CDN bundle.)
+ * LICENSE NOTE: libavoid-js is LGPL-2.1-or-later. The npm ESM entry keeps it
+ * external (an optional peer dependency consumers install themselves), so
+ * that path redistributes no LGPL code. The CDN bundle in dist/browser
+ * (IIFE glue + libavoid.wasm) DOES contain libavoid-js and currently ships
+ * in the npm tarball via the package.json `files` list — whether to keep
+ * shipping it is an open decision.
  */
 
 // libavoid ConnDirFlags (embind exposes these as numeric constants).
@@ -157,11 +159,28 @@ export interface LibavoidRoutingOptions {
  * before it can route; until then unknown layoutFormat values fall back to
  * taut with a console warning.
  *
+ * The first call starts the load and its options win; concurrent and later
+ * calls return the same promise (with a warning if they carry options, which
+ * are ignored). A FAILED load is not cached: a later call retries, so a
+ * consumer whose bundler moved the wasm can recover by calling again with an
+ * explicit wasmUrl. (AvoidLib.load only latches its instance on success, so
+ * retrying it is safe.)
+ *
  * Elements created before this resolves built their Routing dropdown without
  * the libavoid option — create (or re-render) diagrams after awaiting this.
  */
 export function registerLibavoidRouting(options: LibavoidRoutingOptions = {}): Promise<void> {
-  loadPromise ??= (async () => {
+  if (loadPromise) {
+    if (options.wasmUrl !== undefined || options.takeOverGrid !== undefined) {
+      console.warn(
+        '[spytial] registerLibavoidRouting: a libavoid load already started; these options are ' +
+        'ignored. Pass options on the FIRST call — synchronously after import, before awaiting ' +
+        'libavoidReady.'
+      );
+    }
+    return loadPromise;
+  }
+  const load = (async () => {
     await AvoidLib.load(options.wasmUrl);
     registerRoutingMode({
       id: 'libavoid',
@@ -178,5 +197,9 @@ export function registerLibavoidRouting(options: LibavoidRoutingOptions = {}): P
       });
     }
   })();
-  return loadPromise;
+  loadPromise = load;
+  load.catch(() => {
+    if (loadPromise === load) loadPromise = null;
+  });
+  return load;
 }

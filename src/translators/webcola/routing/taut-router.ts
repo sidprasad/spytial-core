@@ -464,8 +464,13 @@ function separateCorridors(host: RouterHost): void {
           ? [[a, overlap.segA], [b, overlap.segB]]
           : [[b, overlap.segB], [a, overlap.segA]];
         for (const [item, segIdx] of ordered) {
-          // Push away from the other route: away-side for A is -side, for B +side.
-          const sideSign = item === a ? -overlap.side : overlap.side;
+          // Push away from the other route. `side` is which side of A the
+          // corridor lies on, in A's frame: A moves to -side along its own
+          // normal. B moves to +side — but tryBowRouteAside offsets along the
+          // bowed segment's OWN normal, which flips when B runs anti-parallel
+          // to A (findParallelOverlap accepts both directions), so B's sign
+          // carries sign(u_B · u_A).
+          let sideSign = -overlap.side;
           // The window is in A's segment frame; convert for B by projecting
           // its endpoints onto B's segment.
           let sStart = overlap.sStart, sEnd = overlap.sEnd;
@@ -476,6 +481,7 @@ function separateCorridors(host: RouterHost): void {
             const bLen = Math.hypot(bdx, bdy);
             if (bLen < 1e-6) continue;
             const ubx = bdx / bLen, uby = bdy / bLen;
+            sideSign = (ubx * overlap.dir.x + uby * overlap.dir.y < 0 ? -1 : 1) * overlap.side;
             const proj = (s: number) => {
               const px = aSeg.x + overlap.dir.x * s, py = aSeg.y + overlap.dir.y * s;
               return Math.max(0, Math.min(bLen, (px - bSeg1.x) * ubx + (py - bSeg1.y) * uby));

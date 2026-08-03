@@ -57,8 +57,16 @@ export {
   getRoutingMode,
   listRoutingModes,
   type RoutingModeDefinition,
+  type RoutingPipeline,
   type EdgeRouter,
   type RouterHost,
+  // The building blocks of the two interfaces above, so third-party routers
+  // can write their own signatures (deep imports are blocked by the exports
+  // map).
+  type Point,
+  type PortAttachment,
+  type ObstacleRect,
+  type BoundsRect,
 } from './translators/webcola/routing';
 export {
   ignoreHistory,

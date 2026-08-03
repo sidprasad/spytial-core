@@ -5,8 +5,11 @@ import { copyFile, mkdir } from 'fs/promises'
 //
 //  1. npm `spytial-core/routers/libavoid` — ESM with libavoid-js EXTERNAL:
 //     libavoid-js is an optional peer dependency (LGPL-2.1-or-later; keeping
-//     it external means spytial-core redistributes no LGPL code), and the
-//     consumer's bundler resolves the WASM from their own node_modules.
+//     it external keeps LGPL code out of this entry), and the consumer's
+//     bundler resolves the WASM from their own node_modules. NOTE: the CDN
+//     artifacts below DO contain libavoid-js and currently ship in the npm
+//     tarball via package.json `files` ("dist/browser") — open decision, see
+//     the license note in routing/libavoid-router.ts.
 //  2. CDN dist/browser/spytial-core-router-libavoid.global.js — IIFE with the
 //     libavoid-js JS glue INLINED; libavoid.wasm is copied next to it and
 //     fetched relative to the script URL at runtime. Loaded after the main
