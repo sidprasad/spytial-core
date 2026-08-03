@@ -14,12 +14,12 @@ import { EDGE_CLEARANCE_PX } from './taut-router';
  * processTransaction. routeEdge is then a cache lookup. Every wasm-side
  * object is destroyed before beginPass returns; nothing lives across passes.
  *
- * LICENSE NOTE: libavoid-js is LGPL-2.1-or-later. The npm ESM entry keeps it
- * external (an optional peer dependency consumers install themselves), so
- * that path redistributes no LGPL code. The CDN bundle in dist/browser
- * (IIFE glue + libavoid.wasm) DOES contain libavoid-js and currently ships
- * in the npm tarball via the package.json `files` list — whether to keep
- * shipping it is an open decision.
+ * LICENSE NOTE: libavoid-js is LGPL-2.1-or-later. spytial-core redistributes
+ * none of it: the npm ESM entry keeps it external (an optional peer
+ * dependency consumers install themselves), and there is deliberately no
+ * self-contained CDN bundle. Script-tag consumers load this entry from an
+ * ESM CDN that resolves libavoid-js itself (see site/pipeline.md). Merely
+ * calling an LGPL library does not affect spytial-core's MIT license.
  */
 
 // libavoid ConnDirFlags (embind exposes these as numeric constants).
