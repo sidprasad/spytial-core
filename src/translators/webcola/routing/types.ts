@@ -48,6 +48,8 @@ export interface RouterHost {
   portAttachment(edge: any, end: 'source' | 'target'): PortAttachment;
   /** Obstacle set for an edge: every node's inflated visible rect except the edge's own endpoints. */
   obstaclesFor(edge: any): ObstacleRect[];
+  /** Full obstacle set: every node's inflated visible rect, with node ids. */
+  obstacles(): Array<ObstacleRect & { id: string }>;
   /**
    * Fan parallel edges between the same node pair (curvature/offset post-step).
    * No-op for edges without parallel siblings. Obstacle-blind — routers must
@@ -72,6 +74,13 @@ export interface EdgeRouter {
    * means the router is synchronous and always ready.
    */
   readonly ready?: Promise<void>;
+  /**
+   * Optional batch hook, called once at the start of each routing pass with
+   * positions frozen. Routers whose quality comes from routing all edges
+   * together (global nudging, crossing minimization) do the work here and
+   * serve routeEdge from a cache.
+   */
+  beginPass?(host: RouterHost): void;
   /** Route one edge. Returns a polyline from source port to target port. */
   routeEdge(edge: any, host: RouterHost): Point[];
   /** Optional post-pass over all routes (e.g. corridor separation). */

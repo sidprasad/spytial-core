@@ -23,6 +23,8 @@ Add the custom element that will receive the final layout:
 
 Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing; the Routing dropdown in the rendered toolbar switches modes at runtime. (`layoutFormat="legacy"`, the old curved router, has been removed — the value still parses but warns and routes as taut.)
 
+For higher-quality orthogonal routing, import the opt-in libavoid router: `import 'spytial-core/routers/libavoid'` (npm; also install the optional peer `libavoid-js`), or load `spytial-core-router-libavoid.global.js` after the main bundle with `libavoid.wasm` served next to it (CDN). It registers an `Orthogonal (libavoid)` mode and upgrades `grid` in place. Note: libavoid-js is LGPL-2.1-or-later; the npm entry keeps it external as an optional peer dependency.
+
 Load the browser bundle:
 
 ```html

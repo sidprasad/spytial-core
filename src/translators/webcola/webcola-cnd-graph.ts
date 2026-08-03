@@ -928,6 +928,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
     return {
       portAttachment: (edge, end) => this.getPortAttachment(edge, end),
       obstaclesFor: (edge) => this.buildRouterObstacles(edge),
+      obstacles: () => {
+        if (!this.routerObstacleCache) this.buildRouterObstacleCache();
+        return this.routerObstacleCache!;
+      },
       fanParallel: (edge, route, scale) => this.handleMultipleEdgeRouting(edge, route, scale),
       links: () => (this.currentLayout?.links ?? []) as any[],
       routes: this.computedRoutes,
@@ -4949,6 +4953,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
       // recomputation — turning per-edge obstacle work from O(E·N) into O(N)+O(E·N filter).
       this.buildRouterObstacleCache();
+
+      // Batch hook: routers that route all edges in one transaction
+      // (e.g. libavoid) do the work here and serve routeEdge from a cache.
+      this.edgeRouter.beginPass?.(this.routerHost());
 
       // Compute routes for all edges (stored in computedRoutes map)
       this.computeAllRoutes();
