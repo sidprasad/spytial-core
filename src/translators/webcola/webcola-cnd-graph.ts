@@ -869,29 +869,21 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Resolves the layoutFormat attribute to a registered routing mode id.
    * Taut is the default: unset, 'default', and 'taut' all resolve to 'taut'.
-   * 'legacy' (the removed multi-router curved path) is deprecated: it warns
-   * once and routes as taut. Unknown/unregistered values also warn once and
-   * fall back to taut.
+   * Anything not in the registry warns once and falls back to taut — with a
+   * dedicated removal message for 'legacy' (the removed multi-router curved
+   * path).
    */
   private get routingMode(): string {
     const format = this.layoutFormat;
     if (!format || format === 'default') return 'taut';
-    if (format === 'legacy') {
-      if (!this.warnedRoutingModeFallback) {
-        this.warnedRoutingModeFallback = true;
-        console.warn(
-          '[spytial] layoutFormat="legacy" has been removed; edges now route as "taut". ' +
-          'Remove the layoutFormat attribute (taut is the default) to silence this warning.'
-        );
-      }
-      return 'taut';
-    }
     if (getRoutingMode(format)) return format;
     if (!this.warnedRoutingModeFallback) {
       this.warnedRoutingModeFallback = true;
-      console.warn(
-        `[spytial] Unknown layoutFormat "${format}" — no such routing mode is registered. ` +
-        'Falling back to "taut". (Opt-in routers must be imported before they can be selected.)'
+      console.warn(format === 'legacy'
+        ? '[spytial] layoutFormat="legacy" has been removed; edges now route as "taut". ' +
+          'Remove the layoutFormat attribute (taut is the default) to silence this warning.'
+        : `[spytial] Unknown layoutFormat "${format}" — no such routing mode is registered. ` +
+          'Falling back to "taut". (Opt-in routers must be imported before they can be selected.)'
       );
     }
     return 'taut';
@@ -921,11 +913,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /**
    * The RouterHost handed to pluggable routers: everything Spytial-specific
-   * (ports, obstacles, parallel-edge fanning, edge classification) stays
-   * behind these callbacks.
+   * (ports, obstacles, parallel-edge fanning, edge selection) stays behind
+   * these callbacks. Built once — every member delegates to `this`, and
+   * `computedRoutes` is a stable Map instance — and reused across passes.
    */
+  private cachedRouterHost: RouterHost | null = null;
+
   private routerHost(): RouterHost {
-    return {
+    return this.cachedRouterHost ??= {
       portAttachment: (edge, end) => this.getPortAttachment(edge, end),
       obstaclesFor: (edge) => this.buildRouterObstacles(edge),
       obstacles: () => {
@@ -933,10 +928,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
         return this.routerObstacleCache!;
       },
       fanParallel: (edge, route, scale) => this.handleMultipleEdgeRouting(edge, route, scale),
-      links: () => (this.currentLayout?.links ?? []) as any[],
+      routerEdges: () =>
+        ((this.currentLayout?.links ?? []) as any[]).filter(e => this.isRouterEdge(e)),
       routes: this.computedRoutes,
-      isAlignmentEdge: (edge) => this.isAlignmentEdge(edge),
-      hasGroupEndpoints: (edge) => this.hasGroupEndpoints(edge),
     };
   }
 
@@ -4370,7 +4364,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * connectors (group `addEdge`) and inferredEdge `draw` edges carrying
    * per-end sourceGroupId/targetGroupId stamps. These edges route via
    * routeGroupEdge and are excluded from node-port machinery (port
-   * distribution, corridor separation, direct-line fast path).
+   * distribution and the pluggable router — see isRouterEdge).
    */
   private hasGroupEndpoints(d: any): boolean {
     return !!(d?.sourceGroupId || d?.targetGroupId || d?.groupId || d?.id?.startsWith('_g_'));
@@ -6105,6 +6099,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
+   * True for edges the standard pipeline hands to the pluggable router: the
+   * complement of computeSingleRoute's special cases (alignment edges,
+   * self-loops, group-attached edges). Also drives RouterHost.routerEdges(),
+   * so batch/finalize passes see exactly the edges routeEdge will be asked
+   * about.
+   */
+  private isRouterEdge(d: any): boolean {
+    return !this.isAlignmentEdge(d)
+      && d?.source?.id !== d?.target?.id
+      && !(d?.id?.startsWith('_g_') || d?.sourceGroupId || d?.targetGroupId);
+  }
+
   /**
    * Computes route points for a single edge.
    * Returns an array of {x, y} points (not an SVG path string).
@@ -6113,7 +6119,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * @returns Array of route points, or null if edge should not be rendered
    */
   private computeSingleRoute(edgeData: any): Array<{ x: number; y: number }> | null {
-    // Early return for alignment edges - they don't need complex routing
+    // Common case: a plain node-to-node edge goes to the active pluggable
+    // router (taut by default — see ./routing).
+    if (this.isRouterEdge(edgeData)) {
+      return this.edgeRouter.routeEdge(edgeData, this.routerHost());
+    }
+
+    // Alignment edges are invisible guides — a straight segment suffices.
     if (this.isAlignmentEdge(edgeData)) {
       return [
         { x: edgeData.source.x || 0, y: edgeData.source.y || 0 },
@@ -6141,12 +6153,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       return this.createSelfLoopRoute(edgeData);
     }
 
-    // Group edges keep their boundary-snap contract; everything else goes
-    // through the active pluggable router (taut by default — see ./routing).
-    if (edgeData.id?.startsWith('_g_') || edgeData.sourceGroupId || edgeData.targetGroupId) {
-      return this.computeGroupEdgeRoute(edgeData);
-    }
-    return this.edgeRouter.routeEdge(edgeData, this.routerHost());
+    // Everything left is group-attached: the boundary-snap contract.
+    return this.computeGroupEdgeRoute(edgeData);
   }
 
   /**

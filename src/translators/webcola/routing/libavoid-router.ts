@@ -1,5 +1,5 @@
 import { AvoidLib } from 'libavoid-js';
-import type { EdgeRouter, Point, RouterHost } from './types';
+import type { EdgeRouter, Point, PortAttachment, RouterHost } from './types';
 import { registerRoutingMode } from './registry';
 import { EDGE_CLEARANCE_PX } from './taut-router';
 
@@ -36,14 +36,6 @@ function connDirForNormal(normal: Point): number {
   return CONN_DIR_ALL;
 }
 
-/** True for edges the standard pipeline sends to the router (mirrors computeSingleRoute). */
-function isRouterEdge(edge: any, host: RouterHost): boolean {
-  if (host.isAlignmentEdge(edge)) return false;
-  if (edge?.source?.id === edge?.target?.id) return false;
-  if (edge?.id?.startsWith('_g_') || edge?.sourceGroupId || edge?.targetGroupId) return false;
-  return true;
-}
-
 export class LibavoidRouter implements EdgeRouter {
   /** Routes computed by the last beginPass, keyed by edge id. */
   private batch = new Map<string, Point[]>();
@@ -68,9 +60,9 @@ export class LibavoidRouter implements EdgeRouter {
       );
 
       // One shape per node (inflation is libavoid's job via shapeBufferDistance,
-      // so shapes use the un-inflated visible rectangle).
-      const shapesByNodeId = new Map<string, any>();
-      const rectByNodeId = new Map<string, { minX: number; minY: number }>();
+      // so shapes use the un-inflated visible rectangle). The deflated top-left
+      // is kept alongside: pin offsets are relative to it.
+      const shapeByNodeId = new Map<string, { shape: any; minX: number; minY: number }>();
       for (const o of host.obstacles()) {
         const minX = o.minX + EDGE_CLEARANCE_PX, minY = o.minY + EDGE_CLEARANCE_PX;
         const maxX = o.maxX - EDGE_CLEARANCE_PX, maxY = o.maxY - EDGE_CLEARANCE_PX;
@@ -78,38 +70,34 @@ export class LibavoidRouter implements EdgeRouter {
         const br = new Avoid.Point(maxX, maxY);
         const rect = new Avoid.Rectangle(tl, br);
         temps.push(tl, br, rect);
-        shapesByNodeId.set(o.id, new Avoid.ShapeRef(router, rect));
-        rectByNodeId.set(o.id, { minX, minY });
+        shapeByNodeId.set(o.id, { shape: new Avoid.ShapeRef(router, rect), minX, minY });
       }
 
-      // One connector per routable edge, attached via shape connection pins at
-      // the port-distributed attachment points, visible only outward.
+      // One connector per router-owned edge, attached via shape connection
+      // pins at the port-distributed attachment points, visible only outward.
       const conns: Array<{ id: string; connRef: any; fallback: [Point, Point] }> = [];
       let pinClass = 1000; // unique classId per pin
-      for (const edge of host.links()) {
-        if (!isRouterEdge(edge, host)) continue;
+      const mkEnd = (s: { shape: any; minX: number; minY: number }, att: PortAttachment) => {
+        const classId = pinClass++;
+        const pin = new Avoid.ShapeConnectionPin(
+          s.shape, classId,
+          att.point.x - s.minX, att.point.y - s.minY,
+          false, 0, connDirForNormal(att.normal)
+        );
+        pin.setExclusive(false);
+        const end = new Avoid.ConnEnd(s.shape, classId);
+        temps.push(end);
+        return end;
+      };
+      for (const edge of host.routerEdges()) {
         const src = host.portAttachment(edge, 'source');
         const tgt = host.portAttachment(edge, 'target');
-        const srcShape = shapesByNodeId.get(edge.source.id);
-        const tgtShape = shapesByNodeId.get(edge.target.id);
+        const srcShape = shapeByNodeId.get(edge.source.id);
+        const tgtShape = shapeByNodeId.get(edge.target.id);
         if (!srcShape || !tgtShape) continue;
 
-        const mkEnd = (shape: any, nodeId: string, att: { point: Point; normal: Point }) => {
-          const rect = rectByNodeId.get(nodeId)!;
-          const classId = pinClass++;
-          const pin = new Avoid.ShapeConnectionPin(
-            shape, classId,
-            att.point.x - rect.minX, att.point.y - rect.minY,
-            false, 0, connDirForNormal(att.normal)
-          );
-          pin.setExclusive(false);
-          const end = new Avoid.ConnEnd(shape, classId);
-          temps.push(end);
-          return end;
-        };
-
-        const srcEnd = mkEnd(srcShape, edge.source.id, src);
-        const tgtEnd = mkEnd(tgtShape, edge.target.id, tgt);
+        const srcEnd = mkEnd(srcShape, src);
+        const tgtEnd = mkEnd(tgtShape, tgt);
         const connRef = new Avoid.ConnRef(router, srcEnd, tgtEnd);
         conns.push({ id: edge.id, connRef, fallback: [src.point, tgt.point] });
       }

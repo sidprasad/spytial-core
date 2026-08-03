@@ -420,7 +420,7 @@ export function tryBowRouteAside(
  * bowed perpendicular, away from the other, by just enough to restore the
  * separation — validated against the edge's obstacle set so the bow never
  * clips a node. Same-pair edges are skipped (fanning owns those), as are
- * group edges, self-loops, and routes that are already complex.
+ * routes that are already complex.
  *
  * Cost: O(E²·S²) pairwise segment scan, gated by the same edge-count
  * threshold and wall-clock budget as the other polish passes.
@@ -430,10 +430,7 @@ function separateCorridors(host: RouterHost): void {
 
   type Item = { id: string; edge: any; route: Point[]; len: number };
   const items: Item[] = [];
-  for (const edge of host.links()) {
-    if (host.isAlignmentEdge(edge)) continue;
-    if (edge.source.id === edge.target.id) continue;
-    if (host.hasGroupEndpoints(edge)) continue;
+  for (const edge of host.routerEdges()) {
     const route = host.routes.get(edge.id);
     if (!route || route.length < 2 || route.length > 6) continue;
     items.push({ id: edge.id, edge, route, len: getRouteLength(route) });

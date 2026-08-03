@@ -56,19 +56,20 @@ export interface RouterHost {
    * validate the result against the obstacle set themselves.
    */
   fanParallel(edge: any, route: Point[], scale: number): Point[];
-  /** All current layout links (routers filter what they touch). */
-  links(): any[];
+  /**
+   * The edges the router owns: every current link except the special cases
+   * the component routes itself (alignment edges, self-loops, group-attached
+   * edges). Exactly these edges reach routeEdge during a pass.
+   */
+  routerEdges(): any[];
   /** Live map of computed routes by edge id; finalize passes may rewrite entries. */
   routes: Map<string, Point[]>;
-  isAlignmentEdge(edge: any): boolean;
-  hasGroupEndpoints(edge: any): boolean;
 }
 
 /**
  * A pluggable edge router for the standard pipeline. Routes one node-to-node
  * edge at a time; self-loops and group edges never reach it.
- */
-/**
+ *
  * Routers must be ready to route synchronously from the moment their mode is
  * registered — the routing pass never awaits. Routers with asynchronous setup
  * (e.g. WASM init) must finish it BEFORE calling registerRoutingMode, the way

@@ -10,8 +10,8 @@ import { copyFile, mkdir } from 'fs/promises'
 //  2. CDN dist/browser/spytial-core-router-libavoid.global.js — IIFE with the
 //     libavoid-js JS glue INLINED; libavoid.wasm is copied next to it and
 //     fetched relative to the script URL at runtime. Loaded after the main
-//     bundle, it registers 'libavoid' and takes over 'grid' via
-//     window.spytialcore.registerRoutingMode.
+//     bundle, it registers 'libavoid' and takes over 'grid' through the
+//     shared routing registry (globalThis-backed — see routing/registry.ts).
 export default defineConfig([
   {
     entry: { 'routers/libavoid': 'src/routers/libavoid.ts' },
