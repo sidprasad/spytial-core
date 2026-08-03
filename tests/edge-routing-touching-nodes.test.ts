@@ -77,7 +77,6 @@ describe('Edge routing near-touching nodes', () => {
       ];
 
       const fakeThis: any = {
-        gridRouteToPoints: proto.gridRouteToPoints,
         getRectangleIntersection: proto.getRectangleIntersection,
         getTouchDirection: proto.getTouchDirection,
         computePerpendicularRoute: proto.computePerpendicularRoute,

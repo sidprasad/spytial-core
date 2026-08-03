@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import {
+  routeTautPolyline,
+  filletPath,
+  segmentEntersRect,
+  routePolylineClips,
+  simplifyCollinear,
+} from '../src/translators/webcola/routing';
 
 /**
  * Tests for the consolidated "taut" curved router (corner-visibility shortest
- * path + fillet smoothing), gated behind useTautRouter. These exercise the new
- * geometric core directly via prototype injection, the way the legacy
- * direct-line tests do.
+ * path + fillet smoothing). The geometric core lives in
+ * src/translators/webcola/routing/ as pure functions; the port machinery
+ * (getPortAttachment) stays on the component and is exercised via prototype
+ * injection.
  */
 
 const proto = WebColaCnDGraph.prototype as any;
@@ -18,40 +26,30 @@ const port = (x: number, y: number, nx: number, ny: number) => ({
   normal: { x: nx, y: ny },
 });
 
-const routerThis = () => ({
-  anyObstacleBlocks: proto.anyObstacleBlocks,
-  segmentEntersRect: proto.segmentEntersRect,
-  pointInAnyObstacle: proto.pointInAnyObstacle,
-  lBendFallback: proto.lBendFallback,
-  simplifyCollinear: proto.simplifyCollinear,
-  routeTautPolyline: proto.routeTautPolyline,
-});
-
 describe('segmentEntersRect', () => {
   const r = obs(100, 100, 200, 200);
 
   it('is true when the segment passes through the interior', () => {
-    expect(proto.segmentEntersRect.call({}, { x: 0, y: 150 }, { x: 300, y: 150 }, r)).toBe(true);
+    expect(segmentEntersRect({ x: 0, y: 150 }, { x: 300, y: 150 }, r)).toBe(true);
   });
 
   it('is false when the segment only grazes an edge', () => {
     // Runs exactly along the top edge y=100 — touches but never enters interior.
-    expect(proto.segmentEntersRect.call({}, { x: 0, y: 100 }, { x: 300, y: 100 }, r)).toBe(false);
+    expect(segmentEntersRect({ x: 0, y: 100 }, { x: 300, y: 100 }, r)).toBe(false);
   });
 
   it('is false when the segment touches only a corner', () => {
-    expect(proto.segmentEntersRect.call({}, { x: 0, y: 0 }, { x: 100, y: 100 }, r)).toBe(false);
+    expect(segmentEntersRect({ x: 0, y: 0 }, { x: 100, y: 100 }, r)).toBe(false);
   });
 
   it('is false when the segment misses the rect entirely', () => {
-    expect(proto.segmentEntersRect.call({}, { x: 0, y: 0 }, { x: 50, y: 50 }, r)).toBe(false);
+    expect(segmentEntersRect({ x: 0, y: 0 }, { x: 50, y: 50 }, r)).toBe(false);
   });
 });
 
 describe('routeTautPolyline', () => {
   it('returns a straight 2-point route when the path is clear', () => {
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(25, 0, 1, 0),
       port(175, 0, -1, 0),
       [] // no obstacles
@@ -63,8 +61,7 @@ describe('routeTautPolyline', () => {
 
   it('routes around a blocking obstacle without entering its interior', () => {
     const blocker = obs(130, 80, 170, 120); // straddles the straight line at y=100
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(0, 100, 1, 0),
       port(300, 100, -1, 0),
       [blocker]
@@ -73,7 +70,7 @@ describe('routeTautPolyline', () => {
     expect(route.length).toBeGreaterThan(2);
     // No segment of the result penetrates the obstacle interior.
     for (let i = 0; i < route.length - 1; i++) {
-      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], blocker)).toBe(false);
+      expect(segmentEntersRect(route[i], route[i + 1], blocker)).toBe(false);
     }
     // Endpoints preserved exactly.
     expect(route[0]).toEqual({ x: 0, y: 100 });
@@ -82,8 +79,7 @@ describe('routeTautPolyline', () => {
 
   it('exits perpendicular to the source side (normal stub) when blocked', () => {
     const blocker = obs(130, 80, 170, 120);
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(0, 100, 1, 0), // exits pointing +x
       port(300, 100, -1, 0),
       [blocker]
@@ -100,15 +96,14 @@ describe('routeTautPolyline', () => {
     // pre-filter drops it, or the detour segment slices through B.
     const A = obs(40, -100, 60, 100);
     const B = obs(20, -70, 30, -40);
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(0, 0, 1, 0),
       port(100, 0, -1, 0),
       [A, B]
     );
     for (let i = 0; i < route.length - 1; i++) {
-      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], A)).toBe(false);
-      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], B)).toBe(false);
+      expect(segmentEntersRect(route[i], route[i + 1], A)).toBe(false);
+      expect(segmentEntersRect(route[i], route[i + 1], B)).toBe(false);
     }
     expect(route[0]).toEqual({ x: 0, y: 0 });
     expect(route[route.length - 1]).toEqual({ x: 100, y: 0 });
@@ -121,15 +116,14 @@ describe('routeTautPolyline', () => {
     // considers obstacles outside the initial AABB.
     const blocker = obs(130, 80, 170, 120);
     const offBand = obs(140, 78, 160, 83);
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(0, 100, 1, 0),
       port(300, 100, -1, 0),
       [blocker, offBand]
     );
     for (let i = 0; i < route.length - 1; i++) {
-      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], blocker)).toBe(false);
-      expect(proto.segmentEntersRect.call({}, route[i], route[i + 1], offBand)).toBe(false);
+      expect(segmentEntersRect(route[i], route[i + 1], blocker)).toBe(false);
+      expect(segmentEntersRect(route[i], route[i + 1], offBand)).toBe(false);
     }
   });
 
@@ -138,8 +132,7 @@ describe('routeTautPolyline', () => {
     // but an L-bend via (T.x, S.y) is clear above them.
     const many = [];
     for (let i = 0; i < 25; i++) many.push(obs(10 + i * 2, 95, 11 + i * 2, 105));
-    const route = proto.routeTautPolyline.call(
-      routerThis(),
+    const route = routeTautPolyline(
       port(0, 100, 1, 0),
       port(300, 50, -1, 0),
       many
@@ -152,29 +145,27 @@ describe('routeTautPolyline', () => {
 });
 
 describe('routePolylineClips', () => {
-  const ctx = { anyObstacleBlocks: proto.anyObstacleBlocks, segmentEntersRect: proto.segmentEntersRect };
-
   it('detects a segment passing through an obstacle', () => {
     const o = obs(40, -10, 60, 10);
-    expect(proto.routePolylineClips.call(ctx, [{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(true);
+    expect(routePolylineClips([{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(true);
   });
 
   it('passes a polyline that clears all obstacles', () => {
     const o = obs(40, 20, 60, 40); // well below the y=0 line
-    expect(proto.routePolylineClips.call(ctx, [{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(false);
+    expect(routePolylineClips([{ x: 0, y: 0 }, { x: 100, y: 0 }], [o])).toBe(false);
   });
 });
 
 describe('simplifyCollinear', () => {
   it('drops collinear interior points', () => {
-    const out = proto.simplifyCollinear.call({}, [
+    const out = simplifyCollinear([
       { x: 0, y: 0 }, { x: 5, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 },
     ]);
     expect(out).toEqual([{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]);
   });
 
   it('drops duplicate points', () => {
-    const out = proto.simplifyCollinear.call({}, [
+    const out = simplifyCollinear([
       { x: 0, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 10 },
     ]);
     expect(out).toEqual([{ x: 0, y: 0 }, { x: 10, y: 10 }]);
@@ -183,12 +174,12 @@ describe('simplifyCollinear', () => {
 
 describe('filletPath', () => {
   it('emits a straight line for a 2-point route', () => {
-    const d = proto.filletPath.call({}, [{ x: 0, y: 0 }, { x: 100, y: 0 }]);
+    const d = filletPath([{ x: 0, y: 0 }, { x: 100, y: 0 }]);
     expect(d).toBe('M 0 0 L 100 0');
   });
 
   it('rounds an interior corner with a quadratic Bézier', () => {
-    const d = proto.filletPath.call({}, [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }]);
+    const d = filletPath([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }]);
     expect(d).toContain('Q 100 0'); // control point at the corner vertex
     expect(d.startsWith('M 0 0')).toBe(true);
     expect(d.endsWith('100 100')).toBe(true);
@@ -205,12 +196,9 @@ describe('getPortAttachment', () => {
     getRenderedBounds: proto.getRenderedBounds,
     getVisibleBounds: proto.getVisibleBounds,
     normalizeNodeBounds: proto.normalizeNodeBounds,
-    clipLineToRectExit: proto.clipLineToRectExit,
     applyPortBasedEndpoints: proto.applyPortBasedEndpoints,
-    isPointOnRectPerimeter: proto.isPointOnRectPerimeter,
     computePortMargin: proto.computePortMargin,
     getDominantDirection: proto.getDominantDirection,
-    sideNormal: proto.sideNormal,
     getPortAttachment: proto.getPortAttachment,
   });
 

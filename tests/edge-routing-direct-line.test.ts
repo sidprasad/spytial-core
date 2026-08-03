@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { clipLineToRectExit } from '../src/translators/webcola/routing';
 
 describe('clipLineToRectExit', () => {
-  const proto = WebColaCnDGraph.prototype as any;
-
   const rect = (x: number, y: number, w: number, h: number) => ({
     x, y, width: () => w, height: () => h,
   });
@@ -12,7 +10,7 @@ describe('clipLineToRectExit', () => {
     const r = rect(0, 0, 50, 30);
     const inside = { x: 25, y: 15 }; // center
     const outside = { x: 100, y: 15 };
-    const exit = proto.clipLineToRectExit.call({}, inside, outside, r);
+    const exit = clipLineToRectExit(inside, outside, r);
     expect(exit.x).toBeCloseTo(50, 5);
     expect(exit.y).toBeCloseTo(15, 5);
   });
@@ -21,7 +19,7 @@ describe('clipLineToRectExit', () => {
     const r = rect(0, 0, 50, 30);
     const inside = { x: 25, y: 15 };
     const outside = { x: 25, y: 100 };
-    const exit = proto.clipLineToRectExit.call({}, inside, outside, r);
+    const exit = clipLineToRectExit(inside, outside, r);
     expect(exit.x).toBeCloseTo(25, 5);
     expect(exit.y).toBeCloseTo(30, 5);
   });
@@ -34,7 +32,7 @@ describe('clipLineToRectExit', () => {
     // Shallow angle: dx = 50, dy = 10 → t for right = 25/50 = 0.5, t for bottom = 15/10 = 1.5
     // Right wins.
     const outside = { x: 75, y: 25 };
-    const exit = proto.clipLineToRectExit.call({}, inside, outside, r);
+    const exit = clipLineToRectExit(inside, outside, r);
     expect(exit.x).toBeCloseTo(50, 5);
     expect(exit.y).toBeCloseTo(20, 5);
   });
