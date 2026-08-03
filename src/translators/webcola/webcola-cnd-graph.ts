@@ -11,6 +11,10 @@ import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
   type RoutingModeDefinition,
+  type RectSide,
+  choosePortSides,
+  sideCenter,
+  SIDE_NORMALS,
   getRoutingMode,
   listRoutingModes,
   TautRouter,
@@ -4942,16 +4946,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // causing edges to stop short of the visual node boundary.
       this.ensureNodeBounds(true);
 
-      // Build caches for optimization before routing edges
+      // Precompute the obstacle set once (positions are frozen now) so each
+      // edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
+      // recomputation. Built BEFORE the routing caches: side selection in
+      // buildEdgeRoutingCaches consults the obstacle set.
+      this.buildRouterObstacleCache();
+
+      // Build caches for optimization before routing edges (includes
+      // obstacle-aware exit/entry side selection for the standard pipeline)
       this.buildEdgeRoutingCaches();
 
       // Sort edge ports by angle to minimize crossings at shared nodes
       this.sortEdgePortsByAngle();
-
-      // Precompute the obstacle set once (positions are frozen now) so each
-      // edge's buildRouterObstacles is an O(N) filter, not O(N) bounds
-      // recomputation — turning per-edge obstacle work from O(E·N) into O(N)+O(E·N filter).
-      this.buildRouterObstacleCache();
 
       // Batch hook: routers that route all edges in one transaction
       // (e.g. libavoid) do the work here and serve routeEdge from a cache.
@@ -5060,25 +5066,55 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Skip self-loops and group edges for port ordering
       if (sourceId === targetId || this.hasGroupEndpoints(edge)) return;
 
-      // Determine which side of source/target this edge exits/enters
+      // Sides are re-derived every pass (positions move, sides can flip), so
+      // stale stamps from a previous pass must never survive into this one.
+      delete (edge as any)._exitSide;
+      delete (edge as any)._entrySide;
+      delete (edge as any)._sourcePortIndex;
+      delete (edge as any)._sourcePortCount;
+      delete (edge as any)._targetPortIndex;
+      delete (edge as any)._targetPortCount;
+
       const sourceCx = edge.source.x || 0;
       const sourceCy = edge.source.y || 0;
       const targetCx = edge.target.x || 0;
       const targetCy = edge.target.y || 0;
-      const dx = targetCx - sourceCx;
-      const dy = targetCy - sourceCy;
-      const angle = Math.atan2(dy, dx);
-      const sourceDirRaw = this.getDominantDirection(angle);
-      const targetDirRaw = this.getDominantDirection(angle + Math.PI); // Reverse direction for target
-      // Map getDominantDirection's 'up'/'down' to our 'top'/'bottom' side names
-      const dirToSide = (d: string | null): 'top' | 'bottom' | 'left' | 'right' | null => {
-        if (d === 'up') return 'top';
-        if (d === 'down') return 'bottom';
-        if (d === 'left' || d === 'right') return d;
-        return null;
-      };
-      const sourceSide = dirToSide(sourceDirRaw);
-      const targetSide = dirToSide(targetDirRaw);
+
+      let sourceSide: 'top' | 'bottom' | 'left' | 'right' | null;
+      let targetSide: 'top' | 'bottom' | 'left' | 'right' | null;
+      if (!this.useGridPipeline) {
+        // Standard pipeline: obstacle-aware side choice. A long edge whose
+        // straight line is blocked (e.g. a skip pointer over a chain) flips
+        // to a matching over/under pair instead of hooking around the first
+        // blocker — see routing/port-sides.ts. The stamps drive bucketing
+        // here, the attachment point/normal in getPortAttachment, and the
+        // distribution axis in applyPortBasedEndpoints, so all three agree.
+        const sB = this.getRenderedBounds(edge.source);
+        const tB = this.getRenderedBounds(edge.target);
+        const choice = choosePortSides(
+          { minX: sB.x, minY: sB.y, maxX: sB.x + sB.width(), maxY: sB.y + sB.height() },
+          { minX: tB.x, minY: tB.y, maxX: tB.x + tB.width(), maxY: tB.y + tB.height() },
+          this.buildRouterObstacles(edge)
+        );
+        (edge as any)._exitSide = choice.exitSide;
+        (edge as any)._entrySide = choice.entrySide;
+        sourceSide = choice.exitSide;
+        targetSide = choice.entrySide;
+      } else {
+        // Grid pipeline: historical dominant-direction bucketing.
+        const angle = Math.atan2(targetCy - sourceCy, targetCx - sourceCx);
+        const sourceDirRaw = this.getDominantDirection(angle);
+        const targetDirRaw = this.getDominantDirection(angle + Math.PI); // Reverse direction for target
+        // Map getDominantDirection's 'up'/'down' to our 'top'/'bottom' side names
+        const dirToSide = (d: string | null): 'top' | 'bottom' | 'left' | 'right' | null => {
+          if (d === 'up') return 'top';
+          if (d === 'down') return 'bottom';
+          if (d === 'left' || d === 'right') return d;
+          return null;
+        };
+        sourceSide = dirToSide(sourceDirRaw);
+        targetSide = dirToSide(targetDirRaw);
+      }
 
       if (sourceSide) {
         if (!this.edgeRoutingCache.nodeEdgesBySide.has(sourceId)) {
@@ -6200,8 +6236,24 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const center = { x: bounds.x + bounds.width() / 2, y: bounds.y + bounds.height() / 2 };
     const otherCenter = { x: otherBounds.x + otherBounds.width() / 2, y: otherBounds.y + otherBounds.height() / 2 };
 
+    // Side stamped by the obstacle-aware chooser during this pass (absent for
+    // callers outside a routing pass, e.g. unit tests — then the ray decides).
+    const stampedSide: RectSide | undefined =
+      end === 'source' ? edgeData._exitSide : edgeData._entrySide;
+
     // Base perimeter point: where the center→other-center line exits this rect.
     let point = clipLineToRectExit(center, otherCenter, bounds);
+    if (stampedSide) {
+      // A flipped edge anchors at the stamped side's midpoint — the ray clip
+      // sits on the side facing the blocker, which is exactly what the
+      // chooser decided against.
+      const n = sideNormal(point, bounds);
+      const sn = SIDE_NORMALS[stampedSide];
+      if (n.x !== sn.x || n.y !== sn.y) {
+        const rect = { minX: bounds.x, minY: bounds.y, maxX: bounds.x + bounds.width(), maxY: bounds.y + bounds.height() };
+        point = sideCenter(rect, stampedSide);
+      }
+    }
 
     // Port distribution: spread siblings on the same side. Reuse
     // applyPortBasedEndpoints by seeding a 2-point route and reading back the
@@ -6220,7 +6272,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       }
     }
 
-    return { point, normal: sideNormal(point, bounds) };
+    return {
+      point,
+      normal: stampedSide ? { ...SIDE_NORMALS[stampedSide] } : sideNormal(point, bounds),
+    };
   }
 
   /**
@@ -6820,25 +6875,32 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     if (!hasSourcePort && !hasTargetPort) return route;
 
-    // Determine edge direction for figuring out which axis to distribute along
+    // Distribution axis per end: a left/right side spreads ports along Y, a
+    // top/bottom side along X. Sides stamped by the obstacle-aware chooser
+    // win; without stamps (grid pipeline, direct test calls) fall back to the
+    // dominant direction of the center-to-center line.
     const dx = (edgeData.target.x || 0) - (edgeData.source.x || 0);
     const dy = (edgeData.target.y || 0) - (edgeData.source.y || 0);
-    const angle = Math.atan2(dy, dx);
-    const direction = this.getDominantDirection(angle);
+    const direction = this.getDominantDirection(Math.atan2(dy, dx));
+    const axisOf = (side: RectSide | undefined, horizontalEdge: boolean, verticalEdge: boolean): 'y' | 'x' | null =>
+      side ? (side === 'left' || side === 'right' ? 'y' : 'x')
+           : horizontalEdge ? 'y' : verticalEdge ? 'x' : null;
 
     if (hasSourcePort) {
       const bounds = this.normalizeNodeBounds(edgeData.source);
       const portIndex = edgeData._sourcePortIndex;
       const portCount = edgeData._sourcePortCount;
-
-      if (direction === 'right' || direction === 'left') {
-        // Edge goes horizontal: distribute source Y along the exit side
+      const axis = axisOf(
+        edgeData._exitSide,
+        direction === 'right' || direction === 'left',
+        direction === 'up' || direction === 'down'
+      );
+      if (axis === 'y') {
         const sideLength = bounds.height();
         const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         route[0] = { ...route[0], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
-      } else if (direction === 'up' || direction === 'down') {
-        // Edge goes vertical: distribute source X along the exit side
+      } else if (axis === 'x') {
         const sideLength = bounds.width();
         const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
@@ -6850,16 +6912,20 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const bounds = this.normalizeNodeBounds(edgeData.target);
       const portIndex = edgeData._targetPortIndex;
       const portCount = edgeData._targetPortCount;
-      // Target side is opposite to edge direction
-      const targetDir = direction === 'right' ? 'left' : direction === 'left' ? 'right' : direction === 'up' ? 'down' : 'up';
-
-      if (targetDir === 'right' || targetDir === 'left') {
+      // Without a stamp, the target side is opposite to the edge direction —
+      // same distribution axis as the source.
+      const axis = axisOf(
+        edgeData._entrySide,
+        direction === 'right' || direction === 'left',
+        direction === 'up' || direction === 'down'
+      );
+      if (axis === 'y') {
         const sideLength = bounds.height();
         const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;
         const last = route.length - 1;
         route[last] = { ...route[last], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
-      } else if (targetDir === 'up' || targetDir === 'down') {
+      } else if (axis === 'x') {
         const sideLength = bounds.width();
         const margin = this.computePortMargin(sideLength, portCount);
         const usable = sideLength - 2 * margin;

@@ -174,6 +174,18 @@ describe('corridor separation direction (TautRouter.finalize)', () => {
     expect(Math.max(...bowedB.map(p => p.y))).toBeGreaterThan(8);
   });
 
+  it('separates exactly collinear routes (shared visibility corridor)', () => {
+    // Both routes run the same corridor at y=8 — lateral distance 0, the case
+    // findParallelOverlap used to skip. One of them must move off the line.
+    const routes = new Map([
+      ['a', [{ x: -50, y: 8 }, { x: 250, y: 8 }]],
+      ['b', [{ x: 0, y: 8 }, { x: 200, y: 8 }]],
+    ]);
+    new TautRouter().finalize!(makeHost(routes));
+    const ys = [...routes.values()].flat().map(p => p.y);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThanOrEqual(4);
+  });
+
   it('bows a parallel neighbor away too (control)', () => {
     const routes = new Map([
       ['a', [{ x: -50, y: 0 }, { x: 250, y: 0 }]],

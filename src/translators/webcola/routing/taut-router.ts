@@ -329,9 +329,13 @@ export function findParallelOverlap(
       }
       if (w2 - w1 < MIN_OVERLAP) continue;
       const latMid = latAt((w1 + w2) / 2);
-      if (latMid === 0) continue;
+      // Exactly collinear pairs (routes sharing a visibility corridor) have
+      // no geometric side. They are the strongest tram-lines of all, so pick
+      // a side deterministically rather than skipping; either bow direction
+      // restores separation, and the obstacle check rejects the blocked one.
+      const collinear = Math.abs(latMid) < 1e-6;
       // Trim the window to where lat keeps the mid's sign (cross-over guard).
-      if (Math.abs(slope) > 1e-9) {
+      if (!collinear && Math.abs(slope) > 1e-9) {
         const sZero = t1 - lat1 / slope;
         if (sZero > w1 && sZero < w2) {
           if (latMid > 0 === slope > 0) w1 = Math.max(w1, sZero);
@@ -347,7 +351,7 @@ export function findParallelOverlap(
           dir: { x: ux, y: uy },
           sStart: w1, sEnd: w2,
           lateral: Math.abs(latAt((w1 + w2) / 2)),
-          side: latMid > 0 ? 1 : -1,
+          side: collinear ? 1 : latMid > 0 ? 1 : -1,
           windowLen,
         };
       }

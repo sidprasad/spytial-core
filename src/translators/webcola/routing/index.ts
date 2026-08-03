@@ -18,6 +18,7 @@ export * from './registry';
 export * from './geometry';
 export * from './taut-router';
 export * from './grid-helpers';
+export * from './port-sides';
 
 registerRoutingMode({
   id: 'taut',
