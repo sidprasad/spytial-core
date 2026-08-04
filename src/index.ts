@@ -37,6 +37,10 @@ export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor'
 export { LayoutInstance, ConstraintValidatorStrategy, AlignmentEdgeStrategy } from './layout/layoutinstance';
 export { QualitativeConstraintValidator } from './layout/qualitative-constraint-validator';
 export { parseLayoutSpec } from './layout/layoutspec';
+// `parseLayoutSpec`'s return type. Replaces the `ParsedCnDSpec` alias that
+// `translators` used to re-export — that name had already been deleted, so the
+// re-export was dangling and shipped a broken line into dist/types.
+export type { LayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-evaluator';
@@ -78,7 +82,6 @@ export {
   registerSequencePolicy,
 } from './translators';
 export type {
-  ParsedCnDSpec,
   NodePositionHint,
   TransformInfo,
   LayoutState,

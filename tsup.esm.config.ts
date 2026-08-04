@@ -24,9 +24,12 @@ export default defineConfig({
   entry: { index: 'src/index.ts', explorer: 'src/explorer.ts' },
   format: ['esm'],
   outDir: 'dist/esm',
-  // tsup's dts hard-fails on the pre-existing baseline type errors (e.g. the
-  // translators/index.ts ParsedCnDSpec re-export). Types come from the
-  // best-effort tsc emit instead (build:types → dist/types/index.d.ts).
+  // tsup's dts hard-fails on the pre-existing baseline type errors. The example
+  // this used to cite (the translators/index.ts ParsedCnDSpec re-export) is
+  // fixed; what remains is 13 errors in ReplInterface, spytial-explorer,
+  // alloy-graph and smtlib. Types come from the best-effort tsc emit instead
+  // (build:types → dist/types/index.d.ts). When the baseline reaches zero this
+  // can go back to a real dts build — see tsconfig.types.json.
   dts: false,
   // index.ts's browser-only auto-registration uses guarded dynamic import();
   // splitting lets those become async chunks instead of being inlined eagerly.
