@@ -63,6 +63,19 @@ interface IDataInstance {
 
 For mutable instances (e.g. an interactive instance builder), `IInputDataInstance` extends it with `addAtom`, `removeAtom`, `addRelationTuple`, `removeRelationTuple`, an event system, `addFromDataInstance`, and a `reify(): unknown` round-trip back to the source language.
 
+If you implement `addRelationTuple`, remember that `IRelation.types` is **positional**: one entry per column, and its length is the relation's arity. Never append to it — a caller who sends the endpoints' own types would otherwise turn a binary `Person -> City` into `["Person", "City", "Student"]` the first time a `Student` endpoint appears. Run the incoming tuple through the exported `settleTupleTypes` helper, which returns the tuple to store and the signature the relation should carry:
+
+```typescript
+import { settleTupleTypes } from 'spytial-core';
+
+addRelationTuple(relationId: string, tuple: ITuple): void {
+  const relation = this.relations.get(relationId);
+  const settled = settleTupleTypes(tuple, relation, id => this.atoms.get(id)?.type);
+  // settled.tuple carries the relation's declared column types;
+  // settled.relationTypes is the signature to store.
+}
+```
+
 The cleanest reference implementation is [`JSONDataInstance`](https://github.com/sidprasad/spytial-core/blob/main/src/data-instance/json-data-instance.ts) — read it before writing your own.
 
 ---

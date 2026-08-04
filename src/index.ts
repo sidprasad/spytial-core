@@ -11,6 +11,10 @@ export * as Translators from './translators';
 
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
+// Keeps a relation's positional column types intact on a write — anything
+// implementing IInputDataInstance should settle a tuple through this.
+export { settleTupleTypes } from './data-instance/tuple-types';
+export type { AtomTypeLookup, SettledTuple } from './data-instance/tuple-types';
 export { JSONDataInstance, DataInstanceNormalizer } from './data-instance/json-data-instance';
 export { AlloyDataInstance, createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 export { DotDataInstance } from './data-instance/dot/dot-data-instance';

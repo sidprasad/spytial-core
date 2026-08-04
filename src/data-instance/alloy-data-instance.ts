@@ -1,4 +1,5 @@
 import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
+import { settleTupleTypes } from './tuple-types';
 import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
 import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
 import { 
@@ -423,18 +424,29 @@ export class AlloyDataInstance implements IInputDataInstance {
   }
 
   public addRelationTuple(relationId: string, tuple: ITuple): void {
+    // A field's types are positional, and reify() reads `tuple.types[i]` back
+    // positionally to decide whether an atom is a builtin literal or a backticked
+    // atom id — so settle the tuple against the field before writing it.
+    const atoms = this.getAtoms();
+    const relation = this.getRelations().find(r => r.id === relationId || r.name === relationId);
+    const settled = settleTupleTypes(
+      tuple,
+      relation,
+      atomId => atoms.find(a => a.id === atomId)?.type
+    );
+
     // Convert ITuple to AlloyTuple
     const alloyTuple: AlloyTuple = {
       _: 'tuple',
-      atoms: tuple.atoms,
-      types: tuple.types
+      atoms: settled.tuple.atoms,
+      types: settled.tuple.types
     };
     this.alloyInstance = addInstanceRelationTuple(this.alloyInstance, relationId, alloyTuple);
-    
+
     // Emit event
     this.emitEvent({
       type: 'relationTupleAdded',
-      data: { relationId, tuple }
+      data: { relationId, tuple: settled.tuple }
     });
   }
 

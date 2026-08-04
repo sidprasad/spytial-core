@@ -2053,10 +2053,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
         // Provisional: a layout node knows only its most specific type, and this class
-        // has no data instance to check it against. StructuredInputGraph settles these
-        // against the relation's declared column types before writing. NOTE these
-        // values also reach EXTERNAL listeners of the bubbling event below, which get
-        // them unsettled — such a listener must settle them itself before writing.
+        // has no data instance to check it against. Whichever data instance receives
+        // the tuple settles its column types against the relation's declared signature
+        // before storing it (see settleTupleTypes), so these values are never what
+        // lands in a relation. A listener keeping its OWN store must settle them.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -2200,10 +2200,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
         // Provisional: a layout node knows only its most specific type, and this class
-        // has no data instance to check it against. StructuredInputGraph settles these
-        // against the relation's declared column types before writing. NOTE these
-        // values also reach EXTERNAL listeners of the bubbling event below, which get
-        // them unsettled — such a listener must settle them itself before writing.
+        // has no data instance to check it against. Whichever data instance receives
+        // the tuple settles its column types against the relation's declared signature
+        // before storing it (see settleTupleTypes), so these values are never what
+        // lands in a relation. A listener keeping its OWN store must settle them.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -3736,20 +3736,20 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const oldTuple: ITuple = {
       atoms: [oldSourceNode.id, oldTargetNode.id],
       // Provisional: a layout node knows only its most specific type, and this class
-      // has no data instance to check it against. StructuredInputGraph settles these
-      // against the relation's declared column types before writing. NOTE these
-      // values also reach EXTERNAL listeners of the bubbling event below, which get
-      // them unsettled — such a listener must settle them itself before writing.
+      // has no data instance to check it against. Whichever data instance receives
+      // the tuple settles its column types against the relation's declared signature
+      // before storing it (see settleTupleTypes), so these values are never what
+      // lands in a relation. A listener keeping its OWN store must settle them.
       types: [oldSourceNode.mostSpecificType || 'untyped', oldTargetNode.mostSpecificType || 'untyped']
     };
 
     const newTuple: ITuple = {
       atoms: [newSourceNode.id, newTargetNode.id],
       // Provisional: a layout node knows only its most specific type, and this class
-      // has no data instance to check it against. StructuredInputGraph settles these
-      // against the relation's declared column types before writing. NOTE these
-      // values also reach EXTERNAL listeners of the bubbling event below, which get
-      // them unsettled — such a listener must settle them itself before writing.
+      // has no data instance to check it against. Whichever data instance receives
+      // the tuple settles its column types against the relation's declared signature
+      // before storing it (see settleTupleTypes), so these values are never what
+      // lands in a relation. A listener keeping its OWN store must settle them.
       types: [newSourceNode.mostSpecificType || 'untyped', newTargetNode.mostSpecificType || 'untyped']
     };
 
@@ -3823,10 +3823,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
             tuples.push({
               atoms: [keyNode.id, memberNode.id],
               // Provisional: a layout node knows only its most specific type, and this class
-              // has no data instance to check it against. StructuredInputGraph settles these
-              // against the relation's declared column types before writing. NOTE these
-              // values also reach EXTERNAL listeners of the bubbling event below, which get
-              // them unsettled — such a listener must settle them itself before writing.
+              // has no data instance to check it against. Whichever data instance receives
+              // the tuple settles its column types against the relation's declared signature
+              // before storing it (see settleTupleTypes), so these values are never what
+              // lands in a relation. A listener keeping its OWN store must settle them.
               types: [keyNode.mostSpecificType || 'untyped', memberNode.mostSpecificType || 'untyped']
             });
           }
@@ -3839,10 +3839,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       tuples.push({
         atoms: [sourceNode.id, targetNode.id],
         // Provisional: a layout node knows only its most specific type, and this class
-        // has no data instance to check it against. StructuredInputGraph settles these
-        // against the relation's declared column types before writing. NOTE these
-        // values also reach EXTERNAL listeners of the bubbling event below, which get
-        // them unsettled — such a listener must settle them itself before writing.
+        // has no data instance to check it against. Whichever data instance receives
+        // the tuple settles its column types against the relation's declared signature
+        // before storing it (see settleTupleTypes), so these values are never what
+        // lands in a relation. A listener keeping its OWN store must settle them.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       });
     }

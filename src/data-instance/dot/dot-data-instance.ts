@@ -673,6 +673,13 @@ export class DotDataInstance implements IInputDataInstance {
     this.emitEvent({ type: 'atomRemoved', data: { atomId: id } });
   }
 
+  /**
+   * Note: unlike the other data instances, this one does NOT settle `t.types`
+   * against the relation (see settleTupleTypes). It stores nothing but the edge,
+   * and getRelations() recomputes both the tuple types and the positional
+   * per-column signature from the endpoint atoms on every read — so a caller's
+   * column types cannot drift into the relation here.
+   */
   addRelationTuple(relationId: string, t: ITuple): void {
     if (t.atoms.length < 2) {
       throw new Error('Tuple must have at least 2 atoms');

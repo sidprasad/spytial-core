@@ -1,4 +1,5 @@
 import { IAtom, IRelation, IType, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent, IDataInstance } from './interfaces';
+import { settleTupleTypes } from './tuple-types';
 import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
@@ -542,33 +543,35 @@ export class JSONDataInstance implements IInputDataInstance {
         throw new Error(`Cannot add tuple: referenced atom '${atomId}' does not exist`);
       }
     }
-    
-    // Find or create relation
+
+    // Find or create relation. `relation.types` is positional — one entry per
+    // column — so the write settles against it rather than merging into it.
+    // See settleTupleTypes.
     let relation = this.relations.find(r => r.id === relationId || r.name === relationId);
+    const settled = settleTupleTypes(
+      tuple,
+      relation,
+      atomId => this.atoms.find(a => a.id === atomId)?.type
+    );
+
     if (!relation) {
       relation = {
         id: relationId,
         name: relationId,
-        types: [...tuple.types], // Copy the types
+        types: settled.relationTypes,
         tuples: []
       };
       this.relations.push(relation);
     } else {
-      // Merge types if relation exists
-      const existingTypes = new Set(relation.types);
-      for (const type of tuple.types) {
-        if (!existingTypes.has(type)) {
-          relation.types.push(type);
-        }
-      }
+      relation.types = settled.relationTypes;
     }
-    
-    relation.tuples.push(tuple);
-    
+
+    relation.tuples.push(settled.tuple);
+
     // Emit event
     this.emitEvent({
       type: 'relationTupleAdded',
-      data: { relationId, tuple }
+      data: { relationId, tuple: settled.tuple }
     });
   }
 
