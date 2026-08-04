@@ -29,7 +29,7 @@ Also exported: `DataInstanceNormalizer` for running those passes manually.
 
 ### `parseLayoutSpec(yaml: string): LayoutSpec`
 
-Parse a YAML string into a typed `LayoutSpec`. Exposed type: `ParsedCnDSpec` (from `translators`).
+Parse a YAML string into a typed `LayoutSpec`. The `LayoutSpec` type is exported from the package root.
 
 ### `SGraphQueryEvaluator`
 

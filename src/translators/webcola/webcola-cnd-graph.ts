@@ -1,8 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode, edgeEndpointFromIndex } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
-import type { GridRouter, Group, Layout, Node, Link } from 'webcola';
+import type { GridRouter, Group, Layout, Node, Link, ID3StyleLayoutAdaptor } from 'webcola';
+
+/**
+ * What `cola.d3adaptor()` actually hands back: a Layout plus the D3 shims.
+ * The plain `Layout` class has only a STATIC `drag`, so annotating the adaptor
+ * as `Layout` hides the instance `drag()` this file calls.
+ */
+type D3Layout = Layout & ID3StyleLayoutAdaptor;
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { FALLBACK_ICON } from '../../layout/icon-registry';
@@ -37,6 +44,20 @@ import {
 // In the browser these evaluate exactly as before.
 let d3 = typeof window !== 'undefined' ? (window.d3v4 || window.d3) : undefined; // Use d3 v4 if available, otherwise fallback to the default window.d3
 let cola = typeof window !== 'undefined' ? window.cola : undefined;
+
+/**
+ * The vendored WebCola runtime, asserted present.
+ *
+ * For code that only runs inside a live render (routing, bounds) the library is
+ * necessarily loaded — `renderLayout` throws long before these are reached if it
+ * is not. This keeps that invariant in one place instead of a null check per use.
+ */
+function requireCola(): NonNullable<typeof cola> {
+  if (!cola) {
+    throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
+  }
+  return cola;
+}
 
 /**
  * Checks if two SVG elements are overlapping.
@@ -140,7 +161,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
-  private colaLayout!: Layout;
+  private colaLayout!: D3Layout;
   /** Signature of the warnings currently on screen. See renderLayoutWarnings. */
   private currentWarningSignature: string | null = null;
   /**
@@ -1092,7 +1113,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (!this.container) return;
     
     // Update all error nodes to check if they should have small-error-node class
-    this.container.selectAll('.error-node').each((d: any, i: number, nodes: any[]) => {
+    this.container.selectAll('.error-node').each((d: any, i: number, nodes: ArrayLike<SVGGElement>) => {
       const nodeElement = d3.select(nodes[i]);
       const isSmall = this.isSmallNode(d);
       
@@ -1981,13 +2002,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Create new edge object
     const newEdge: EdgeWithMetadata = {
       id: edgeId,
-      source: sourceIndex,
-      target: targetIndex,
+      source: edgeEndpointFromIndex(sourceIndex),
+      target: edgeEndpointFromIndex(targetIndex),
       label: label,
       relName: label,
       color: '#333',
       isUserCreated: true
-    } as EdgeWithMetadata;
+    };
 
     // Add edge to current layout
     this.currentLayout.links.push(newEdge);
@@ -2023,7 +2044,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create a tuple representing the edge/relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
-        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+        types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
       console.log(`Dispatching edge creation request: ${relationName}(${sourceNode.id}, ${targetNode.id})`);
@@ -2117,7 +2138,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       this.dispatchEvent(new CustomEvent('edge-modified', {
         detail: { 
           edge: edgeData,
-          oldLabel: currentLabel,
+          oldLabel: displayLabel,
           newLabel: newLabel
         }
       }));
@@ -2136,7 +2157,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private getNodeFromEdge(edgeData: EdgeWithMetadata, position: 'source' | 'target'): NodeWithMetadata | null {
     if (!this.currentLayout) return null;
     
-    const nodeIndex = typeof edgeData[position] === 'number' ? edgeData[position] : edgeData[position].index;
+    // Endpoints are indices before WebCola's first tick and node objects after,
+    // so accept either. See EdgeWithMetadata in webcolatranslator.
+    const endpoint = edgeData[position] as NodeWithMetadata | number;
+    const nodeIndex = typeof endpoint === 'number' ? endpoint : endpoint?.index;
+    if (nodeIndex === undefined) return null;
     return this.currentLayout.nodes[nodeIndex] || null;
   }
 
@@ -2161,7 +2186,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create tuple for the relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
-        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+        types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
       console.log(`Dispatching edge modification request: ${oldRelationName} -> ${newRelationName}`);
@@ -2449,7 +2474,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
 
       // Create WebCola layout using d3adaptor
-      const layout: Layout = cola.d3adaptor(d3)
+      const layout: D3Layout = cola.d3adaptor(d3)
         .linkDistance(linkLength)
         .convergenceThreshold(convergenceThreshold)
         .avoidOverlaps(true)
@@ -3186,7 +3211,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.currentLayout = null as any;
     this.colaLayout = null as any;
     this.svgNodes = null;
-    this.svgLinks = null;
     this.svgGroups = null;
 
     // Clear caches
@@ -3310,7 +3334,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Render groups using D3 data binding
    */
-  private renderGroups(groups: any[], layout: Layout): void {
+  private renderGroups(groups: any[], layout: D3Layout): void {
     if (!this.currentLayout.nodes || this.currentLayout.nodes.length === 0) {
       console.warn("Cannot render groups: nodes not available");
       return;
@@ -3336,7 +3360,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private setupLinks(
     links: Array<EdgeWithMetadata>, 
-    layout: Layout
+    layout: D3Layout
   ) {
     // Create link groups for each edge
     const linkGroups = this.container
@@ -3693,12 +3717,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Create tuples for old and new edges
     const oldTuple: ITuple = {
       atoms: [oldSourceNode.id, oldTargetNode.id],
-      types: [oldSourceNode.type || 'untyped', oldTargetNode.type || 'untyped']
+      types: [oldSourceNode.mostSpecificType || 'untyped', oldTargetNode.mostSpecificType || 'untyped']
     };
 
     const newTuple: ITuple = {
       atoms: [newSourceNode.id, newTargetNode.id],
-      types: [newSourceNode.type || 'untyped', newTargetNode.type || 'untyped']
+      types: [newSourceNode.mostSpecificType || 'untyped', newTargetNode.mostSpecificType || 'untyped']
     };
 
     console.log(`Reconnecting edge: ${relationName} from ${oldSourceNode.id}->${oldTargetNode.id} to ${newSourceNode.id}->${newTargetNode.id}`);
@@ -3723,8 +3747,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const targetIndex = this.currentLayout.nodes.findIndex(n => n.id === newTargetNode.id);
     
     if (sourceIndex !== -1 && targetIndex !== -1) {
-      edgeData.source = sourceIndex;
-      edgeData.target = targetIndex;
+      edgeData.source = edgeEndpointFromIndex(sourceIndex);
+      edgeData.target = edgeEndpointFromIndex(targetIndex);
     }
   }
 
@@ -3767,7 +3791,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
           if (memberNode && keyNode) {
             tuples.push({
               atoms: [keyNode.id, memberNode.id],
-              types: [keyNode.type || 'untyped', memberNode.type || 'untyped']
+              types: [keyNode.mostSpecificType || 'untyped', memberNode.mostSpecificType || 'untyped']
             });
           }
         }
@@ -3778,7 +3802,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (tuples.length === 0) {
       tuples.push({
         atoms: [sourceNode.id, targetNode.id],
-        types: [sourceNode.type || 'untyped', targetNode.type || 'untyped']
+        types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       });
     }
 
@@ -3838,7 +3862,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private setupGroups(
     groups: any[], 
     nodes: Array<NodeWithMetadata>, 
-    layout: Layout
+    layout: D3Layout
   ) {
     // Create group rectangles with dynamic styling
     const groupRects = this.setupGroupRectangles(groups, nodes, layout);
@@ -3861,7 +3885,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private setupGroupRectangles(
     groups: any[], 
     nodes: Array<NodeWithMetadata>, 
-    layout: Layout
+    layout: D3Layout
   ): d3.Selection<SVGRectElement, any, any, unknown> {
     const groupRects = this.container
       .selectAll(".group")
@@ -4019,7 +4043,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private setupGroupLabels(
     groups: any[],
-    layout: Layout
+    layout: D3Layout
   ): d3.Selection<SVGTextElement, any, any, unknown> {
     const allNodes = this.currentLayout?.nodes || [];
 
@@ -4081,7 +4105,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Render links using D3 data binding with enhanced grouping and labeling
    */
-  private renderLinks(links: Array<EdgeWithMetadata>, layout: Layout): void {
+  private renderLinks(links: Array<EdgeWithMetadata>, layout: D3Layout): void {
     // Clear the stale alignment-edge cache so isAlignmentEdge() falls back to the
     // reliable id-prefix check during rendering. On re-renders (e.g. stability policy)
     // the cache still holds IDs from the previous render; new alignment edges with
@@ -4099,7 +4123,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * @param layout - WebCola layout instance for drag behavior
    * @returns D3 selection of created node groups
    */
-  private setupNodes(nodes: Array<NodeWithMetadata>, layout: Layout): d3.Selection<SVGGElement, any, any, unknown> {
+  private setupNodes(nodes: Array<NodeWithMetadata>, layout: D3Layout): d3.Selection<SVGGElement, any, any, unknown> {
     // Create node groups with drag behavior
     const nodeDrag = layout.drag();
     this.setupNodeDragHandlers(nodeDrag);
@@ -4136,14 +4160,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
         }
       })
     // Show tooltip with node ID only when not in input mode
-      .on('mouseover', function(d: any) {
+      .on('mouseover', function(this: SVGGElement, d: any) {
           d3.select(this)
             .append('title')
             .attr('class', 'node-tooltip')
             .text(`ID: ${d.id}`);
         
       })
-      .on('mouseout', function() {
+      .on('mouseout', function(this: SVGGElement) {
         d3.select(this).select('title.node-tooltip').remove();
       });
 
@@ -4278,7 +4302,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr("dominant-baseline", "middle")
       .attr("font-family", this.getFontFamily())
       .attr("fill", "black")
-      .each((d: any, i: number, nodes: SVGTextElement[]) => {
+      .each((d: any, i: number, nodes: ArrayLike<SVGTextElement>) => {
         if (this.isHiddenNode(d)) {
           return;
         }
@@ -4382,7 +4406,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Render nodes using D3 data binding with drag behavior
    */
-  private renderNodes(nodes: Array<NodeWithMetadata>, layout: Layout): void {
+  private renderNodes(nodes: Array<NodeWithMetadata>, layout: D3Layout): void {
     this.svgNodes = this.setupNodes(nodes, layout);
   }
 
@@ -4633,8 +4657,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Mirror the main path's `d` onto the highlight underlay sibling.
     // Cheap: one getAttribute + setAttribute per highlighted edge per tick.
     this.svgLinkGroups.select('path.highlight-underlay')
-      .attr('d', function () {
-        const parent = (this as SVGPathElement).parentNode as Element | null;
+      .attr('d', function (this: SVGPathElement) {
+        const parent = this.parentNode as Element | null;
         const main = parent?.querySelector('path[data-link-id]');
         return main?.getAttribute('d') ?? null;
       });
@@ -4680,8 +4704,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         return d.bounds.y + WebColaCnDGraph.GROUP_LABEL_PILL_OFFSET_Y + Math.max(4, labelFontSize * 0.35);
       })
       .attr('text-anchor', 'middle')
-      .each(function (d: any) {
-        const text = this as SVGTextElement;
+      .each(function (this: SVGTextElement, d: any) {
+        const text = this;
         if (text.textContent && d.bounds) {
           const bbox = text.getBBox();
           d._labelBBox = { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
@@ -4812,7 +4836,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     label
         .attr("x", (d: any) => d.x)
         .attr("y", (d: any) => d.y)
-        .each(function (d: any) {
+        .each(function (this: SVGTextElement, d: any) {
             var y = 0; // Initialize y offset for tspans
             d3.select(this).selectAll("tspan")
                 .attr("x", d.x) // Align tspans with the node's x position
@@ -4837,8 +4861,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
           return d.bounds.y + WebColaCnDGraph.GROUP_LABEL_PILL_OFFSET_Y + Math.max(4, labelFontSize * 0.35);
         })
         .attr("text-anchor", "middle")
-        .each(function (d: any) {
-          const text = this as SVGTextElement;
+        .each(function (this: SVGTextElement, d: any) {
+          const text = this;
           if (text.textContent && d.bounds) {
             const bbox = text.getBBox();
             d._labelBBox = { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
@@ -5248,7 +5272,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       return d.routerNode;
     }).filter(Boolean);
     // NOTE: Router nodes are nodes needed for grid routing, which include both nodes and groups
-    return new cola.GridRouter(gridRouterNodes, {
+    return new (requireCola().GridRouter)(gridRouterNodes, {
         getChildren: (v: any) => v.children,
         getBounds: (v: any) => v.bounds
     }, margin - groupMargin);
@@ -5471,7 +5495,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
           const arrowheight = 7;
           
           // Get the route path from GridRouter
-          const p = cola.GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
+          const p = requireCola().GridRouter.getRoutePath(route, cornerradius, arrowwidth, arrowheight);
           
           // Adjust the route to properly terminate at node boundaries for arrow positioning
           // The GridRouter path may extend beyond the visual node bounds
@@ -7523,9 +7547,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * labels). For sparse graphs the inner loop short-circuits on `isOverlapping`.
    */
   private resolveLinkLabelOverlaps(): void {
+    // `container` is the untyped vendored d3, so selectAll takes no type args —
+    // assert the element type on the way out instead.
     const labels = Array.from(
-      this.container.selectAll<SVGTextElement, any>('.link-group .linklabel').nodes()
-    );
+      this.container.selectAll('.link-group .linklabel').nodes()
+    ) as SVGTextElement[];
     if (labels.length < 2) return;
 
     const MAX_PASSES = 4;
@@ -7955,7 +7981,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     let highlighted = false;
 
     (this.svgNodes as d3.Selection<SVGGElement, any, any, unknown>)
-      .each((d: any, i: number, nodes: any[]) => {
+      .each((d: any, i: number, nodes: ArrayLike<SVGGElement>) => {
         if (nodeIdSet.has(d.id)) {
           d3.select(nodes[i]).classed('highlighted', true);
           highlighted = true;
@@ -8017,7 +8043,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     let highlighted = false;
 
     (this.svgNodes as d3.Selection<SVGGElement, any, any, unknown>)
-      .each((d: any, i: number, nodes: any[]) => {
+      .each((d: any, i: number, nodes: ArrayLike<SVGGElement>) => {
         const nodeGroup = d3.select(nodes[i]);
         
         // Check if this node is a first element

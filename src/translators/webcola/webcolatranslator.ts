@@ -66,15 +66,36 @@ type NodeWithMetadata = Node & {
   iconOpacity?: number,
   mostSpecificType: string,
   showLabels: boolean,
+  /**
+   * Collision rectangle in layout space. WebCola sets this when `avoidOverlaps`
+   * is on, and `ensureNodeBounds` recomputes it from the VISUAL size so routing
+   * and hit-testing use the rendered box rather than the padded collision box.
+   * Absent until the layout's first tick has run.
+   */
+  bounds?: Rectangle,
+  /** {@link bounds} inflated by -1 — WebCola's inner rectangle, used for routing. */
+  innerBounds?: Rectangle,
   /** Original visual width of the node (without layout padding). Use this for rendering. */
   visualWidth: number,
   /** Original visual height of the node (without layout padding). Use this for rendering. */
   visualHeight: number,
 };
 
+/**
+ * A WebCola link carrying our rendering metadata.
+ *
+ * Endpoints are typed as NODES, not indices. WebCola links are BUILT with node
+ * indices, but the layout swaps each index for the node object in place on its
+ * first tick, and every downstream reader (rendering, routing, hit-testing,
+ * label placement) sees a node. Construction sites funnel their index through
+ * {@link edgeEndpointFromIndex}, which is the one documented place the two
+ * representations meet.
+ *
+ * (This used to be declared `Link<NodeWithMetadata> & { source: number }`, which
+ * asked for the impossible type `NodeWithMetadata & number` — reads compiled,
+ * every write was an error.)
+ */
 type EdgeWithMetadata = Link<NodeWithMetadata> & {
-  source: number,
-  target: number,
   relName: string, // This is the name of the relation for the edge
   id: string, // Unique identifier for the edge
   label: string, // This is what is displayed on the edge
@@ -87,6 +108,8 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
   /** Optional label styling (size / color) for the edge's label text. */
   textStyle?: TextStyle,
   bidirectional?: boolean, // Flag to indicate if this edge represents a bidirectional relationship
+  /** Provenance: set when the user drew this edge in input mode, rather than it coming from the data instance. */
+  isUserCreated?: boolean,
   /**
    * For group edges (id starts with `_g_`), the name of the group this edge
    * was created for (matches `group.id`). INFORMATIONAL since the per-end
@@ -113,6 +136,27 @@ type EdgeWithMetadata = Link<NodeWithMetadata> & {
 
 // Export the types for use in other modules
 export type { NodeWithMetadata, EdgeWithMetadata };
+
+/**
+ * Bridge an edge endpoint from the index form WebCola is fed to the node form
+ * WebCola hands back. See {@link EdgeWithMetadata} for why the endpoint types
+ * describe the post-layout shape.
+ *
+ * Call this only when building links for a layout that is about to run — the
+ * value really is a number until WebCola's first tick resolves it.
+ */
+export function edgeEndpointFromIndex(index: number): NodeWithMetadata {
+  return index as unknown as NodeWithMetadata;
+}
+
+/**
+ * Read an edge endpoint back as a node index, accepting either representation:
+ * the raw index before WebCola's first tick, or the resolved node's `index`
+ * after it. Returns -1 when the endpoint carries no index.
+ */
+export function edgeEndpointToIndex(endpoint: NodeWithMetadata | number): number {
+  return typeof endpoint === 'number' ? endpoint : endpoint?.index ?? -1;
+}
 
 /**
  * Position hint for a node, used to initialize node positions for temporal consistency.
@@ -820,8 +864,8 @@ export class WebColaLayout {
 
 
     return {
-      source: sourceIndex,
-      target: targetIndex,
+      source: edgeEndpointFromIndex(sourceIndex),
+      target: edgeEndpointFromIndex(targetIndex),
       relName: edge.relationName,
       id: edge.id,
       label: edge.label,
@@ -867,8 +911,10 @@ export class WebColaLayout {
       }
 
       // Create a key for the edge pair (always use lower source/target index first for consistency)
-      const minIndex = Math.min(edge.source, edge.target);
-      const maxIndex = Math.max(edge.source, edge.target);
+      const sourceIndex = edgeEndpointToIndex(edge.source);
+      const targetIndex = edgeEndpointToIndex(edge.target);
+      const minIndex = Math.min(sourceIndex, targetIndex);
+      const maxIndex = Math.max(sourceIndex, targetIndex);
       const pairKey = `${minIndex}-${maxIndex}-${edge.label}`;
 
       // Look for the reverse edge with the same label (never the edge itself)
@@ -1171,7 +1217,12 @@ export class WebColaLayout {
       // `group` gets dynamic layout fields (keyNode/id/showLabel/labelTextStyle)
       // stamped onto it below, so it's typed loosely here.
       groupsAndSubgroups.forEach((group: any) => {
-        let grp: LayoutGroup = groups.find(g => g.name === group.name);
+        // Every name here came from `groupsAsRecord`, which was built from
+        // `groups`, so the lookup always hits. Guard anyway so a future change
+        // to the subgrouping degrades to an unstamped group rather than a
+        // TypeError deep inside the layout.
+        const grp: LayoutGroup | undefined = groups.find(g => g.name === group.name);
+        if (!grp) return;
         let keyNode = grp.keyNodeId;
         let keyIndex = this.getNodeIndex(keyNode);
         group['keyNode'] = keyIndex;
