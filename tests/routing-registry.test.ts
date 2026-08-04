@@ -146,6 +146,88 @@ describe('isRouterEdge (component)', () => {
   });
 });
 
+describe('routing dropdown (component)', () => {
+  const proto = WebColaCnDGraph.prototype as any;
+
+  function makeElement(layoutFormat: string) {
+    const root = document.createElement('div');
+    root.innerHTML = '<select id="routing-mode"></select>';
+    const el: any = Object.create(proto);
+    Object.defineProperty(el, 'root', { value: root });   // real component: a ShadowRoot getter
+    el.getAttribute = (name: string) => (name === 'layoutFormat' ? layoutFormat : null);
+    el.warnedRoutingModeFallbacks = new Set<string>();
+    return { el, select: root.querySelector('select') as HTMLSelectElement };
+  }
+
+  it('renders ids and labels as data, never as markup', () => {
+    // registerRoutingMode is public API: a consumer picks these strings.
+    registerTestMode('zz-evil"><img src=x>', { label: '<img src=x onerror="boom">' });
+    const { el, select } = makeElement('taut');
+    el.updateRoutingModeDropdown();
+
+    const injected = select.querySelector('img');
+    expect(injected).toBeNull();
+    const option = [...select.options].find(o => o.textContent!.includes('<img'))!;
+    expect(option.value).toBe('zz-evil"><img src=x>');
+    expect(option.textContent).toBe('<img src=x onerror="boom">');
+    expect(select.value).toBe('taut');
+  });
+
+  it('picks up a mode registered after the dropdown was built', () => {
+    const { el, select } = makeElement('taut');
+    el.updateRoutingModeDropdown();
+    const before = select.options.length;
+
+    registerTestMode('zz-late', { label: 'Late Router' });
+    el.updateRoutingModeDropdown();
+    expect(select.options.length).toBe(before + 1);
+    expect([...select.options].at(-1)!.textContent).toBe('Late Router');
+  });
+
+  it('refreshes the label of a replaced mode', () => {
+    // What the libavoid entry does to 'grid' when it takes it over.
+    const builtinGrid = getRoutingMode('grid')!;
+    try {
+      const { el, select } = makeElement('taut');
+      el.updateRoutingModeDropdown();
+      registerRoutingMode({ id: 'grid', label: 'Grid (libavoid)', pipeline: 'standard' });
+      el.updateRoutingModeDropdown();
+      expect([...select.options].find(o => o.value === 'grid')!.textContent).toBe('Grid (libavoid)');
+    } finally {
+      registerRoutingMode(builtinGrid);
+    }
+  });
+});
+
+describe('route pass lifecycle (component)', () => {
+  const proto = WebColaCnDGraph.prototype as any;
+
+  it('hands beginPass an empty route set, not the previous pass"s routes', () => {
+    let seenDuringBeginPass: Map<string, unknown> | null = null;
+    const el: any = Object.create(proto);
+    Object.defineProperty(el, 'edgeRouter', {
+      value: { beginPass: (host: RouterHost) => { seenDuringBeginPass = new Map(host.routes); } },
+    });
+    // A stale route left over from the pass before.
+    el.computedRoutes = new Map([['old-edge', [{ x: 0, y: 0 }]]]);
+    el.currentLayout = { links: [] };
+    el.routerObstacleCache = null;
+    const failures: string[] = [];
+    el.showError = (m: string) => failures.push(m);
+    for (const stub of [
+      'ensureNodeBounds', 'buildRouterObstacleCache', 'buildEdgeRoutingCaches',
+      'sortEdgePortsByAngle', 'computeAllRoutes', 'applyRoutesToSVG',
+      'updateLinkLabelsAfterRouting', 'fitViewportToContent',
+    ]) el[stub] = () => {};
+
+    proto.routeEdges.call(el);
+
+    expect(failures).toEqual([]);
+    expect(seenDuringBeginPass).not.toBeNull();
+    expect(seenDuringBeginPass!.size).toBe(0);
+  });
+});
+
 describe('corridor separation direction (TautRouter.finalize)', () => {
   function makeHost(routes: Map<string, Array<{ x: number; y: number }>>): RouterHost {
     const edges = [...routes.keys()].map((id, i) => ({

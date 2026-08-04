@@ -1460,9 +1460,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         </div>
         <div id="routing-control">
           <label for="routing-mode">Routing:</label>
-          <select id="routing-mode" title="Edge routing mode">
-            ${listRoutingModes().map(m => `<option value="${m.id}">${m.label}</option>`).join('\n            ')}
-          </select>
+          <!-- Options are built from the registry in updateRoutingModeDropdown(). -->
+          <select id="routing-mode" title="Edge routing mode"></select>
         </div>
         <div id="mode-control">
           <label for="theme-mode">Mode:</label>
@@ -1577,8 +1576,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Set up routing mode dropdown
     const routingModeSelect = this.root.querySelector('#routing-mode') as HTMLSelectElement;
     if (routingModeSelect) {
-      // Set initial value from attribute (unset/'default' resolve to taut)
-      routingModeSelect.value = this.routingMode;
+      // Fills the options and sets the initial value from the attribute
+      // (unset/'default' resolve to taut).
+      this.updateRoutingModeDropdown();
 
       routingModeSelect.addEventListener('change', () => {
         this.handleRoutingModeChange(routingModeSelect.value);
@@ -1635,13 +1635,31 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Update the routing mode dropdown to match current layoutFormat attribute
+   * Rebuild the routing dropdown from the registry and select the current
+   * layoutFormat. Options are built with DOM APIs, never interpolated into
+   * markup: ids and labels come from registerRoutingMode(), which consumers
+   * call with values of their own choosing.
+   *
+   * Runs after every layout, so a router that registers late (the libavoid
+   * entry loads its WASM asynchronously) appears in the list without a
+   * re-render, and a replaced mode picks up its new label.
    */
   private updateRoutingModeDropdown(): void {
-    const routingModeSelect = this.shadowRoot?.querySelector('#routing-mode') as HTMLSelectElement;
-    if (routingModeSelect) {
-      routingModeSelect.value = this.routingMode;
+    const select = this.root?.querySelector('#routing-mode') as HTMLSelectElement | null;
+    if (!select) return;
+    const modes = listRoutingModes();
+    const signature = JSON.stringify(modes.map(m => [m.id, m.label]));
+    if (select.getAttribute('data-modes') !== signature) {
+      select.textContent = '';
+      for (const mode of modes) {
+        const option = document.createElement('option');
+        option.value = mode.id;
+        option.textContent = mode.label;
+        select.appendChild(option);
+      }
+      select.setAttribute('data-modes', signature);
     }
+    select.value = this.routingMode;
   }
 
   /**
@@ -4958,6 +4976,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
       // Sort edge ports by angle to minimize crossings at shared nodes
       this.sortEdgePortsByAngle();
+
+      // Start the pass with an empty route set, so the hooks below never see
+      // the previous pass's routes through host.routes.
+      this.computedRoutes.clear();
 
       // Batch hook: routers that route all edges in one transaction
       // (e.g. libavoid) do the work here and serve routeEdge from a cache.
