@@ -62,7 +62,7 @@ Each relation defines a set of edges between atoms:
 |-------|------|-------------|
 | `id` | string | Unique identifier for the relation |
 | `name` | string | Display name (used in selectors like `parent`) |
-| `types` | string[] | The general types for each column of the relation |
+| `types` | string[] | The general type of each column, in order. Positional — its length is the relation's arity |
 | `tuples` | array | The actual edges |
 
 Each **tuple** has:
@@ -70,7 +70,11 @@ Each **tuple** has:
 | Field | Type | Description |
 |-------|------|-------------|
 | `atoms` | string[] | Atom IDs in order (e.g., `["source", "target"]`) |
-| `types` | string[] | The specific type of each atom in this tuple |
+| `types` | string[] | The relation's column type at each position — same length and order as `atoms` |
+
+A tuple's `types` are the relation's column types, not the endpoints' own types. A
+`Student` atom sitting in a `Person` column is written as `"Person"`; the atom keeps
+its own `Student` type, and a selector still sees it as a `Student`.
 
 ### Arity
 

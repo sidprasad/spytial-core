@@ -1,5 +1,6 @@
 import { Graph } from 'graphlib';
 import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from '../interfaces';
+import { settleTupleTypes } from '../tuple-types';
 
 /**
  * Configuration options for primitive value idempotency in PyretDataInstance
@@ -1114,14 +1115,22 @@ export class PyretDataInstance implements IInputDataInstance {
 
     let relation = this.relations.get(relationId);
     let name = relationId + (middleAtoms.length > 0 ? `[${middleAtoms.join(', ')}]` : '');
+
+    // `relation.types` is positional — one entry per column — so the tuple is
+    // settled against the relation's declared signature rather than merged into
+    // it. See settleTupleTypes.
+    const settled = settleTupleTypes(tuple, relation, atomId => this.atoms.get(atomId)?.type);
+
     if (!relation) {
       relation = {
         id: relationId,
         name: name,
-        types: [sourceAtom.type, targetAtom.type],
+        types: settled.relationTypes,
         tuples: []
       };
       this.relations.set(relationId, relation);
+    } else {
+      relation.types = settled.relationTypes;
     }
 
     // Check for duplicate tuples
@@ -1130,12 +1139,12 @@ export class PyretDataInstance implements IInputDataInstance {
     );
 
     if (!isDuplicate) {
-      relation.tuples.push(tuple);
+      relation.tuples.push(settled.tuple);
 
       // Emit event
       this.emitEvent({
         type: 'relationTupleAdded',
-        data: { relationId, tuple }
+        data: { relationId, tuple: settled.tuple }
       });
     }
   }

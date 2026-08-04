@@ -221,7 +221,7 @@ function createIInputDataInstanceTestSuite(factory: InstanceFactory) {
       expect(knowsRelation!.tuples).toHaveLength(2);
     });
 
-    it('should merge types when adding to existing relation', () => {
+    it('should keep one column type per position when adding to existing relation', () => {
       const instance = createEmptyInstance();
       
       // Build up the instance from scratch
@@ -242,8 +242,10 @@ function createIInputDataInstanceTestSuite(factory: InstanceFactory) {
       const relations = instance.getRelations();
       const relation = relations.find(r => r.name === 'relation1');
       expect(relation!.types).toContain('Person');
-      // Note: Not all implementations merge types the same way
-      // Just verify the relation exists and has tuples
+      // relation.types is positional, so the second write settles against the
+      // declared signature instead of appending Company to it. Implementations
+      // seed that signature differently, but its length is always the arity.
+      expect(relation!.types).toHaveLength(2);
       expect(relation!.tuples).toHaveLength(2);
     });
   });

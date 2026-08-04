@@ -2,7 +2,7 @@
 // Guarded for headless import — see webcola-cnd-graph.ts.
 const d3: any = typeof window !== 'undefined' ? ((window as any).d3v4 || (window as any).d3) : undefined;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
-import { IInputDataInstance, IAtom, ITuple, IRelation } from '../../data-instance/interfaces';
+import { IInputDataInstance, IAtom, ITuple } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
@@ -732,48 +732,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Settle a tuple's column types against the relation it is going into.
-   *
-   * `IRelation.types` is POSITIONAL — one entry per column, read back as
-   * `relation.types[index]`. But `addRelationTuple` appends any type it has not
-   * seen onto that array, so sending per-atom types widens the column list: a
-   * `Student` endpoint on a relation declared `Person -> City` turns its types
-   * into `[Person, City, Student]`.
-   *
-   * So for a relation that already exists we send its own declared types back,
-   * which makes that merge a no-op. Only a brand-new relation needs the tuple to
-   * seed the types, and there each atom's DECLARED type (`IAtom.type`) is the
-   * right seed — not its most specific subtype, which would bake a subtype into
-   * the relation's signature.
-   */
-  private settleTupleTypes(relationId: string, tuple: ITuple): ITuple {
-    const relation = this.dataInstance
-      .getRelations()
-      .find((r: IRelation) => r.id === relationId || r.name === relationId);
-
-    // Only trust the declared types when the arity lines up; a mismatched
-    // relation is already inconsistent and second-guessing it here would hide that.
-    if (relation && relation.types.length === tuple.atoms.length) {
-      return { ...tuple, types: [...relation.types] };
-    }
-
-    const atoms = this.dataInstance.getAtoms();
-    return {
-      ...tuple,
-      types: tuple.atoms.map(
-        (id: string) => atoms.find((a: IAtom) => a.id === id)?.type || 'untyped'
-      ),
-    };
-  }
-
-  /**
    * Handle edge creation requests from input mode
+   *
+   * The tuple carried by the event has the endpoints' own types on it, which are
+   * not necessarily the relation's declared column types. The data instance
+   * settles that when it writes the tuple (see settleTupleTypes), so nothing
+   * needs adjusting here.
    */
   private async handleEdgeCreationRequest(event: CustomEvent): Promise<void> {
     const { relationId, tuple } = event.detail;
 
     try {
-      this.dataInstance.addRelationTuple(relationId, this.settleTupleTypes(relationId, tuple));
+      this.dataInstance.addRelationTuple(relationId, tuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
       console.error('Failed to handle edge creation request:', error);
@@ -823,7 +793,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         // (or there was no old relation to remove from)
         if (removedCount > 0 || !oldRelationId || !oldRelationId.trim()) {
           for (const t of allTuples) {
-            this.dataInstance.addRelationTuple(newRelationId, this.settleTupleTypes(newRelationId, t));
+            this.dataInstance.addRelationTuple(newRelationId, t);
           }
         }
       }
@@ -854,7 +824,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
           return;
         }
       }
-      this.dataInstance.addRelationTuple(relationId, this.settleTupleTypes(relationId, newTuple));
+      this.dataInstance.addRelationTuple(relationId, newTuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
       console.error('Failed to handle edge reconnection request:', error);
@@ -1078,7 +1048,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         types: atomTypes
       };
 
-      this.dataInstance.addRelationTuple(relationType, this.settleTupleTypes(relationType, tuple));
+      this.dataInstance.addRelationTuple(relationType, tuple);
       await this.enforceConstraintsAndRegenerate();
 
       this.dispatchEvent(new CustomEvent('relation-added', {
