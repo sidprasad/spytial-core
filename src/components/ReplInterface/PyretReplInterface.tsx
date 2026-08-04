@@ -22,7 +22,11 @@ import { RemoveCommandParser, AtomCommandParser, DotNotationRelationParser } fro
 import { InfoCommandParser } from './parsers/ExtensibleParsers';
 import { PyretIdAllocationParser } from './parsers/PyretIdAllocationParser';
 
-export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'instance'> {
+// `onChange` is dropped from the base props and redeclared: this component owns
+// the instance and only ever hands back a PyretDataInstance, so the callback is
+// narrower than ReplInterface's. Keeping the base signature would force every
+// caller to widen to IInputDataInstance and cast back.
+export interface PyretReplInterfaceProps extends Omit<ReplInterfaceProps, 'instance' | 'onChange'> {
   /** Initial Pyret data instance. If not provided, an empty instance will be created. */
   initialInstance?: PyretDataInstance;
   /** Callback fired when the instance changes */

@@ -112,7 +112,7 @@
     "build:sql": "tsup --config tsup.sql.config.ts",
     "build:react": "tsup --config tsup.react.config.ts",
     "build:esm": "tsup --config tsup.esm.config.ts",
-    "build:types": "tsc -p tsconfig.types.json; node -e \"['dist/types/index.d.ts','dist/types/components/index.d.ts','dist/types/explorer.d.ts'].forEach(f=>require('fs').accessSync(f))\"",
+    "build:types": "tsc -p tsconfig.types.json && node -e \"['dist/types/index.d.ts','dist/types/components/index.d.ts','dist/types/explorer.d.ts'].forEach(f=>require('fs').accessSync(f))\"",
     "build:language": "tsx scripts/generate-language-artifacts.ts",
     "build:all": "npm run build:parser && npm run build:language && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types",
     "dev": "tsup --watch",

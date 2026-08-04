@@ -361,11 +361,14 @@ export class SpytialExplorer extends WebColaCnDGraph {
             }
         });
 
+        // ShadowRoot has no event map for 'keydown' (ShadowRootEventMap only
+        // covers 'slotchange'), so the listener is handed a plain Event.
         shadow.addEventListener('keydown', (e) => {
             const target = e.target as HTMLElement;
-            if (target.id === 'se-spatial-input' && e.key === 'Enter') this.executeSpatialQuery();
-            if (target.id === 'se-datum-input' && e.key === 'Enter') this.executeDatumQuery();
-            if (target.classList.contains('query-result-atom') && e.key === 'Enter') {
+            const key = (e as KeyboardEvent).key;
+            if (target.id === 'se-spatial-input' && key === 'Enter') this.executeSpatialQuery();
+            if (target.id === 'se-datum-input' && key === 'Enter') this.executeDatumQuery();
+            if (target.classList.contains('query-result-atom') && key === 'Enter') {
                 this.navigateToNode(target.dataset.nodeId!);
             }
         });
@@ -1304,7 +1307,11 @@ export class SpytialExplorer extends WebColaCnDGraph {
         if (datumBtn) datumBtn.disabled = !!this.dataEvaluator === false;
 
         if (this.layoutEvaluator && this.currentInstanceLayout?.nodes?.[0]) {
-            const firstName = this.currentInstanceLayout.nodes[0].name || this.currentInstanceLayout.nodes[0].id;
+            // Spatial queries resolve nodes by `id`, never by label — see the
+            // node index in layout-evaluator.ts. (This used to read a `name`
+            // field that LayoutNode does not have, so it always fell through
+            // to `id` anyway.)
+            const firstName = this.currentInstanceLayout.nodes[0].id;
             const spatialInput = shadow.getElementById('se-spatial-input') as HTMLInputElement | null;
             if (spatialInput) spatialInput.placeholder = `must.rightOf(${firstName})`;
         }

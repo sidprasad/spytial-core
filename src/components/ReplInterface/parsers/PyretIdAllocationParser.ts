@@ -233,7 +233,7 @@ export class PyretIdAllocationParser implements ICommandParser {
       // Create a temporary PyretDataInstance from the result
       const tempInstance = await PyretDataInstance.fromExpression(
         expression,
-        false, // showFunctions
+        { showFunctions: false },
         this.evaluator
       );
       
@@ -320,8 +320,11 @@ export class PyretIdAllocationParser implements ICommandParser {
       for (const tuple of relation.tuples) {
         const mappedAtoms = tuple.atoms.map(atomId => idMapping.get(atomId) || atomId);
         
+        // Carry the source tuple's column types over: renaming the atom ids
+        // does not change what each column holds.
         targetInstance.addRelationTuple(relation.name, {
-          atoms: mappedAtoms
+          atoms: mappedAtoms,
+          types: [...(tuple.types ?? [])]
         });
       }
     }
