@@ -142,8 +142,14 @@ export type { NodeWithMetadata, EdgeWithMetadata };
  * WebCola hands back. See {@link EdgeWithMetadata} for why the endpoint types
  * describe the post-layout shape.
  *
- * Call this only when building links for a layout that is about to run — the
- * value really is a number until WebCola's first tick resolves it.
+ * ONLY for links being built for a layout that has NOT started yet.
+ *
+ * WebCola swaps indices for node objects in exactly one place —
+ * `Layout.start()`. Nothing resolves them afterwards. So an index handed to a
+ * layout that is already running stays a number forever while its type claims
+ * to be a node, and every reader (routing, rendering, hit-testing) misreads it.
+ * To attach an edge to a LIVE layout, store the node itself
+ * (`currentLayout.nodes[i]`) rather than calling this.
  */
 export function edgeEndpointFromIndex(index: number): NodeWithMetadata {
   return index as unknown as NodeWithMetadata;

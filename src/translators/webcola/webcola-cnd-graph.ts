@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode, edgeEndpointFromIndex } from './webcolatranslator';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
 import type { GridRouter, Group, Layout, Node, Link, ID3StyleLayoutAdaptor } from 'webcola';
@@ -1999,11 +1999,19 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Generate unique edge ID
     const edgeId = `edge_${sourceNode.id}_${targetNode.id}_${Date.now()}`;
 
-    // Create new edge object
+    // Create new edge object.
+    //
+    // Store the NODE OBJECTS, not the indices. WebCola swaps indices for nodes
+    // only inside Layout.start(), and this edge joins a layout that has already
+    // started — rerenderGraph() deliberately never calls start() again. An index
+    // written here would therefore never be resolved, and every reader
+    // (routing, rendering, hit-testing) would treat the number as a node.
+    // `currentLayout.nodes` is the same array WebCola resolved against, so these
+    // are the identical objects it would have installed.
     const newEdge: EdgeWithMetadata = {
       id: edgeId,
-      source: edgeEndpointFromIndex(sourceIndex),
-      target: edgeEndpointFromIndex(targetIndex),
+      source: this.currentLayout.nodes[sourceIndex],
+      target: this.currentLayout.nodes[targetIndex],
       label: label,
       relName: label,
       color: '#333',
@@ -2044,9 +2052,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create a tuple representing the edge/relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
-        // Provisional: a layout node knows only its most specific type. The data-instance
-        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-        // declared column types before writing, so a subtype never widens the signature.
+        // Provisional: a layout node knows only its most specific type, and this class
+        // has no data instance to check it against. StructuredInputGraph settles these
+        // against the relation's declared column types before writing. NOTE these
+        // values also reach EXTERNAL listeners of the bubbling event below, which get
+        // them unsettled — such a listener must settle them itself before writing.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -2189,9 +2199,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create tuple for the relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
-        // Provisional: a layout node knows only its most specific type. The data-instance
-        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-        // declared column types before writing, so a subtype never widens the signature.
+        // Provisional: a layout node knows only its most specific type, and this class
+        // has no data instance to check it against. StructuredInputGraph settles these
+        // against the relation's declared column types before writing. NOTE these
+        // values also reach EXTERNAL listeners of the bubbling event below, which get
+        // them unsettled — such a listener must settle them itself before writing.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -3723,17 +3735,21 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Create tuples for old and new edges
     const oldTuple: ITuple = {
       atoms: [oldSourceNode.id, oldTargetNode.id],
-      // Provisional: a layout node knows only its most specific type. The data-instance
-      // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-      // declared column types before writing, so a subtype never widens the signature.
+      // Provisional: a layout node knows only its most specific type, and this class
+      // has no data instance to check it against. StructuredInputGraph settles these
+      // against the relation's declared column types before writing. NOTE these
+      // values also reach EXTERNAL listeners of the bubbling event below, which get
+      // them unsettled — such a listener must settle them itself before writing.
       types: [oldSourceNode.mostSpecificType || 'untyped', oldTargetNode.mostSpecificType || 'untyped']
     };
 
     const newTuple: ITuple = {
       atoms: [newSourceNode.id, newTargetNode.id],
-      // Provisional: a layout node knows only its most specific type. The data-instance
-      // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-      // declared column types before writing, so a subtype never widens the signature.
+      // Provisional: a layout node knows only its most specific type, and this class
+      // has no data instance to check it against. StructuredInputGraph settles these
+      // against the relation's declared column types before writing. NOTE these
+      // values also reach EXTERNAL listeners of the bubbling event below, which get
+      // them unsettled — such a listener must settle them itself before writing.
       types: [newSourceNode.mostSpecificType || 'untyped', newTargetNode.mostSpecificType || 'untyped']
     };
 
@@ -3758,9 +3774,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const sourceIndex = this.currentLayout.nodes.findIndex(n => n.id === newSourceNode.id);
     const targetIndex = this.currentLayout.nodes.findIndex(n => n.id === newTargetNode.id);
     
+    // Store the NODE OBJECTS. These endpoints already HOLD resolved nodes — the
+    // layout has started — so writing indices back would un-resolve them, and
+    // nothing would ever resolve them again (see createNewEdge above).
     if (sourceIndex !== -1 && targetIndex !== -1) {
-      edgeData.source = edgeEndpointFromIndex(sourceIndex);
-      edgeData.target = edgeEndpointFromIndex(targetIndex);
+      edgeData.source = this.currentLayout.nodes[sourceIndex];
+      edgeData.target = this.currentLayout.nodes[targetIndex];
     }
   }
 
@@ -3803,9 +3822,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
           if (memberNode && keyNode) {
             tuples.push({
               atoms: [keyNode.id, memberNode.id],
-              // Provisional: a layout node knows only its most specific type. The data-instance
-              // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-              // declared column types before writing, so a subtype never widens the signature.
+              // Provisional: a layout node knows only its most specific type, and this class
+              // has no data instance to check it against. StructuredInputGraph settles these
+              // against the relation's declared column types before writing. NOTE these
+              // values also reach EXTERNAL listeners of the bubbling event below, which get
+              // them unsettled — such a listener must settle them itself before writing.
               types: [keyNode.mostSpecificType || 'untyped', memberNode.mostSpecificType || 'untyped']
             });
           }
@@ -3817,9 +3838,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (tuples.length === 0) {
       tuples.push({
         atoms: [sourceNode.id, targetNode.id],
-        // Provisional: a layout node knows only its most specific type. The data-instance
-        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
-        // declared column types before writing, so a subtype never widens the signature.
+        // Provisional: a layout node knows only its most specific type, and this class
+        // has no data instance to check it against. StructuredInputGraph settles these
+        // against the relation's declared column types before writing. NOTE these
+        // values also reach EXTERNAL listeners of the bubbling event below, which get
+        // them unsettled — such a listener must settle them itself before writing.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       });
     }
