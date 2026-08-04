@@ -21,7 +21,20 @@ Add the custom element that will receive the final layout:
 </webcola-cnd-graph>
 ```
 
-Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing or `layoutFormat="legacy"` for the older curved router; the Routing dropdown in the rendered toolbar switches modes at runtime.
+Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing; the Routing dropdown in the rendered toolbar switches modes at runtime. (`layoutFormat="legacy"`, the old curved router, has been removed — the value still parses but warns and routes as taut.)
+
+For higher-quality orthogonal routing, import the opt-in libavoid router: `import 'spytial-core/routers/libavoid'` (npm; also install the optional peer `libavoid-js`). It registers an `Orthogonal (libavoid)` mode and upgrades `grid` in place. The WASM loads asynchronously — wait for it before rendering, or the first layout still routes with the built-in grid and the Routing dropdown misses the libavoid entry: `await libavoidReady`. If your bundler does not serve `libavoid.wasm` next to the libavoid-js module, call `registerLibavoidRouting({ wasmUrl })` right after the import instead.
+
+On a script-tag page, load the entry as a module from an ESM CDN that resolves dependencies — the routing registry is shared, so it plugs into the classic-script core bundle:
+
+```html
+<script type="module">
+  import { libavoidReady } from 'https://esm.sh/spytial-core/routers/libavoid';
+  await libavoidReady; // then create / re-render diagrams
+</script>
+```
+
+License note: libavoid-js is LGPL-2.1-or-later. spytial-core does not redistribute it — the npm entry keeps it external as an optional peer dependency, and on the CDN path the CDN serves libavoid-js directly from its own npm mirror.
 
 Load the browser bundle:
 

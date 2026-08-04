@@ -31,7 +31,8 @@
     "dist/sql-evaluator.mjs.map",
     "dist/react.mjs",
     "dist/react.mjs.map",
-    "dist/react.css"
+    "dist/react.css",
+    "dist/routers"
   ],
   "exports": {
     ".": {
@@ -68,6 +69,12 @@
       "require": {
         "types": "./dist/sql-evaluator.d.ts",
         "default": "./dist/sql-evaluator.js"
+      }
+    },
+    "./routers/libavoid": {
+      "import": {
+        "types": "./dist/routers/libavoid.d.mts",
+        "default": "./dist/routers/libavoid.mjs"
       }
     },
     "./alloy-instance": {
@@ -107,7 +114,7 @@
     "build:esm": "tsup --config tsup.esm.config.ts",
     "build:types": "tsc -p tsconfig.types.json; node -e \"['dist/types/index.d.ts','dist/types/components/index.d.ts','dist/types/explorer.d.ts'].forEach(f=>require('fs').accessSync(f))\"",
     "build:language": "tsx scripts/generate-language-artifacts.ts",
-    "build:all": "npm run build:parser && npm run build:language && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:react && npm run build:esm && npm run build:types",
+    "build:all": "npm run build:parser && npm run build:language && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -125,7 +132,8 @@
     "serve": "python3 -m http.server 8080",
     "analysis:run": "tsx analysis/runner/run.ts",
     "analysis:aggregate": "tsx analysis/runner/aggregate.ts",
-    "analysis:test": "vitest run --config vitest.analysis.config.ts"
+    "analysis:test": "vitest run --config vitest.analysis.config.ts",
+    "build:routers": "tsup --config tsup.routers.config.ts"
   },
   "keywords": [
     "typescript",
@@ -182,7 +190,8 @@
     "typescript-plugin-css-modules": "^5.1.0",
     "vite": "^6.3.5",
     "vitest": "^3.2.4",
-    "z3-solver": "^4.16.0"
+    "z3-solver": "^4.16.0",
+    "libavoid-js": "^0.5.0-beta.5"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.4",
@@ -214,7 +223,8 @@
     "alasql": "^4.0.0",
     "data-navigator": "^2.4.1",
     "react": ">=18",
-    "react-dom": ">=18"
+    "react-dom": ">=18",
+    "libavoid-js": "^0.5.0-beta.5"
   },
   "peerDependenciesMeta": {
     "alasql": {
@@ -227,6 +237,9 @@
       "optional": true
     },
     "react-dom": {
+      "optional": true
+    },
+    "libavoid-js": {
       "optional": true
     }
   }
