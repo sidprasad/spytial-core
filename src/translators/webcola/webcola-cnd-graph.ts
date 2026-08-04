@@ -2044,6 +2044,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create a tuple representing the edge/relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
+        // Provisional: a layout node knows only its most specific type. The data-instance
+        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+        // declared column types before writing, so a subtype never widens the signature.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -2186,6 +2189,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Create tuple for the relation
       const tuple: ITuple = {
         atoms: [sourceNode.id, targetNode.id],
+        // Provisional: a layout node knows only its most specific type. The data-instance
+        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+        // declared column types before writing, so a subtype never widens the signature.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       };
 
@@ -3717,11 +3723,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Create tuples for old and new edges
     const oldTuple: ITuple = {
       atoms: [oldSourceNode.id, oldTargetNode.id],
+      // Provisional: a layout node knows only its most specific type. The data-instance
+      // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+      // declared column types before writing, so a subtype never widens the signature.
       types: [oldSourceNode.mostSpecificType || 'untyped', oldTargetNode.mostSpecificType || 'untyped']
     };
 
     const newTuple: ITuple = {
       atoms: [newSourceNode.id, newTargetNode.id],
+      // Provisional: a layout node knows only its most specific type. The data-instance
+      // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+      // declared column types before writing, so a subtype never widens the signature.
       types: [newSourceNode.mostSpecificType || 'untyped', newTargetNode.mostSpecificType || 'untyped']
     };
 
@@ -3791,6 +3803,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
           if (memberNode && keyNode) {
             tuples.push({
               atoms: [keyNode.id, memberNode.id],
+              // Provisional: a layout node knows only its most specific type. The data-instance
+              // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+              // declared column types before writing, so a subtype never widens the signature.
               types: [keyNode.mostSpecificType || 'untyped', memberNode.mostSpecificType || 'untyped']
             });
           }
@@ -3802,6 +3817,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (tuples.length === 0) {
       tuples.push({
         atoms: [sourceNode.id, targetNode.id],
+        // Provisional: a layout node knows only its most specific type. The data-instance
+        // owner (StructuredInputGraph.settleTupleTypes) replaces these with the relation's
+        // declared column types before writing, so a subtype never widens the signature.
         types: [sourceNode.mostSpecificType || 'untyped', targetNode.mostSpecificType || 'untyped']
       });
     }
