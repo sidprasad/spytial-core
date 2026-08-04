@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { IInputDataInstance } from '../../data-instance/interfaces';
-import { ICommandParser, CommandResult, AtomCommandParser, RelationCommandParser, DotNotationRelationParser, BatchCommandParser, RemoveCommandParser } from './parsers/CoreParsers';
+import { ICommandParser, CommandResult, AtomCommandParser, DotNotationRelationParser, BatchCommandParser, RemoveCommandParser } from './parsers/CoreParsers';
 import { PyretListParser, InfoCommandParser } from './parsers/ExtensibleParsers';
 import './ReplInterface.css';
 

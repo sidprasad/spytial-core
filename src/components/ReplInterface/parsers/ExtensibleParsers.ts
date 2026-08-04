@@ -323,7 +323,7 @@ export class InfoCommandParser implements ICommandParser {
       }
       acc[atom.type].push(atom);
       return acc;
-    }, {} as Record<string, typeof atoms>);
+    }, {} as Record<string, IAtom[]>);
     
     Object.entries(atomsByType).forEach(([type, typeAtoms]) => {
       message += `${type}:\n`;

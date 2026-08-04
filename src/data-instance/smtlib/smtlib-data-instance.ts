@@ -333,6 +333,7 @@ export class SmtLibDataInstance implements IDataInstance {
       // Constants become atoms
       this.atomCache.set(definition.name, {
         id: definition.name,
+        label: definition.name,
         type: definition.sort
       });
     } else {
@@ -351,6 +352,7 @@ export class SmtLibDataInstance implements IDataInstance {
       if (this.config.treatApplicationsAsAtoms) {
         this.atomCache.set(definition.name, {
           id: definition.name,
+          label: definition.name,
           type: 'Function'
         });
       }

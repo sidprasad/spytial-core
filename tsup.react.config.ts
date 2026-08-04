@@ -12,10 +12,9 @@ import { defineConfig } from 'tsup'
 export default defineConfig({
   entry: { react: 'src/components/index.ts' },
   format: ['esm'],
-  // tsup's dts hard-fails on the pre-existing baseline type errors in the
-  // component subtree. Types for this entry come from the best-effort tsc
-  // emit instead (build:types → dist/types/components/index.d.ts), which the
-  // package.json "./react" types condition points at.
+  // Types for this entry come from build:types (dist/types/components/index.d.ts),
+  // which the package.json "./react" types condition points at. See
+  // tsup.esm.config.ts for why this stays off now that the type baseline is clean.
   dts: false,
   splitting: false,
   sourcemap: true,
