@@ -161,6 +161,8 @@ Every check on an assertion must hold; combine them freely.
 | `nonEmpty: true` | the result has at least one member |
 | `count: n` | the result has exactly `n` members |
 
+`empty` and `nonEmpty` are honoured in both directions — `empty: false` asserts the result is *not* empty, which is what a host generating cases programmatically will produce. Giving both the same value is a contradiction and is rejected.
+
 `because` is free text, echoed back on failure. Use it — a red test that explains its own intent is worth writing.
 
 A query that cannot be evaluated — an unknown atom id, a syntax slip — **fails** its assertion rather than quietly returning nothing.
@@ -187,6 +189,8 @@ Errors stop the case, because assertions over a graph you did not mean to descri
 | `datum/dangling-tuple-atom` | a tuple names an atom that is not in `atoms` |
 | `datum/relation-missing-name`, `datum/relation-missing-tuples` | a relation is unusable |
 | `datum/tuple-empty`, `datum/tuple-missing-atoms` | a tuple has no atoms |
+
+One consequence worth knowing: `datum/no-atoms` is an error, so a case cannot assert about a *deliberately* empty datum — the assertions never run. If you want to test that an empty collection produces an empty diagram, set `skipDatumCheck: true` on that one case and assert `nodes()` is empty yourself.
 
 Warnings are reported but do not fail a case:
 

@@ -64,9 +64,9 @@ export interface Assertion {
     contains?: string[];
     /** The result includes none of these. */
     excludes?: string[];
-    /** The result is empty. */
+    /** `true` asserts the result is empty; `false` asserts it is not. */
     empty?: boolean;
-    /** The result has at least one member. */
+    /** `true` asserts the result has at least one member; `false` asserts it is empty. */
     nonEmpty?: boolean;
     /** The result has exactly this many members. */
     count?: number;

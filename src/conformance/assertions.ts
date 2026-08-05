@@ -57,8 +57,13 @@ export function validateAssertion(assertion: unknown, where: string): Diagnostic
     if (a.count !== undefined && (typeof a.count !== 'number' || !Number.isInteger(a.count) || a.count < 0)) {
         problems.push(bad('"count" must be a non-negative integer.'));
     }
-    if (a.empty === true && a.nonEmpty === true) {
-        problems.push(bad('Assertion cannot be both "empty" and "nonEmpty".'));
+    // Both fields are honoured in both directions, so they disagree exactly
+    // when they hold the same value: `empty: true` with `nonEmpty: true`, or
+    // `empty: false` with `nonEmpty: false`.
+    if (typeof a.empty === 'boolean' && a.empty === a.nonEmpty) {
+        problems.push(bad(
+            `"empty" and "nonEmpty" contradict each other here — both are ${a.empty}. Give one, or give them opposite values.`,
+        ));
     }
 
     return problems;
@@ -112,11 +117,18 @@ export function evaluateAssertion(evaluator: LayoutEvaluator, assertion: Asserti
         }
     }
 
-    if (assertion.empty === true && actual.length > 0) {
+    // Both booleans are honoured in both directions. `empty: false` reads as
+    // "assert this is not empty", and a host generating cases programmatically
+    // will produce exactly that; treating only `true` as meaningful would let
+    // such an assertion pass no matter what the query returned.
+    const wantsEmpty = assertion.empty === true || assertion.nonEmpty === false;
+    const wantsNonEmpty = assertion.nonEmpty === true || assertion.empty === false;
+
+    if (wantsEmpty && actual.length > 0) {
         failures.push(`expected empty, got ${show(actual)}`);
     }
 
-    if (assertion.nonEmpty === true && actual.length === 0) {
+    if (wantsNonEmpty && actual.length === 0) {
         failures.push('expected at least one result, got none');
     }
 

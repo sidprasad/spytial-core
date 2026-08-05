@@ -60,7 +60,7 @@ Whichever surface you use, the browser-side payload is identical: load the spyti
 Most integrations load the browser bundle from a CDN:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/spytial-core@4.4.0/dist/browser/spytial-core-complete.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spytial-core@4.4.1/dist/browser/spytial-core-complete.global.js"></script>
 <script>
   const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
 
@@ -102,8 +102,6 @@ Caraspace's red-black tree example does the first.
 **Ambient state the user can't see.** Debugger frames, evaluation contexts, proof goals. Decide what counts as "the value" for diagramming and what is environment that should be summarised (or omitted).
 
 When in doubt: **start by faithfully relationalizing what is there**, then add adapters when users hit limits. Do not try to predict every gap.
-
----
 
 ---
 

@@ -211,9 +211,14 @@ describe('validateAssertion', () => {
         expect(validateAssertion({ query: 'nodes()', count: 1.5 }, 'x')).toHaveLength(1);
     });
 
-    it('rejects asking for empty and nonEmpty at once', () => {
-        const problems = validateAssertion({ query: 'nodes()', empty: true, nonEmpty: true }, 'x');
-        expect(problems.some(p => p.message.includes('both'))).toBe(true);
+    it('rejects empty and nonEmpty when they contradict', () => {
+        expect(validateAssertion({ query: 'nodes()', empty: true, nonEmpty: true }, 'x')).toHaveLength(1);
+        expect(validateAssertion({ query: 'nodes()', empty: false, nonEmpty: false }, 'x')).toHaveLength(1);
+    });
+
+    it('accepts empty and nonEmpty when they agree', () => {
+        expect(validateAssertion({ query: 'nodes()', empty: true, nonEmpty: false }, 'x')).toEqual([]);
+        expect(validateAssertion({ query: 'nodes()', empty: false, nonEmpty: true }, 'x')).toEqual([]);
     });
 });
 
@@ -261,6 +266,37 @@ describe('runCase', () => {
         });
         expect(result.assertions[0].message).toContain('missing "zzz"');
         expect(result.assertions[0].message).toContain('unexpected "c"');
+    });
+
+    it('honours empty and nonEmpty in both directions, so neither can silently pass', () => {
+        // `empty: false` means "assert this is NOT empty". Checking only for
+        // `true` would make such an assertion vacuous whatever the query returned
+        // — the exact silent pass this harness exists to prevent.
+        const vacuous = runCase({
+            name: 'empty false',
+            datum: listDatum(),
+            spec: LIST_SPEC,
+            assertions: [{ query: 'nodes()', empty: false }],
+        });
+        expect(vacuous.assertions[0].ok).toBe(true);   // genuinely non-empty
+
+        const caught = runCase({
+            name: 'empty false on an empty result',
+            datum: listDatum(),
+            spec: LIST_SPEC,
+            assertions: [{ query: 'must.leftOf(a)', empty: false }],
+        });
+        expect(caught.assertions[0].ok).toBe(false);
+        expect(caught.assertions[0].message).toContain('at least one');
+
+        const inverse = runCase({
+            name: 'nonEmpty false',
+            datum: listDatum(),
+            spec: LIST_SPEC,
+            assertions: [{ query: 'nodes()', nonEmpty: false }],
+        });
+        expect(inverse.assertions[0].ok).toBe(false);
+        expect(inverse.assertions[0].message).toContain('expected empty');
     });
 
     it('fails rather than passes when a query cannot be evaluated', () => {
