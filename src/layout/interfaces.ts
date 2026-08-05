@@ -307,6 +307,15 @@ export interface InstanceLayout {
      */
     hiddenAtoms?: string[];
     /**
+     * Node-id fragments selected by non-negated cyclic constraints, one entry
+     * per fragment, in selector order (reversed for counterclockwise). Absent
+     * when no cyclic constraint selected anything. This is what the `cyclic()`
+     * spatial query reports: membership is settled by selection, so a two-atom
+     * fragment counts even though drawing it needs no disjunction. Singleton
+     * fragments cycle with nobody and are not recorded.
+     */
+    cyclicFragments?: string[][];
+    /**
      * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
      * These are separate from conjunctive constraints for clearer solver integration.
      */

@@ -1165,53 +1165,49 @@ describe('Constraint vocabulary queries (hidden/sized/cyclic)', () => {
     });
 
     describe('cyclic(A)', () => {
-        /** Three rotations of a three-node cycle; each alternative is a consistent chain. */
-        function cyclicDisjunction(a: LayoutNode, b: LayoutNode, c: LayoutNode, negated = false): DisjunctiveConstraint {
-            const src = new CyclicOrientationConstraint('clockwise', 'cycleSel', negated);
-            return disjunction(src, [
-                [leftOf(a, b), leftOf(b, c)],
-                [leftOf(b, c), leftOf(c, a)],
-                [leftOf(c, a), leftOf(a, b)],
-            ]);
-        }
-
         it('returns every atom in the fragment, including the queried one', () => {
             const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
-            const l = layout([a, b, c, d], [], [cyclicDisjunction(a, b, c)]);
+            const l = layout([a, b, c, d], []);
+            l.cyclicFragments = [['A', 'B', 'C']];
             const ev = new LayoutEvaluator(validate(l), l);
             expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual(['A', 'B', 'C']);
             expect(ev.evaluate('cyclic(B)').selectedAtoms()).toEqual(['A', 'B', 'C']);
         });
 
+        it('counts a two-atom fragment: membership is by selection, not by disjunction', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const l = layout([a, b, c], []);
+            l.cyclicFragments = [['A', 'B']];
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual(['A', 'B']);
+            expect(ev.evaluate('cyclic(C)').selectedAtoms()).toEqual([]);
+        });
+
+        it('unions fragments that share the queried atom', () => {
+            const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
+            const l = layout([a, b, c, d], []);
+            l.cyclicFragments = [['A', 'B', 'C'], ['A', 'D']];
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual(['A', 'B', 'C', 'D']);
+            expect(ev.evaluate('cyclic(D)').selectedAtoms()).toEqual(['A', 'D']);
+        });
+
         it('is empty for a node in no cycle', () => {
             const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
-            const l = layout([a, b, c, d], [], [cyclicDisjunction(a, b, c)]);
+            const l = layout([a, b, c, d], []);
+            l.cyclicFragments = [['A', 'B', 'C']];
             const ev = new LayoutEvaluator(validate(l), l);
             expect(ev.evaluate('cyclic(D)').selectedAtoms()).toEqual([]);
         });
 
         it('errors on an unknown node', () => {
             const [a, b, c] = ['A', 'B', 'C'].map(createNode);
-            const l = layout([a, b, c], [], [cyclicDisjunction(a, b, c)]);
+            const l = layout([a, b, c], []);
+            l.cyclicFragments = [['A', 'B', 'C']];
             const ev = new LayoutEvaluator(validate(l), l);
             const result = ev.evaluate('cyclic(Zzz)');
             expect(result.isError()).toBe(true);
             expect(result.prettyPrint()).toContain('Unknown node');
-        });
-
-        it('ignores negated cyclic constraints, which assert the absence of a cycle', () => {
-            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
-            const l = layout([a, b, c], [], [cyclicDisjunction(a, b, c, true)]);
-            const ev = new LayoutEvaluator(validate(l), l);
-            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual([]);
-        });
-
-        it('ignores disjunctions whose source is not a cyclic constraint', () => {
-            const [a, b] = ['A', 'B'].map(createNode);
-            const src = new RelativeOrientationConstraint(['left'], 'A->B');
-            const l = layout([a, b], [], [disjunction(src, [[leftOf(a, b)], [leftOf(b, a)]])]);
-            const ev = new LayoutEvaluator(validate(l), l);
-            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual([]);
         });
     });
 });

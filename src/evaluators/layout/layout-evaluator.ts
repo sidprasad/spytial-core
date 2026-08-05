@@ -9,11 +9,7 @@
  */
 
 import { QualitativeConstraintValidator } from '../../layout/qualitative-constraint-validator';
-import {
-    DisjunctiveConstraint, ImplicitConstraint, InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode,
-    isAlignmentConstraint, isLeftConstraint, isTopConstraint
-} from '../../layout/interfaces';
-import { CyclicOrientationConstraint } from '../../layout/layoutspec';
+import { InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode } from '../../layout/interfaces';
 import {
     IEvaluatorResult, EvaluatorResult, SingleValue, Tuple
 } from '../interfaces';
@@ -475,49 +471,25 @@ export class LayoutEvaluator {
 
     /**
      * Atoms sharing a cyclic fragment with the given node (including the node
-     * itself). Grounded in the cyclic disjunctions the layout carries, so it
-     * reports membership only — which rotation was drawn is not entailed by
-     * the spec. Fragments of two or fewer atoms produce no disjunction (they
-     * entail no arrangement) and report empty, as do negated cyclic
-     * constraints, which assert the absence of a cycle.
+     * itself). Grounded in the fragments the cyclic constraints selected
+     * (InstanceLayout.cyclicFragments), so membership is settled by selection:
+     * a two-atom fragment counts even though drawing it needs no disjunction.
+     * Which rotation was drawn is not entailed, so the query reports
+     * membership only. Negated cyclic constraints assert the absence of a
+     * cycle and contribute no fragments.
      */
     private queryCyclic(nodeId: string, expr: string): LayoutEvaluatorResult {
         if (!this.allNodeIds.has(nodeId)) {
             return LayoutEvaluatorResult.error(`Unknown node: "${nodeId}"`, expr);
         }
         const result = new Set<string>();
-        for (const disjunction of this.layout.disjunctiveConstraints ?? []) {
-            const source = disjunction.sourceConstraint instanceof ImplicitConstraint
-                ? disjunction.sourceConstraint.c
-                : disjunction.sourceConstraint;
-            if (!(source instanceof CyclicOrientationConstraint) || source.negated) continue;
-            const members = this.cyclicFragmentMembers(disjunction);
-            if (!members.has(nodeId)) continue;
-            for (const member of members) {
+        for (const fragment of this.layout.cyclicFragments ?? []) {
+            if (!fragment.includes(nodeId)) continue;
+            for (const member of fragment) {
                 if (this.allNodeIds.has(member)) result.add(member);
             }
         }
         return LayoutEvaluatorResult.fromSet(result, expr);
-    }
-
-    /** Every node referenced by any alternative of a cyclic disjunction. */
-    private cyclicFragmentMembers(disjunction: DisjunctiveConstraint): Set<string> {
-        const members = new Set<string>();
-        for (const alternative of disjunction.alternatives) {
-            for (const constraint of alternative) {
-                if (isTopConstraint(constraint)) {
-                    members.add(constraint.top.id);
-                    members.add(constraint.bottom.id);
-                } else if (isLeftConstraint(constraint)) {
-                    members.add(constraint.left.id);
-                    members.add(constraint.right.id);
-                } else if (isAlignmentConstraint(constraint)) {
-                    members.add(constraint.node1.id);
-                    members.add(constraint.node2.id);
-                }
-            }
-        }
-        return members;
     }
 
     /**

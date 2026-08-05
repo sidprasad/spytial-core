@@ -562,10 +562,10 @@ describe('constraint vocabulary queries (hidden/sized/cyclic)', () => {
         expect(result.ok).toBe(true);
     });
 
-    it('cyclic(A) is empty for a two-atom fragment, which entails no arrangement', () => {
-        // Two atoms cannot be told apart from a swap by rotation, so the engine
-        // generates no disjunction for them. The documented contract is that
-        // their atoms report empty rather than a hollow two-member "cycle".
+    it('cyclic(A) counts a two-atom fragment: membership is by selection', () => {
+        // Two atoms need no disjunction to draw — any placement is a rotation —
+        // but the selector still put them in a cycle, and membership is what
+        // the query reports.
         const result = runCase({
             name: 'two-state ring',
             datum: {
@@ -583,8 +583,21 @@ describe('constraint vocabulary queries (hidden/sized/cyclic)', () => {
             },
             spec: 'constraints:\n  - cyclic:\n      selector: "{x, y : State | y in x.next}"\n      direction: clockwise\n',
             assertions: [
+                { query: 'cyclic(s1)', equals: ['s1', 's2'] },
+                { query: 'cyclic(s2)', equals: ['s1', 's2'] },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('cyclic(A) is empty under a negated cyclic constraint, which asserts no cycle', () => {
+        const result = runCase({
+            name: 'no ring allowed',
+            datum: ringDatum(),
+            spec: 'constraints:\n  - cyclic:\n      selector: "{x, y : State | y in x.next}"\n      direction: clockwise\n      hold: never\n',
+            assertions: [
                 { query: 'cyclic(s1)', empty: true },
-                { query: 'cyclic(s2)', empty: true },
             ],
         });
         expect(result.errors).toEqual([]);

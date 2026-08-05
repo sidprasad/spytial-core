@@ -162,7 +162,7 @@ Three of these deserve a word on what they do *not* say:
 
 - `hidden()` reports only atoms a `hideAtom` selector removed. An atom can be missing from `nodes()` for other reasons — it was never in the datum, or an `attribute` directive folded it into its owner — and those never appear in `hidden()`.
 - `sized(W, H)` matches the exact numbers a `size` constraint asked for. An atom no `size` constraint touched can land on those numbers by accident — in particular, auto-sized short-label nodes default to exactly 100 × 60, so querying those numbers matches them all. Point it at atoms you sized on purpose, with numbers you chose.
-- `cyclic(A)` reports membership, not order — which rotation of the cycle gets drawn is not entailed by the spec. A fragment of two or fewer atoms entails no arrangement, so its atoms report empty. A negated cyclic constraint asserts the *absence* of a cycle and never contributes members.
+- `cyclic(A)` reports membership, not order — which rotation of the cycle gets drawn is not entailed by the spec. Membership follows the selector, so a two-atom fragment counts even though drawing it takes no extra constraint. A negated cyclic constraint asserts the *absence* of a cycle and never contributes members.
 
 ### Checks
 
