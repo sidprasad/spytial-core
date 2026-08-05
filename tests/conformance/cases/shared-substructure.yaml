@@ -1,0 +1,53 @@
+# A DAG where two parents point at the same child.
+#
+# This is the case that catches the most common relationalizer bug. When a host
+# value is reachable by two paths, the walker must emit it once, under one id,
+# so the diagram shows the sharing. A walker that recurses without tracking
+# identity emits it twice and quietly draws a tree where the value was a DAG.
+#
+# The `nodes()` count is what proves it: four atoms, not five.
+
+cases:
+  - name: a shared child is one atom, not two
+    note: Seed case. Run this against your relationalizer before trusting it on cyclic or shared values.
+    datum:
+      atoms:
+        - { id: root, type: Node, label: root }
+        - { id: leftChild, type: Node, label: left }
+        - { id: rightChild, type: Node, label: right }
+        - { id: shared, type: Node, label: shared }
+      relations:
+        - id: child
+          name: child
+          types: [Node, Node]
+          tuples:
+            - { atoms: [root, leftChild], types: [Node, Node] }
+            - { atoms: [root, rightChild], types: [Node, Node] }
+            - { atoms: [leftChild, shared], types: [Node, Node] }
+            - { atoms: [rightChild, shared], types: [Node, Node] }
+    spec: |
+      constraints:
+        - orientation:
+            selector: "{x, y : Node | y in x.child}"
+            directions: [below]
+    assertions:
+      - query: nodes()
+        count: 4
+        because: the shared value is reachable two ways but is still one atom
+
+      - query: must.below(leftChild)
+        contains: [shared]
+
+      - query: must.below(rightChild)
+        contains: [shared]
+        because: both parents dominate the same atom, which is what sharing looks like
+
+      - query: must.below(root)
+        equals: [leftChild, rightChild, shared]
+
+      - query: edges(shared)
+        nonEmpty: true
+
+      - query: must.above(shared)
+        equals: [leftChild, rightChild, root]
+        because: a duplicated child would show only one parent above it

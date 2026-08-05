@@ -105,6 +105,31 @@ When in doubt: **start by faithfully relationalizing what is there**, then add a
 
 ---
 
+---
+
+## 5. Testing what you built
+
+> *How do you know the datum and the spec say what you meant?*
+
+Two of the four answers above can be checked automatically, and should be.
+
+The trap is testing at the wrong level. A spec describes spatial *relationships*, not a picture — a list that runs left to right is satisfied by infinitely many drawings. Comparing rendered images or asserting on coordinates therefore tests the renderer, not the integration: those tests break when nothing is wrong, and pass when something is.
+
+What you can check, without rendering anything, is what the spec **entails**:
+
+```yaml
+assertions:
+  - query: must.rightOf(n1)
+    equals: [n2, n3]
+    because: orientation is transitive, so the tail is all to the right of the head
+```
+
+`spytial-check` runs cases like this from the command line, in JSON in and JSON out, so integrations in any host can use it as a subprocess. It also checks the raw datum for the bugs the data instance would otherwise repair on the way in — duplicate ids, dangling tuples, lost sharing.
+
+See [Testing an Integration](testing-integrations.md).
+
+---
+
 ## A checklist for a new integration
 
 Before you publish, make sure the integration has answers for these:
@@ -113,5 +138,6 @@ Before you publish, make sure the integration has answers for these:
 - [ ] **Attach** — Can a user attach a spec without learning YAML? Is there an escape hatch for users who want raw YAML?
 - [ ] **Present** — In the host's typical workflow (REPL, notebook, IDE, build tool), does the diagram appear where users will look for output?
 - [ ] **Gaps** — For at least one classical example (BST, linked list, AST, DAG with sharing), is there a way to express ordering and at least one derived metric?
+- [ ] **Test** — Do you have conformance cases pinning down what your specs entail, and a check that a shared value stays one atom?
 
 Once you can check those, you have the outline of an integration. The next step is to build the smallest end-to-end path: one value, one spec, one rendered diagram.
