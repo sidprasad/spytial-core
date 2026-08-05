@@ -109,10 +109,25 @@ Re-exports under `Layout` namespace include `LayoutSpec`, `InstanceLayout`, `Lay
 | `SGraphQueryEvaluator`                          | Default selector engine. |
 | `ForgeEvaluator`, `WrappedForgeEvaluator`       | Forge expression evaluator (uses the `forge-expr-evaluator` dependency). |
 | `SQLEvaluator` *(moved in 4.0.0)*               | AlaSQL-backed alternative for users who'd rather write SQL. Import from `spytial-core/sql-evaluator`; on CDN pages load `spytial-core-sql.global.js`. |
-| `LayoutEvaluator`, `LayoutEvaluatorResult`, `LayoutEvaluatorRecordResult`, `LayoutEvaluatorEdgeResult` | Spatial query engine — answers questions like "what's directly above A?". Used by `<spytial-explorer>` and accessibility tooling. |
+| `LayoutEvaluator`, `LayoutEvaluatorResult`, `LayoutEvaluatorRecordResult`, `LayoutEvaluatorEdgeResult` | Spatial query engine — answers what a spec entails ("what *must* be above A?"), against the solved constraint graph rather than rendered positions. Used by `<spytial-explorer>`, accessibility tooling, and the conformance harness. |
 | `SpatialQuery`, `DirectionalRelation`, `AlignmentAxis`, `Modality`, `EdgeInfo` | Types used by `LayoutEvaluator`. |
 
 Re-exported namespace: `Evaluators`.
+
+---
+
+## Conformance harness
+
+Testing for integrations: does the relationalizer's datum describe a well-formed graph, and does the emitted spec entail the spatial facts its author meant? Import from `spytial-core/conformance`, or use the `spytial-check` bin from a host that is not JavaScript. See [Testing an Integration](testing-integrations.md).
+
+| Export | Notes |
+|--------|-------|
+| `runCase`, `runCases`      | Run conformance cases. Never throw — failures come back as diagnostics. |
+| `checkDatum`               | Check a raw relationalizer output on its own, before the data instance normalizes it. |
+| `evaluateAssertion`, `validateAssertion` | The assertion layer, if you are building your own runner. |
+| `extractCases`             | Read cases out of a document (single case, array, or `{cases: [...]}`). |
+| `CONFORMANCE_FORMAT_VERSION`, `ASSERTION_CHECKS` | The case/result contract version, and every check an assertion can carry. |
+| `ConformanceCase`, `Assertion`, `CaseResult`, `RunResult`, `Diagnostic`, `DiagnosticCode` | Types for the case and result JSON. |
 
 ---
 
@@ -275,6 +290,8 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 | `spytial-core/explorer`                                             | `<spytial-explorer>` a11y element (registers itself on import). `data-navigator` is an optional peer dep. |
 | `spytial-core/alloy-instance`                                       | Standalone Alloy XML parser. |
 | `spytial-core/evaluator`                                            | Self-contained headless evaluator (bundles SGQ). |
+| `spytial-core/conformance`                                          | The conformance harness for integration tests. |
+| `spytial-check` (bin)                                               | CLI wrapper around the harness: case documents in, JSON verdict on stdout, exit 0/1/2. Self-contained, so it can be vendored beside a non-JavaScript package. |
 | `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle (engine + custom elements; no React components or SQL since 4.0.0). |
 | `dist/browser/spytial-core-sql.global.js` (CDN, opt-in)             | Adds `SQLEvaluator` back onto the `spytialcore` global for pages using SQL selectors. Load after the main bundle. |
 | `dist/browser/spytial-core-explorer.global.js` (CDN, opt-in)        | Registers `<spytial-explorer>` and adds `SpytialExplorer` onto the `spytialcore` global. Load after the main bundle. |
@@ -285,7 +302,7 @@ CDN URLs:
 - jsDelivr: `https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`
 - unpkg:    `https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`
 
-For reproducibility, pin a version (`spytial-core@4.4.0`).
+For reproducibility, pin a version (`spytial-core@4.4.1`).
 
 ---
 

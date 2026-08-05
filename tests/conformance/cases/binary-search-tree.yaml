@@ -1,0 +1,75 @@
+# A binary search tree.
+#
+# Two ordering relations at once, each carrying two directions. `directions`
+# reads as the target relative to the source: `[left, below]` on `x.left` puts
+# the child left of and below its parent.
+#
+# The interesting checks are the ones no single constraint states. Nothing says
+# the left subtree sits left of the right subtree, but it follows.
+
+cases:
+  - name: binary search tree places subtrees on the correct sides
+    note: Seed case. Copy this shape for any recursive structure with named child positions.
+    datum:
+      atoms:
+        - { id: n5, type: Node, label: "5" }
+        - { id: n3, type: Node, label: "3" }
+        - { id: n8, type: Node, label: "8" }
+        - { id: n1, type: Node, label: "1" }
+        - { id: n4, type: Node, label: "4" }
+      relations:
+        - id: left
+          name: left
+          types: [Node, Node]
+          tuples:
+            - { atoms: [n5, n3], types: [Node, Node] }
+            - { atoms: [n3, n1], types: [Node, Node] }
+        - id: right
+          name: right
+          types: [Node, Node]
+          tuples:
+            - { atoms: [n5, n8], types: [Node, Node] }
+            - { atoms: [n3, n4], types: [Node, Node] }
+    spec: |
+      constraints:
+        - orientation:
+            selector: "{x, y : Node | y in x.left}"
+            directions: [left, below]
+        - orientation:
+            selector: "{x, y : Node | y in x.right}"
+            directions: [right, below]
+    assertions:
+      - query: nodes()
+        count: 5
+
+      - query: must.leftOf(n5)
+        equals: [n1, n3]
+        because: >
+          n3 is left of the root and n1 is left of n3, so n1 follows by
+          transitivity. n4 does NOT: the spec only says n4 is right of n3, and
+          nothing relates n4 to the root. Reading this tree as "the whole left
+          subtree is left of 5" is an assumption the spec does not make. If you
+          want that guarantee, the spec has to state it.
+
+      - query: must.leftOf(n5)
+        excludes: [n4]
+        because: pinned deliberately, so this stays visible if the spec later changes
+
+      - query: must.rightOf(n5)
+        contains: [n8]
+
+      - query: must.leftOf(n5)
+        excludes: [n8]
+        because: a right child must never end up left of its parent
+
+      - query: must.below(n5)
+        equals: [n1, n3, n4, n8]
+        because: every descendant hangs below the root
+
+      - query: must.above(n5)
+        empty: true
+        because: the root is the top of the tree
+
+      - query: must.rightOf(n1)
+        contains: [n4]
+        because: within the left subtree, 4 still sits right of 1

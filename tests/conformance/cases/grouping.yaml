@@ -1,0 +1,57 @@
+# Grouping by a binary selector.
+#
+# With a binary selector the first element is the group key and the second is
+# the member added to that key's group — one group per key. This is the form to
+# reach for; the old `group: { field, groupOn, addToGroup }` shape is deprecated.
+#
+# Note the selector has to be genuinely binary. `Team.members` looks like it
+# names a relation but it is a join, so it evaluates to the unary set of all
+# members and produces one box around the lot. Writing it out as
+# `{t : Team, p : Person | p in t.members}` keeps both columns.
+#
+# Group queries take no modality — membership is a fact about the layout, not
+# something the solver reasons about.
+
+cases:
+  - name: members land in their team's group
+    note: Seed case. Copy this shape when a spec draws boxes around related atoms.
+    datum:
+      atoms:
+        - { id: teamA, type: Team, label: "Team A" }
+        - { id: teamB, type: Team, label: "Team B" }
+        - { id: ana, type: Person, label: Ana }
+        - { id: bo, type: Person, label: Bo }
+        - { id: cy, type: Person, label: Cy }
+      relations:
+        - id: members
+          name: members
+          types: [Team, Person]
+          tuples:
+            - { atoms: [teamA, ana], types: [Team, Person] }
+            - { atoms: [teamA, bo], types: [Team, Person] }
+            - { atoms: [teamB, cy], types: [Team, Person] }
+    spec: |
+      constraints:
+        - group:
+            selector: "{t : Team, p : Person | p in t.members}"
+            name: team
+    assertions:
+      - query: grouped(ana)
+        count: 1
+        because: Ana belongs to exactly one team, so she is in exactly one group
+
+      - query: grouped(ana, bo)
+        nonEmpty: true
+        because: two members of one team share a group
+
+      - query: grouped(ana, cy)
+        empty: true
+        because: members of different teams must not share a group
+
+      - query: groups()
+        count: 2
+        because: one group per team key, not one box around everyone
+
+      - query: grouped(teamA)
+        empty: true
+        because: the key labels the group, it is not a member of it

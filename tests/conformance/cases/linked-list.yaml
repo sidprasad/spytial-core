@@ -1,0 +1,45 @@
+# A linked list laid out left to right.
+#
+# The smallest useful case: one relation, one constraint, and the check that
+# orientation is transitive — n1 must be left of n3 even though no constraint
+# mentions that pair directly.
+
+cases:
+  - name: linked list runs left to right
+    note: Seed case. Copy this shape for any spec built on a single ordering relation.
+    datum:
+      atoms:
+        - { id: n1, type: Node, label: "1" }
+        - { id: n2, type: Node, label: "2" }
+        - { id: n3, type: Node, label: "3" }
+      relations:
+        - id: next
+          name: next
+          types: [Node, Node]
+          tuples:
+            - { atoms: [n1, n2], types: [Node, Node] }
+            - { atoms: [n2, n3], types: [Node, Node] }
+    spec: |
+      constraints:
+        - orientation:
+            selector: "{x, y : Node | y in x.next}"
+            directions: [right]
+    assertions:
+      - query: nodes()
+        equals: [n1, n2, n3]
+        because: the relationalizer should emit one atom per cell
+
+      - query: must.rightOf(n1)
+        equals: [n2, n3]
+        because: orientation is transitive, so the tail is all to the right of the head
+
+      - query: must.leftOf(n3)
+        equals: [n1, n2]
+
+      - query: must.above(n1)
+        empty: true
+        because: the spec orders horizontally only, so nothing is pinned vertically
+
+      - query: edges(n1, n2)
+        nonEmpty: true
+        because: next should be drawn, not just used for ordering

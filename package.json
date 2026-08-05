@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "4.4.0",
+  "version": "4.4.1",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/types/index.d.ts",
@@ -32,8 +32,18 @@
     "dist/react.mjs",
     "dist/react.mjs.map",
     "dist/react.css",
-    "dist/routers"
+    "dist/routers",
+    "dist/conformance.js",
+    "dist/conformance.mjs",
+    "dist/conformance.d.ts",
+    "dist/conformance.d.mts",
+    "dist/conformance.js.map",
+    "dist/conformance.mjs.map",
+    "dist/cli"
   ],
+  "bin": {
+    "spytial-check": "./dist/cli/spytial-check.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -59,6 +69,16 @@
       "import": {
         "types": "./dist/types/explorer.d.ts",
         "default": "./dist/esm/explorer.mjs"
+      }
+    },
+    "./conformance": {
+      "import": {
+        "types": "./dist/conformance.d.mts",
+        "default": "./dist/conformance.mjs"
+      },
+      "require": {
+        "types": "./dist/conformance.d.ts",
+        "default": "./dist/conformance.js"
       }
     },
     "./sql-evaluator": {
@@ -110,11 +130,12 @@
     "build:browser": "tsup --config tsup.browser.config.ts",
     "build:components": "tsup --config tsup.components.config.ts",
     "build:sql": "tsup --config tsup.sql.config.ts",
+    "build:conformance": "tsup --config tsup.conformance.config.ts",
     "build:react": "tsup --config tsup.react.config.ts",
     "build:esm": "tsup --config tsup.esm.config.ts",
     "build:types": "tsc -p tsconfig.types.json && node -e \"['dist/types/index.d.ts','dist/types/components/index.d.ts','dist/types/explorer.d.ts'].forEach(f=>require('fs').accessSync(f))\"",
     "build:language": "tsx scripts/generate-language-artifacts.ts",
-    "build:all": "npm run build:parser && npm run build:language && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types",
+    "build:all": "npm run build:parser && npm run build:language && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:conformance && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
