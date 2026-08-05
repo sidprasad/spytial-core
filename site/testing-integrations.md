@@ -77,6 +77,8 @@ The contract is deliberately small:
 | **exit 2** | bad usage, or input that could not be read |
 | **exit 3** | the run took longer than `--timeout` |
 
+The split that matters is **0/1 against 2/3**, not zero against non-zero. On 0 and 1 the harness reached a verdict and stdout holds a `RunResult`. On 2 and 3 it never got that far: stdout is empty and the reason is on stderr. A host that treats every non-zero code as "some cases failed" will report a typo in a file path as a spec that does not hold.
+
 Because stdout carries only the result, you can pipe it straight into a parser.
 
 A run gives up after 300 seconds by default. Cases normally resolve in well under a second, so this only fires on something pathological — a selector that does not terminate on a particular datum, say — and it exists so a stuck case fails your CI job rather than hanging it. Raise it with `--timeout <seconds>` for a very large suite, or switch it off with `--timeout 0`.
@@ -91,7 +93,9 @@ def check(case):
         capture_output=True,
         text=True,
     )
-    if result.returncode == 2:
+    # 0 and 1 mean the harness has an answer for you; 2 and 3 mean it does not,
+    # and stdout is empty. Branch on that before parsing.
+    if result.returncode >= 2:
         raise RuntimeError(result.stderr)
     return json.loads(result.stdout)
 
