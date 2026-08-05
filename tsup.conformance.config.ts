@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs'
+
 import { defineConfig } from 'tsup'
+
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8')) as { version: string }
 
 // The conformance harness ships as two artifacts, for the two ways it gets used.
 //
@@ -45,5 +49,13 @@ export default defineConfig([
     platform: 'node',
     // No `banner` shebang here: esbuild carries the one in the source file
     // through, and adding a second makes the output unparseable.
+    //
+    // Stamp the version into the bundle. Vendored as a lone file there is no
+    // spytial-core package.json anywhere near it, so the runtime lookup finds
+    // nothing and every RunResult would claim version "unknown" — losing the
+    // one field that says which release checked the cases.
+    define: {
+      __SPYTIAL_CORE_VERSION__: JSON.stringify(version),
+    },
   },
 ])

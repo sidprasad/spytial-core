@@ -12,11 +12,12 @@
  *   spytial-check --pretty cases/       # human-readable summary
  *
  * Exit codes: 0 every case passed, 1 at least one failed, 2 bad usage or
- * unreadable input. Hosts should branch on the exit code and read stdout for
- * detail; stdout is always valid JSON unless --pretty is given.
+ * unreadable input, 3 timed out. Hosts should branch on the exit code and read
+ * stdout for detail; stdout is always valid JSON unless --pretty is given.
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 
 import yaml from 'js-yaml';
@@ -35,13 +36,15 @@ Usage:
 Options:
   --pretty        human-readable summary instead of JSON
   --quiet         with --pretty, show only failures
+  --timeout <s>   give up after <s> seconds (default 300; 0 disables)
   --version       print the spytial-core version and exit
   -h, --help      show this help
 
 A case document is JSON or YAML holding one case, an array of cases, or
 { "cases": [...] }. Directories are scanned for .json/.yaml/.yml files.
 
-Exit codes: 0 all passed, 1 some failed, 2 bad usage or unreadable input.
+Exit codes: 0 all passed, 1 some failed, 2 bad usage or unreadable input,
+3 timed out.
 
 Docs: https://sidprasad.github.io/spytial-core/#/testing-integrations`;
 
@@ -50,18 +53,41 @@ interface Options {
     readStdin: boolean;
     pretty: boolean;
     quiet: boolean;
+    /** Seconds before the run is abandoned. 0 disables it. */
+    timeoutSeconds: number;
 }
 
 class UsageError extends Error {}
 
-function parseArgs(argv: string[]): Options {
-    const options: Options = { paths: [], readStdin: false, pretty: false, quiet: false };
+/**
+ * Generous on purpose. A case normally resolves in well under a second, so this
+ * only ever fires on something pathological — but it has to clear a large suite
+ * on a slow runner without tripping.
+ */
+const DEFAULT_TIMEOUT_SECONDS = 300;
 
-    for (const arg of argv) {
+function parseArgs(argv: string[]): Options {
+    const options: Options = {
+        paths: [], readStdin: false, pretty: false, quiet: false,
+        timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+    };
+
+    for (let i = 0; i < argv.length; i++) {
+        const arg = argv[i];
         switch (arg) {
             case '--pretty': options.pretty = true; break;
             case '--quiet': options.quiet = true; break;
             case '-': options.readStdin = true; break;
+            case '--timeout': {
+                const value = argv[++i];
+                if (value === undefined) throw new UsageError('--timeout needs a value in seconds.');
+                const seconds = Number(value);
+                if (!Number.isFinite(seconds) || seconds < 0) {
+                    throw new UsageError(`--timeout needs a non-negative number of seconds, got "${value}".`);
+                }
+                options.timeoutSeconds = seconds;
+                break;
+            }
             default:
                 if (arg.startsWith('-')) throw new UsageError(`Unknown option "${arg}".`);
                 options.paths.push(arg);
@@ -75,11 +101,26 @@ function parseArgs(argv: string[]): Options {
 }
 
 /**
- * Read the version off the installed package, the way the language generator
- * does. `__dirname` is guarded because this file is built as CJS but is also
- * imported directly from source by the tests, where it may not exist.
+ * The release that built this file, stamped in by tsup. Absent when running
+ * from source (tests, tsx), where the lookup below takes over.
+ */
+declare const __SPYTIAL_CORE_VERSION__: string | undefined;
+
+/**
+ * Which spytial-core release this is.
+ *
+ * The build-time stamp comes first because of how the bin is meant to be
+ * deployed: vendored as a lone file beside a Python or Rust package, with no
+ * spytial-core `package.json` anywhere near it. The lookup below would find
+ * nothing there and every RunResult would report "unknown", losing the field
+ * that says which release checked the cases. `typeof` on an undeclared name is
+ * safe, so this degrades cleanly when the stamp is absent.
  */
 function readVersion(): string {
+    if (typeof __SPYTIAL_CORE_VERSION__ === 'string' && __SPYTIAL_CORE_VERSION__.length > 0) {
+        return __SPYTIAL_CORE_VERSION__;
+    }
+
     const here = typeof __dirname === 'string' ? __dirname : undefined;
     const candidates = [
         ...(here ? [join(here, '..', 'package.json'), join(here, '..', '..', 'package.json')] : []),
@@ -203,6 +244,77 @@ function withStdoutDivertedToStderr<T>(fn: () => T): T {
     }
 }
 
+// ─── Timeout ─────────────────────────────────────────────────────────
+
+/** Marks the re-executed child, so it runs the cases instead of watching. */
+const CHILD_MARKER = 'SPYTIAL_CHECK_SUPERVISED';
+
+/** Exit code when the run is abandoned for taking too long. */
+const EXIT_TIMED_OUT = 3;
+
+/**
+ * Whether this process can supervise a run.
+ *
+ * The timeout has to be enforced from outside the work, not inside it: cases
+ * run synchronously, so a pathological spec blocks the event loop and no timer
+ * in this process would ever fire. Re-executing the bin under `spawnSync`'s own
+ * timeout is what makes the limit real.
+ *
+ * Only the built CJS bin can do this. The version stamp is the signal: it is
+ * injected at build time, so its presence means `__filename` points at a
+ * bundle node can actually re-run. Running from source (tests, tsx) it is
+ * absent, and re-executing the TypeScript entry would fail outright — so the
+ * run proceeds unsupervised instead.
+ */
+function canSupervise(): boolean {
+    return process.env[CHILD_MARKER] !== '1'
+        && typeof __SPYTIAL_CORE_VERSION__ === 'string'
+        && typeof __filename === 'string'
+        && existsSync(__filename);
+}
+
+/**
+ * Re-run this bin under a hard time limit, forwarding its output and status.
+ *
+ * `stdinData` is passed through because the supervisor has already consumed
+ * fd 0; the child cannot read it a second time.
+ */
+function superviseRun(argv: string[], seconds: number, stdinData: string | undefined): number {
+    const result = spawnSync(
+        process.execPath,
+        [__filename, ...argv, '--timeout', '0'],
+        {
+            input: stdinData ?? '',
+            encoding: 'utf8',
+            timeout: seconds * 1000,
+            maxBuffer: 256 * 1024 * 1024,
+            env: { ...process.env, [CHILD_MARKER]: '1' },
+        },
+    );
+
+    if (result.stdout) process.stdout.write(result.stdout);
+    if (result.stderr) process.stderr.write(result.stderr);
+
+    // spawnSync reports a timeout as a kill signal, and sets `error` too on
+    // some platforms. Either is the same outcome.
+    const timedOut = result.signal !== null
+        || (result.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT';
+    if (timedOut) {
+        process.stderr.write(
+            `spytial-check: gave up after ${seconds}s. A case is taking far longer than layout ` +
+            `normally does — most likely a selector that does not terminate on this datum. ` +
+            `Raise the limit with --timeout <seconds>, or disable it with --timeout 0.\n`,
+        );
+        return EXIT_TIMED_OUT;
+    }
+
+    if (result.error) {
+        process.stderr.write(`spytial-check: ${result.error.message}\n`);
+        return 2;
+    }
+    return result.status ?? 2;
+}
+
 // ─── Entry ───────────────────────────────────────────────────────────
 
 export function main(argv: string[]): number {
@@ -217,8 +329,17 @@ export function main(argv: string[]): number {
 
     let cases: ConformanceCase[];
     let options: Options;
+    let stdinData: string | undefined;
     try {
         options = parseArgs(argv);
+
+        // Read stdin before anything else that might branch: the supervisor
+        // needs the bytes to hand on, and fd 0 can only be drained once.
+        if (options.readStdin) stdinData = readStdin();
+
+        if (options.timeoutSeconds > 0 && canSupervise()) {
+            return superviseRun(argv, options.timeoutSeconds, stdinData);
+        }
 
         cases = [];
         for (const path of options.paths) {
@@ -226,8 +347,8 @@ export function main(argv: string[]): number {
                 cases.push(...parseCaseDocument(readFileSync(file, 'utf8'), file));
             }
         }
-        if (options.readStdin) {
-            cases.push(...parseCaseDocument(readStdin(), 'stdin'));
+        if (stdinData !== undefined) {
+            cases.push(...parseCaseDocument(stdinData, 'stdin'));
         }
     } catch (e: unknown) {
         if (e instanceof UsageError) {

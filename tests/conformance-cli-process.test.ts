@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -92,6 +92,51 @@ describe.skipIf(!built)('spytial-check as a subprocess', () => {
         expect(run.status).toBe(2);
         expect(run.stdout).toBe('');
         expect(run.stderr).toContain('Usage:');
+    });
+
+    it('reports its version when vendored alone, with no package.json nearby', () => {
+        // The documented deployment: copy this one file next to a Python or Rust
+        // package. Nothing resolves spytial-core from there, so the version has
+        // to be stamped into the bundle or every RunResult claims "unknown".
+        const dir = mkdtempSync(join(tmpdir(), 'spytial-check-vendored-'));
+        const vendored = join(dir, 'spytial-check.js');
+        copyFileSync(BIN, vendored);
+
+        const version = spawnSync(process.execPath, [vendored, '--version'], { encoding: 'utf8' });
+        expect(version.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+        expect(version.stdout).not.toContain('unknown');
+
+        const caseFile = join(dir, 'case.json');
+        writeFileSync(caseFile, JSON.stringify(passingCase));
+        const run = spawnSync(process.execPath, [vendored, caseFile], { encoding: 'utf8' });
+        expect(JSON.parse(run.stdout).spytialCoreVersion).not.toBe('unknown');
+    });
+
+    it('gives up on a run that exceeds --timeout, with nothing on stdout', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'spytial-check-timeout-'));
+        const file = join(dir, 'case.json');
+        writeFileSync(file, JSON.stringify(passingCase));
+
+        // Small enough that starting the child alone overruns it. The point is
+        // the supervisor path, not the specific duration.
+        const run = runBin(['--timeout', '0.05', file]);
+
+        expect(run.status).toBe(3);
+        expect(run.stdout).toBe('');
+        expect(run.stderr).toContain('gave up after');
+    });
+
+    it('passes output and status through the timeout supervisor unchanged', () => {
+        const dir = mkdtempSync(join(tmpdir(), 'spytial-check-supervised-'));
+        const failing = join(dir, 'failing.json');
+        writeFileSync(failing, JSON.stringify({ ...passingCase, assertions: [{ query: 'nodes()', count: 99 }] }));
+
+        // Default timeout is on, so this already goes through the supervisor.
+        const run = runBin([failing]);
+
+        expect(run.status).toBe(1);
+        expect(JSON.parse(run.stdout).failed).toBe(1);
+        expect(run.stderr).toContain('Generated');
     });
 
     it('runs the seed suite that ships with the repo', () => {

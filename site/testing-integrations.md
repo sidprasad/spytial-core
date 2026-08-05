@@ -75,8 +75,11 @@ The contract is deliberately small:
 | **exit 0** | every case passed |
 | **exit 1** | at least one case failed |
 | **exit 2** | bad usage, or input that could not be read |
+| **exit 3** | the run took longer than `--timeout` |
 
 Because stdout carries only the result, you can pipe it straight into a parser.
+
+A run gives up after 300 seconds by default. Cases normally resolve in well under a second, so this only fires on something pathological — a selector that does not terminate on a particular datum, say — and it exists so a stuck case fails your CI job rather than hanging it. Raise it with `--timeout <seconds>` for a very large suite, or switch it off with `--timeout 0`.
 
 ```python
 import json, subprocess
