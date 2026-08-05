@@ -421,6 +421,15 @@ export class LayoutInstance {
     private inferredEdgeGroupStamps: Map<string, { sourceGroupId?: string; targetGroupId?: string }> = new Map();
 
     /**
+     * Node-id fragments selected by non-negated cyclic constraints, recorded for
+     * InstanceLayout.cyclicFragments (what the `cyclic()` spatial query reports).
+     * Membership is settled by selection, so two-atom fragments are recorded even
+     * though they need no disjunction to draw. Reset at the start of each
+     * generateLayout() call.
+     */
+    private cyclicFragments: string[][] = [];
+
+    /**
      * Atom IDs that a hideAtom directive would hide but which the counterfactual pass must
      * show, because a layout constraint references them. Honored by ensureNoExtraNodes.
      * Carried across the internal counterfactual pass, so it is reset only by the public
@@ -1496,6 +1505,22 @@ export class LayoutInstance {
     }
 
 
+    /**
+     * The atoms hideAtom constraints removed this pass, for InstanceLayout.hiddenAtoms.
+     * Sorted so the layout is deterministic; undefined when nothing was hidden by
+     * selector, matching how other optional layout fields are carried.
+     */
+    private collectHiddenAtoms(): string[] | undefined {
+        if (this.hiddenNodeSelectors.size === 0) return undefined;
+        return [...this.hiddenNodeSelectors.keys()].sort();
+    }
+
+    /** The cyclic fragments recorded this pass, for InstanceLayout.cyclicFragments. */
+    private collectCyclicFragments(): string[][] | undefined {
+        if (this.cyclicFragments.length === 0) return undefined;
+        return this.cyclicFragments.map(fragment => [...fragment]);
+    }
+
     private getMostSpecificType(node: string, a: IDataInstance): string {
         let allTypes = this.getNodeTypes(node, a);
         let mostSpecificType = allTypes[0];
@@ -1640,6 +1665,7 @@ export class LayoutInstance {
         this.conflictedHiddenNodes = new Set();
         this.reintroducedNodes = new Set();
         this.inferredEdgeGroupStamps = new Map();
+        this.cyclicFragments = [];
 
         let ai = a;
 
@@ -1811,7 +1837,9 @@ export class LayoutInstance {
             edges: layoutEdges,
             constraints: constraints,
             groups: groups,
-            disjunctiveConstraints: allDisjunctions.length > 0 ? allDisjunctions : undefined
+            disjunctiveConstraints: allDisjunctions.length > 0 ? allDisjunctions : undefined,
+            hiddenAtoms: this.collectHiddenAtoms(),
+            cyclicFragments: this.collectCyclicFragments()
         };
 
         // Constraint tuples referencing hideAtom-hidden atoms were skipped during
@@ -1900,7 +1928,9 @@ export class LayoutInstance {
             constraints: context.constraints,
             groups: layoutGroups,
             disjunctiveConstraints: [],
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: this.collectHiddenAtoms(),
+            cyclicFragments: this.collectCyclicFragments()
         };
 
         return {
@@ -2010,7 +2040,9 @@ export class LayoutInstance {
             constraints,
             groups: layout.groups,
             conflictingConstraints: [...minimalConflictingSet.values()].flat(),
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: layout.hiddenAtoms,
+            cyclicFragments: layout.cyclicFragments
         };
         return {
             layout: counterfactualLayout,
@@ -2050,7 +2082,9 @@ export class LayoutInstance {
             constraints: layout.constraints,
             groups: overlappingGroups,
             overlappingNodes: error.overlappingNodes,
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: layout.hiddenAtoms,
+            cyclicFragments: layout.cyclicFragments
         }
         return { 
             layout: counterfactualLayout, 
@@ -2144,7 +2178,16 @@ export class LayoutInstance {
             // For each fragment, create a disjunction with N perturbations
             relatedNodeIds.forEach((fragment) => {
                 const fragmentLength = fragment.length;
-                
+
+                // Membership is settled by selection, not by the solver: a pair
+                // the selector closed into a fragment is still "in a cycle" even
+                // though drawing it needs no disjunction. Singletons cycle with
+                // nobody and are not recorded. Negated cyclic asserts the
+                // absence of a cycle, so it contributes no members either.
+                if (!c.negated && fragmentLength >= 2) {
+                    this.cyclicFragments.push([...fragment]);
+                }
+
                 // Fragments with 2 or fewer nodes don't need disjunctions
                 if (fragmentLength <= 2) {
                     return;

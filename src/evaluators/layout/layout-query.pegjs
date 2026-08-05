@@ -2,7 +2,8 @@
 // Generates SpatialQuery AST nodes consumed by LayoutEvaluator.
 //
 // Composite:  union(expr, expr, ...)  inter(expr, expr, ...)  not(expr)
-// Atomic:     must.leftOf(A)  can.aligned.x(B)  nodes()  node(A)  edges(A, B)  ...
+// Atomic:     must.leftOf(A)  can.aligned.x(B)  nodes()  node(A)  edges(A, B)
+//             hidden()  sized(120, 80)  cyclic(A)  ...
 
 {{
 // Type imports are not available in Peggy actions, so we construct plain objects
@@ -54,6 +55,9 @@ AtomicQuery
   / GroupedTogether
   / Grouped
   / Contains
+  / Hidden
+  / Sized
+  / Cyclic
 
 // modality.aligned.axis(nodeId)
 ModalAligned
@@ -124,6 +128,22 @@ Contains
       return { kind: 'contains', groupName: name };
     }
 
+// hidden()
+Hidden
+  = "hidden()" { return { kind: 'hidden' }; }
+
+// sized(width, height)
+Sized
+  = "sized(" _ width:Number _ "," _ height:Number _ ")" {
+      return { kind: 'sized', width, height };
+    }
+
+// cyclic(A)
+Cyclic
+  = "cyclic(" _ nodeId:Identifier _ ")" {
+      return { kind: 'cyclic', nodeId };
+    }
+
 // ─── Terminals ──────────────────────────────────────────────────────
 
 Modality
@@ -143,6 +163,9 @@ Axis
 
 Identifier
   = chars:$[a-zA-Z0-9_$]+ { return chars; }
+
+Number
+  = digits:$([0-9]+ ("." [0-9]+)?) { return parseFloat(digits); }
 
 _ "whitespace"
   = [ \t\n\r]*

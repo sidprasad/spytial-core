@@ -1,0 +1,67 @@
+# The rest of the constraint vocabulary in one diagram: a ring of three
+# states, a note atom hidden by hideAtom, and states sized on purpose.
+#
+# `hidden()`, `sized(W, H)`, and `cyclic(A)` take no modality — what they
+# report is settled the moment the layout exists. Each one also says less
+# than it might seem to:
+#
+#   hidden()    only atoms a hideAtom selector removed, nothing else
+#   sized(W, H) exact dimensions; an untouched atom can coincide by accident
+#   cyclic(A)   membership in the ring, not which rotation gets drawn
+
+cases:
+  - name: ring hides its note, sizes its states, and cycles them
+    note: Seed case. Copy this shape to test hideAtom, size, and cyclic constraints.
+    datum:
+      atoms:
+        - { id: s1, type: State, label: "s1" }
+        - { id: s2, type: State, label: "s2" }
+        - { id: s3, type: State, label: "s3" }
+        - { id: note0, type: Note, label: "note" }
+      relations:
+        - id: next
+          name: next
+          types: [State, State]
+          tuples:
+            - { atoms: [s1, s2], types: [State, State] }
+            - { atoms: [s2, s3], types: [State, State] }
+            - { atoms: [s3, s1], types: [State, State] }
+        - id: about
+          name: about
+          types: [Note, State]
+          tuples:
+            - { atoms: [note0, s1], types: [Note, State] }
+    spec: |
+      constraints:
+        - cyclic:
+            selector: "{x, y : State | y in x.next}"
+            direction: clockwise
+        - size:
+            selector: State
+            width: 120
+            height: 80
+        - hideAtom:
+            selector: Note
+    assertions:
+      - query: hidden()
+        equals: [note0]
+        because: the spec hides every Note, and nothing else is hidden
+
+      - query: nodes()
+        equals: [s1, s2, s3]
+        because: the hidden note is not drawn
+
+      - query: sized(120, 80)
+        equals: [s1, s2, s3]
+        because: the size constraint gives every State exactly this box
+
+      - query: cyclic(s1)
+        equals: [s1, s2, s3]
+        because: >
+          all three states share the ring. Membership is entailed; which
+          rotation gets drawn is not, so no assertion here should name a
+          clockwise neighbour. Use can/cannot queries for that.
+
+      - query: inter(cyclic(s1), sized(120, 80))
+        count: 3
+        because: the queries compose with set operations like any other

@@ -491,6 +491,135 @@ describe('extractCases', () => {
     });
 });
 
+// ─── Constraint vocabulary queries ───────────────────────────────────────────
+
+describe('constraint vocabulary queries (hidden/sized/cyclic)', () => {
+    /** A three-state ring with a note atom attached to one state. */
+    function ringDatum() {
+        return {
+            atoms: [
+                { id: 's1', type: 'State', label: 's1' },
+                { id: 's2', type: 'State', label: 's2' },
+                { id: 's3', type: 'State', label: 's3' },
+                { id: 'note0', type: 'Note', label: 'note' },
+            ],
+            relations: [
+                {
+                    id: 'next', name: 'next', types: ['State', 'State'],
+                    tuples: [
+                        { atoms: ['s1', 's2'], types: ['State', 'State'] },
+                        { atoms: ['s2', 's3'], types: ['State', 'State'] },
+                        { atoms: ['s3', 's1'], types: ['State', 'State'] },
+                    ],
+                },
+                {
+                    id: 'about', name: 'about', types: ['Note', 'State'],
+                    tuples: [{ atoms: ['note0', 's1'], types: ['Note', 'State'] }],
+                },
+            ],
+        };
+    }
+
+    it('hidden() reports exactly what hideAtom hid', () => {
+        const result = runCase({
+            name: 'hide the note',
+            datum: ringDatum(),
+            spec: 'constraints:\n  - hideAtom:\n      selector: Note\n',
+            assertions: [
+                { query: 'hidden()', equals: ['note0'] },
+                { query: 'nodes()', equals: ['s1', 's2', 's3'] },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('sized(W, H) reports the atoms a size constraint set', () => {
+        const result = runCase({
+            name: 'sized states',
+            datum: ringDatum(),
+            spec: 'constraints:\n  - size:\n      selector: State\n      width: 120\n      height: 80\n',
+            assertions: [
+                { query: 'sized(120, 80)', equals: ['s1', 's2', 's3'] },
+                { query: 'sized(999, 999)', empty: true },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('cyclic(A) reports ring membership and nothing else', () => {
+        const result = runCase({
+            name: 'ring',
+            datum: ringDatum(),
+            spec: 'constraints:\n  - cyclic:\n      selector: "{x, y : State | y in x.next}"\n      direction: clockwise\n',
+            assertions: [
+                { query: 'cyclic(s1)', equals: ['s1', 's2', 's3'] },
+                { query: 'cyclic(s1)', excludes: ['note0'] },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('cyclic(A) counts a two-atom fragment: membership is by selection', () => {
+        // Two atoms need no disjunction to draw — any placement is a rotation —
+        // but the selector still put them in a cycle, and membership is what
+        // the query reports.
+        const result = runCase({
+            name: 'two-state ring',
+            datum: {
+                atoms: [
+                    { id: 's1', type: 'State', label: 's1' },
+                    { id: 's2', type: 'State', label: 's2' },
+                ],
+                relations: [{
+                    id: 'next', name: 'next', types: ['State', 'State'],
+                    tuples: [
+                        { atoms: ['s1', 's2'], types: ['State', 'State'] },
+                        { atoms: ['s2', 's1'], types: ['State', 'State'] },
+                    ],
+                }],
+            },
+            spec: 'constraints:\n  - cyclic:\n      selector: "{x, y : State | y in x.next}"\n      direction: clockwise\n',
+            assertions: [
+                { query: 'cyclic(s1)', equals: ['s1', 's2'] },
+                { query: 'cyclic(s2)', equals: ['s1', 's2'] },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('cyclic(A) is empty under a negated cyclic constraint, which asserts no cycle', () => {
+        const result = runCase({
+            name: 'no ring allowed',
+            datum: ringDatum(),
+            spec: 'constraints:\n  - cyclic:\n      selector: "{x, y : State | y in x.next}"\n      direction: clockwise\n      hold: never\n',
+            assertions: [
+                { query: 'cyclic(s1)', empty: true },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+
+    it('all three return empty, not errors, when the spec uses none of the constraints', () => {
+        const result = runCase({
+            name: 'plain list',
+            datum: listDatum(),
+            spec: LIST_SPEC,
+            assertions: [
+                { query: 'hidden()', empty: true },
+                { query: 'sized(999, 999)', empty: true },
+                { query: 'cyclic(a)', empty: true },
+            ],
+        });
+        expect(result.errors).toEqual([]);
+        expect(result.ok).toBe(true);
+    });
+});
+
 // ─── The seed suite ──────────────────────────────────────────────────────────
 
 describe('seed suite', () => {

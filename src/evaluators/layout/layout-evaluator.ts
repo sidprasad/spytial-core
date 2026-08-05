@@ -27,6 +27,9 @@ export type SpatialQuery =
     | { kind: 'grouped'; nodeId: string }
     | { kind: 'groupedTogether'; nodeIds: string[] }
     | { kind: 'contains'; groupName: string }
+    | { kind: 'hidden' }
+    | { kind: 'sized'; width: number; height: number }
+    | { kind: 'cyclic'; nodeId: string }
     | { kind: 'reachable'; relation: DirectionalRelation; nodeId: string }
     | { kind: 'alignedWith'; axis: AlignmentAxis; nodeId: string }
     | { kind: 'nodeInfo'; nodeId: string }
@@ -327,6 +330,12 @@ export class LayoutEvaluator {
                     return this.queryGroupedTogether(q.nodeIds, expr);
                 case 'contains':
                     return this.queryContains(q.groupName, expr);
+                case 'hidden':
+                    return new LayoutEvaluatorResult([...(this.layout.hiddenAtoms ?? [])].sort(), expr);
+                case 'sized':
+                    return this.querySized(q.width, q.height, expr);
+                case 'cyclic':
+                    return this.queryCyclic(q.nodeId, expr);
                 case 'reachable':
                     return LayoutEvaluatorResult.fromSet(
                         this.validator.getReachable(q.nodeId, q.relation), expr);
@@ -447,6 +456,43 @@ export class LayoutEvaluator {
     }
 
     /**
+     * Atoms whose box is exactly width × height. A `size` constraint produces
+     * exactly the dimensions it asked for, so matching the numbers the spec
+     * gave is an entailment check; an auto-sized node can coincide, which is
+     * why the intended use is checking atoms the author sized on purpose.
+     */
+    private querySized(width: number, height: number, expr: string): LayoutEvaluatorResult {
+        const result = new Set<string>();
+        for (const [id, node] of this.nodeById) {
+            if (node.width === width && node.height === height) result.add(id);
+        }
+        return LayoutEvaluatorResult.fromSet(result, expr);
+    }
+
+    /**
+     * Atoms sharing a cyclic fragment with the given node (including the node
+     * itself). Grounded in the fragments the cyclic constraints selected
+     * (InstanceLayout.cyclicFragments), so membership is settled by selection:
+     * a two-atom fragment counts even though drawing it needs no disjunction.
+     * Which rotation was drawn is not entailed, so the query reports
+     * membership only. Negated cyclic constraints assert the absence of a
+     * cycle and contribute no fragments.
+     */
+    private queryCyclic(nodeId: string, expr: string): LayoutEvaluatorResult {
+        if (!this.allNodeIds.has(nodeId)) {
+            return LayoutEvaluatorResult.error(`Unknown node: "${nodeId}"`, expr);
+        }
+        const result = new Set<string>();
+        for (const fragment of this.layout.cyclicFragments ?? []) {
+            if (!fragment.includes(nodeId)) continue;
+            for (const member of fragment) {
+                if (this.allNodeIds.has(member)) result.add(member);
+            }
+        }
+        return LayoutEvaluatorResult.fromSet(result, expr);
+    }
+
+    /**
      * Recursively evaluate a sub-query and extract its atom set.
      * Throws if the sub-query returns a non-atom result (record or edge result).
      */
@@ -527,6 +573,7 @@ export class LayoutEvaluator {
      *   must.aligned.x(A)   can.aligned.y(B)
      *   reachable.leftOf(A) alignedWith.x(A)
      *   grouped(A)          contains(GroupName)
+     *   hidden()            sized(120, 80)     cyclic(A)
      *   node(A)             edges(A)           edges(A, B)
      *   nodes()             groups()
      *   union(expr, expr)   inter(expr, expr)  not(expr)
@@ -546,6 +593,9 @@ export class LayoutEvaluator {
             case 'grouped': return `grouped(${q.nodeId})`;
             case 'groupedTogether': return `grouped(${q.nodeIds.join(', ')})`;
             case 'contains': return `contains(${q.groupName})`;
+            case 'hidden': return `hidden()`;
+            case 'sized': return `sized(${q.width}, ${q.height})`;
+            case 'cyclic': return `cyclic(${q.nodeId})`;
             case 'reachable': return `reachable.${q.relation}(${q.nodeId})`;
             case 'alignedWith': return `alignedWith.${q.axis}(${q.nodeId})`;
             case 'nodeInfo': return `node(${q.nodeId})`;
