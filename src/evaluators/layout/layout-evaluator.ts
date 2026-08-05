@@ -601,7 +601,7 @@ export class LayoutEvaluator {
      *   must.aligned.x(A)   can.aligned.y(B)
      *   reachable.leftOf(A) alignedWith.x(A)
      *   grouped(A)          contains(GroupName)
-     *   hidden()            sized(100, 60)     cyclic(A)
+     *   hidden()            sized(120, 80)     cyclic(A)
      *   node(A)             edges(A)           edges(A, B)
      *   nodes()             groups()
      *   union(expr, expr)   inter(expr, expr)  not(expr)

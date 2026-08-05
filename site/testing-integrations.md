@@ -150,7 +150,7 @@ Directional and alignment queries take one of three modalities. This is the part
 | `grouped(A, B, ...)` | groups holding **all** the named atoms |
 | `contains(G)` | members of group `G` |
 | `hidden()` | atoms a `hideAtom` constraint removed |
-| `sized(100, 60)` | atoms whose box is exactly that width × height |
+| `sized(120, 80)` | atoms whose box is exactly that width × height |
 | `cyclic(A)` | atoms in a cycle with `A`, including `A` |
 | `node(A)` | `A`'s attributes |
 | `edges(A)` / `edges(A, B)` | edges touching `A`, or running between the pair |
@@ -161,7 +161,7 @@ Group queries take no modality — membership is settled, not something the solv
 Three of these deserve a word on what they do *not* say:
 
 - `hidden()` reports only atoms a `hideAtom` selector removed. An atom can be missing from `nodes()` for other reasons — it was never in the datum, or an `attribute` directive folded it into its owner — and those never appear in `hidden()`.
-- `sized(W, H)` matches the exact numbers a `size` constraint asked for. An atom no `size` constraint touched can land on those numbers by accident, so point it at atoms you sized on purpose.
+- `sized(W, H)` matches the exact numbers a `size` constraint asked for. An atom no `size` constraint touched can land on those numbers by accident — in particular, auto-sized short-label nodes default to exactly 100 × 60, so querying those numbers matches them all. Point it at atoms you sized on purpose, with numbers you chose.
 - `cyclic(A)` reports membership, not order — which rotation of the cycle gets drawn is not entailed by the spec. A fragment of two or fewer atoms entails no arrangement, so its atoms report empty. A negated cyclic constraint asserts the *absence* of a cycle and never contributes members.
 
 ### Checks

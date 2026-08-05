@@ -3,7 +3,7 @@
 //
 // Composite:  union(expr, expr, ...)  inter(expr, expr, ...)  not(expr)
 // Atomic:     must.leftOf(A)  can.aligned.x(B)  nodes()  node(A)  edges(A, B)
-//             hidden()  sized(100, 60)  cyclic(A)  ...
+//             hidden()  sized(120, 80)  cyclic(A)  ...
 
 {{
 // Type imports are not available in Peggy actions, so we construct plain objects
