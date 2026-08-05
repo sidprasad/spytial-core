@@ -299,6 +299,14 @@ export interface InstanceLayout {
      */
     reintroducedNodes?: LayoutNode[];
     /**
+     * IDs of atoms a hideAtom constraint removed from this layout, sorted. Absent
+     * when no atom was hidden by selector. Legacy disconnected-node hiding
+     * (hideDisconnected / hideDisconnectedBuiltIns) is not recorded here: this
+     * field answers "what did the spec's hideAtom constraints hide", which is
+     * what the `hidden()` spatial query reports.
+     */
+    hiddenAtoms?: string[];
+    /**
      * Disjunctive constraints, where at least one alternative in each disjunction must be satisfiable.
      * These are separate from conjunctive constraints for clearer solver integration.
      */

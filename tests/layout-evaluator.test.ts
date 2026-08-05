@@ -1107,3 +1107,111 @@ describe('Set operations (union/inter/not)', () => {
         expect(result.selectedAtoms().sort()).toEqual(['A', 'B', 'C', 'D']);
     });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Constraint vocabulary queries (hidden/sized/cyclic)', () => {
+
+    describe('hidden()', () => {
+        it('returns the atoms recorded on layout.hiddenAtoms', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const l = layout([a, b], [leftOf(a, b)]);
+            l.hiddenAtoms = ['H2', 'H1'];
+            const ev = new LayoutEvaluator(validate(l), l);
+            const result = ev.evaluate('hidden()');
+            expect(result.isError()).toBe(false);
+            expect(result.selectedAtoms()).toEqual(['H1', 'H2']);
+        });
+
+        it('is empty when the layout hid nothing', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const l = layout([a, b], [leftOf(a, b)]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('hidden()').selectedAtoms()).toEqual([]);
+        });
+
+        it('composes with set operations', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const l = layout([a, b], []);
+            l.hiddenAtoms = ['H1'];
+            const ev = new LayoutEvaluator(validate(l), l);
+            // Hidden atoms are not drawn, so they are outside nodes(); the
+            // union puts both populations in one result.
+            const result = ev.evaluate('union(hidden(), nodes())');
+            expect(result.selectedAtoms().sort()).toEqual(['A', 'B', 'H1']);
+        });
+    });
+
+    describe('sized(W, H)', () => {
+        it('returns exactly the atoms whose box matches', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode); // 100x60 each
+            b.width = 40;
+            b.height = 40;
+            const l = layout([a, b, c], []);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('sized(40, 40)').selectedAtoms()).toEqual(['B']);
+            expect(ev.evaluate('sized(100, 60)').selectedAtoms()).toEqual(['A', 'C']);
+            expect(ev.evaluate('sized(1, 1)').selectedAtoms()).toEqual([]);
+        });
+
+        it('accepts decimal dimensions', () => {
+            const a = createNode('A');
+            a.width = 100.5;
+            a.height = 60.25;
+            const l = layout([a], []);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('sized(100.5, 60.25)').selectedAtoms()).toEqual(['A']);
+        });
+    });
+
+    describe('cyclic(A)', () => {
+        /** Three rotations of a three-node cycle; each alternative is a consistent chain. */
+        function cyclicDisjunction(a: LayoutNode, b: LayoutNode, c: LayoutNode, negated = false): DisjunctiveConstraint {
+            const src = new CyclicOrientationConstraint('clockwise', 'cycleSel', negated);
+            return disjunction(src, [
+                [leftOf(a, b), leftOf(b, c)],
+                [leftOf(b, c), leftOf(c, a)],
+                [leftOf(c, a), leftOf(a, b)],
+            ]);
+        }
+
+        it('returns every atom in the fragment, including the queried one', () => {
+            const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
+            const l = layout([a, b, c, d], [], [cyclicDisjunction(a, b, c)]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual(['A', 'B', 'C']);
+            expect(ev.evaluate('cyclic(B)').selectedAtoms()).toEqual(['A', 'B', 'C']);
+        });
+
+        it('is empty for a node in no cycle', () => {
+            const [a, b, c, d] = ['A', 'B', 'C', 'D'].map(createNode);
+            const l = layout([a, b, c, d], [], [cyclicDisjunction(a, b, c)]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(D)').selectedAtoms()).toEqual([]);
+        });
+
+        it('errors on an unknown node', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const l = layout([a, b, c], [], [cyclicDisjunction(a, b, c)]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            const result = ev.evaluate('cyclic(Zzz)');
+            expect(result.isError()).toBe(true);
+            expect(result.prettyPrint()).toContain('Unknown node');
+        });
+
+        it('ignores negated cyclic constraints, which assert the absence of a cycle', () => {
+            const [a, b, c] = ['A', 'B', 'C'].map(createNode);
+            const l = layout([a, b, c], [], [cyclicDisjunction(a, b, c, true)]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual([]);
+        });
+
+        it('ignores disjunctions whose source is not a cyclic constraint', () => {
+            const [a, b] = ['A', 'B'].map(createNode);
+            const src = new RelativeOrientationConstraint(['left'], 'A->B');
+            const l = layout([a, b], [], [disjunction(src, [[leftOf(a, b)], [leftOf(b, a)]])]);
+            const ev = new LayoutEvaluator(validate(l), l);
+            expect(ev.evaluate('cyclic(A)').selectedAtoms()).toEqual([]);
+        });
+    });
+});

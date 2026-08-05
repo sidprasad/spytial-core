@@ -9,7 +9,11 @@
  */
 
 import { QualitativeConstraintValidator } from '../../layout/qualitative-constraint-validator';
-import { InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode } from '../../layout/interfaces';
+import {
+    DisjunctiveConstraint, ImplicitConstraint, InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode,
+    isAlignmentConstraint, isLeftConstraint, isTopConstraint
+} from '../../layout/interfaces';
+import { CyclicOrientationConstraint } from '../../layout/layoutspec';
 import {
     IEvaluatorResult, EvaluatorResult, SingleValue, Tuple
 } from '../interfaces';
@@ -27,6 +31,9 @@ export type SpatialQuery =
     | { kind: 'grouped'; nodeId: string }
     | { kind: 'groupedTogether'; nodeIds: string[] }
     | { kind: 'contains'; groupName: string }
+    | { kind: 'hidden' }
+    | { kind: 'sized'; width: number; height: number }
+    | { kind: 'cyclic'; nodeId: string }
     | { kind: 'reachable'; relation: DirectionalRelation; nodeId: string }
     | { kind: 'alignedWith'; axis: AlignmentAxis; nodeId: string }
     | { kind: 'nodeInfo'; nodeId: string }
@@ -327,6 +334,12 @@ export class LayoutEvaluator {
                     return this.queryGroupedTogether(q.nodeIds, expr);
                 case 'contains':
                     return this.queryContains(q.groupName, expr);
+                case 'hidden':
+                    return new LayoutEvaluatorResult([...(this.layout.hiddenAtoms ?? [])].sort(), expr);
+                case 'sized':
+                    return this.querySized(q.width, q.height, expr);
+                case 'cyclic':
+                    return this.queryCyclic(q.nodeId, expr);
                 case 'reachable':
                     return LayoutEvaluatorResult.fromSet(
                         this.validator.getReachable(q.nodeId, q.relation), expr);
@@ -447,6 +460,67 @@ export class LayoutEvaluator {
     }
 
     /**
+     * Atoms whose box is exactly width × height. A `size` constraint produces
+     * exactly the dimensions it asked for, so matching the numbers the spec
+     * gave is an entailment check; an auto-sized node can coincide, which is
+     * why the intended use is checking atoms the author sized on purpose.
+     */
+    private querySized(width: number, height: number, expr: string): LayoutEvaluatorResult {
+        const result = new Set<string>();
+        for (const [id, node] of this.nodeById) {
+            if (node.width === width && node.height === height) result.add(id);
+        }
+        return LayoutEvaluatorResult.fromSet(result, expr);
+    }
+
+    /**
+     * Atoms sharing a cyclic fragment with the given node (including the node
+     * itself). Grounded in the cyclic disjunctions the layout carries, so it
+     * reports membership only — which rotation was drawn is not entailed by
+     * the spec. Fragments of two or fewer atoms produce no disjunction (they
+     * entail no arrangement) and report empty, as do negated cyclic
+     * constraints, which assert the absence of a cycle.
+     */
+    private queryCyclic(nodeId: string, expr: string): LayoutEvaluatorResult {
+        if (!this.allNodeIds.has(nodeId)) {
+            return LayoutEvaluatorResult.error(`Unknown node: "${nodeId}"`, expr);
+        }
+        const result = new Set<string>();
+        for (const disjunction of this.layout.disjunctiveConstraints ?? []) {
+            const source = disjunction.sourceConstraint instanceof ImplicitConstraint
+                ? disjunction.sourceConstraint.c
+                : disjunction.sourceConstraint;
+            if (!(source instanceof CyclicOrientationConstraint) || source.negated) continue;
+            const members = this.cyclicFragmentMembers(disjunction);
+            if (!members.has(nodeId)) continue;
+            for (const member of members) {
+                if (this.allNodeIds.has(member)) result.add(member);
+            }
+        }
+        return LayoutEvaluatorResult.fromSet(result, expr);
+    }
+
+    /** Every node referenced by any alternative of a cyclic disjunction. */
+    private cyclicFragmentMembers(disjunction: DisjunctiveConstraint): Set<string> {
+        const members = new Set<string>();
+        for (const alternative of disjunction.alternatives) {
+            for (const constraint of alternative) {
+                if (isTopConstraint(constraint)) {
+                    members.add(constraint.top.id);
+                    members.add(constraint.bottom.id);
+                } else if (isLeftConstraint(constraint)) {
+                    members.add(constraint.left.id);
+                    members.add(constraint.right.id);
+                } else if (isAlignmentConstraint(constraint)) {
+                    members.add(constraint.node1.id);
+                    members.add(constraint.node2.id);
+                }
+            }
+        }
+        return members;
+    }
+
+    /**
      * Recursively evaluate a sub-query and extract its atom set.
      * Throws if the sub-query returns a non-atom result (record or edge result).
      */
@@ -527,6 +601,7 @@ export class LayoutEvaluator {
      *   must.aligned.x(A)   can.aligned.y(B)
      *   reachable.leftOf(A) alignedWith.x(A)
      *   grouped(A)          contains(GroupName)
+     *   hidden()            sized(100, 60)     cyclic(A)
      *   node(A)             edges(A)           edges(A, B)
      *   nodes()             groups()
      *   union(expr, expr)   inter(expr, expr)  not(expr)
@@ -546,6 +621,9 @@ export class LayoutEvaluator {
             case 'grouped': return `grouped(${q.nodeId})`;
             case 'groupedTogether': return `grouped(${q.nodeIds.join(', ')})`;
             case 'contains': return `contains(${q.groupName})`;
+            case 'hidden': return `hidden()`;
+            case 'sized': return `sized(${q.width}, ${q.height})`;
+            case 'cyclic': return `cyclic(${q.nodeId})`;
             case 'reachable': return `reachable.${q.relation}(${q.nodeId})`;
             case 'alignedWith': return `alignedWith.${q.axis}(${q.nodeId})`;
             case 'nodeInfo': return `node(${q.nodeId})`;

@@ -1496,6 +1496,16 @@ export class LayoutInstance {
     }
 
 
+    /**
+     * The atoms hideAtom constraints removed this pass, for InstanceLayout.hiddenAtoms.
+     * Sorted so the layout is deterministic; undefined when nothing was hidden by
+     * selector, matching how other optional layout fields are carried.
+     */
+    private collectHiddenAtoms(): string[] | undefined {
+        if (this.hiddenNodeSelectors.size === 0) return undefined;
+        return [...this.hiddenNodeSelectors.keys()].sort();
+    }
+
     private getMostSpecificType(node: string, a: IDataInstance): string {
         let allTypes = this.getNodeTypes(node, a);
         let mostSpecificType = allTypes[0];
@@ -1811,7 +1821,8 @@ export class LayoutInstance {
             edges: layoutEdges,
             constraints: constraints,
             groups: groups,
-            disjunctiveConstraints: allDisjunctions.length > 0 ? allDisjunctions : undefined
+            disjunctiveConstraints: allDisjunctions.length > 0 ? allDisjunctions : undefined,
+            hiddenAtoms: this.collectHiddenAtoms()
         };
 
         // Constraint tuples referencing hideAtom-hidden atoms were skipped during
@@ -1900,7 +1911,8 @@ export class LayoutInstance {
             constraints: context.constraints,
             groups: layoutGroups,
             disjunctiveConstraints: [],
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: this.collectHiddenAtoms()
         };
 
         return {
@@ -2010,7 +2022,8 @@ export class LayoutInstance {
             constraints,
             groups: layout.groups,
             conflictingConstraints: [...minimalConflictingSet.values()].flat(),
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: layout.hiddenAtoms
         };
         return {
             layout: counterfactualLayout,
@@ -2050,7 +2063,8 @@ export class LayoutInstance {
             constraints: layout.constraints,
             groups: overlappingGroups,
             overlappingNodes: error.overlappingNodes,
-            warnings: this.warnings
+            warnings: this.warnings,
+            hiddenAtoms: layout.hiddenAtoms
         }
         return { 
             layout: counterfactualLayout, 
