@@ -48,8 +48,9 @@ The demos are the best references for how to wire everything up end-to-end:
   - Shows the **selector synthesis pipeline**, including initialization and status reporting.
 - `webcola-demo/structured-input-demo.html`
   - Full pipeline with structured input and interactive layout.
-- `webcola-demo/integrated-demo-components.tsx`
-  - Example of how the pipeline can integrate into component-driven UIs.
+- `webcola-demo/react-component-integration.tsx`
+  - Example of how the pipeline can integrate into component-driven UIs; also the
+    source of the components CDN bundle and its `window.mount*` API.
 
 When adding new features, start by deciding **which stage of the pipeline** your change belongs to, then check the corresponding demo or component for patterns you can copy.
 

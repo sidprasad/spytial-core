@@ -16,17 +16,16 @@
 export { ErrorMessageModal, ErrorMessageContainer, ErrorStateManager } from './ErrorMessageModal';
 export type { ErrorMessageContainerProps, SystemError, SelectorErrorDetail } from './ErrorMessageModal';
 
-// Instance authoring
-export { InstanceBuilder } from './InstanceBuilder/InstanceBuilder';
-export type { InstanceBuilderProps } from './InstanceBuilder/InstanceBuilder';
+// Instance authoring is the `<structured-input-graph>` custom element, not a
+// React component: it edits the same IInputDataInstance on the diagram itself,
+// enforcing constraints as you go. The `InstanceBuilder` forms it replaced were
+// removed in 4.5.0.
 
-// REPL interfaces
+// REPL interfaces. `ReplInterface` is the substrate PyretReplInterface renders.
 export { ReplInterface } from './ReplInterface/ReplInterface';
 export type { ReplInterfaceProps } from './ReplInterface/ReplInterface';
 export { PyretReplInterface } from './ReplInterface/PyretReplInterface';
 export type { PyretReplInterfaceProps } from './ReplInterface/PyretReplInterface';
-export { ReplWithVisualization } from './ReplInterface/ReplWithVisualization';
-export type { ReplWithVisualizationProps } from './ReplInterface/ReplWithVisualization';
 export { PyretExpressionParser } from './ReplInterface/parsers/PyretExpressionParser';
 export type { PyretEvaluator, PyretEvaluationResult } from './ReplInterface/parsers/PyretExpressionParser';
 

@@ -207,10 +207,8 @@ Since 4.0.0 these live on their own entry: `import { … } from 'spytial-core/re
 |--------|------|
 | `ProjectionControls`, `ProjectionControlsProps`, `ProjectionChoice` | Type/atom dropdown UI for projections. |
 | `ProjectionOrchestrator`, `ProjectionOrchestratorProps`, `ProjectionOrchestratorResult` | Wraps `applyProjectionTransform` + controls into one component. |
-| `InstanceBuilder`, `InstanceBuilderProps`                    | Visual graph editor for building data instances. |
-| `ReplInterface`, `ReplInterfaceProps`                        | Generic REPL component. |
+| `ReplInterface`, `ReplInterfaceProps`                        | Generic REPL component; the substrate `PyretReplInterface` renders. |
 | `PyretReplInterface`, `PyretReplInterfaceProps`              | Pyret-flavoured REPL. |
-| `ReplWithVisualization`, `ReplWithVisualizationProps`        | REPL + linked diagram. |
 | `PyretExpressionParser`, `PyretEvaluator`, `PyretEvaluationResult` | Pyret expression parsing helpers used by `PyretReplInterface`. |
 | `ErrorMessageContainer`, `ErrorMessageContainerProps`        | UI surface for system errors. |
 | `ErrorStateManager`, `SystemError`, `SelectorErrorDetail`    | Error-state plumbing for surfacing selector / IIS errors. |
@@ -285,7 +283,7 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 | Path                                                                | Use                                            |
 |---------------------------------------------------------------------|------------------------------------------------|
 | `spytial-core` (default entry)                                      | NPM consumers (Vite, Webpack, esbuild, Node). Real ESM — tree-shakable, no React/SQL weight. |
-| `spytial-core/react`                                                | The React components (error modal, `InstanceBuilder`, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
+| `spytial-core/react`                                                | The React components (error modal, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
 | `spytial-core/sql-evaluator`                                        | `SQLEvaluator` (AlaSQL-backed). `alasql` is an optional peer dep. |
 | `spytial-core/explorer`                                             | `<spytial-explorer>` a11y element (registers itself on import). `data-navigator` is an optional peer dep. |
 | `spytial-core/alloy-instance`                                       | Standalone Alloy XML parser. |

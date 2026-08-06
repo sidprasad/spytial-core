@@ -1,6 +1,6 @@
 /**
- * Example integration of CndLayoutInterface and InstanceBuilder with webcola-integrated-demo.html
- * 
+ * Example integration of CndLayoutInterface with the demo pages.
+ *
  * This file demonstrates how to mount the React components into the existing demo page
  * and integrate them with the existing JavaScript functions.
  */
@@ -8,7 +8,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
-import { InstanceBuilder } from '../src/components/InstanceBuilder/InstanceBuilder';
 import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
 import { generateLayoutSpecYaml, parseLayoutSpecToData } from '../src/components/NoCodeView';
 import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
@@ -16,7 +15,6 @@ import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
 import { ErrorMessages } from '../src/layout/constraint-validator';
 import { PyretReplInterface, PyretReplInterfaceProps } from '../src/components/ReplInterface/PyretReplInterface';
-import { ReplWithVisualization, ReplWithVisualizationProps } from '../src/components/ReplInterface/ReplWithVisualization';
 import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
@@ -55,25 +53,6 @@ export interface PyretReplMountConfig {
   disabled?: boolean;
   /** CSS class name for styling */
   className?: string;
-}
-
-/**
- * Configuration options for mounting ReplWithVisualization
- * @public
- */
-export interface ReplWithVisualizationMountConfig {
-  /** Initial data instance to work with */
-  initialInstance?: IInputDataInstance;
-  /** Initial CND layout specification */
-  initialCndSpec?: string;
-  /** Whether to show the CND layout interface */
-  showLayoutInterface?: boolean;
-  /** Height of the REPL interface (default: 300px) */
-  replHeight?: string;
-  /** Height of the visualization area (default: 400px) */
-  visualizationHeight?: string;
-  /** Custom styling for the container */
-  style?: React.CSSProperties;
 }
 
 /*******************************************************
@@ -618,64 +597,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
 }
 
 /**
- * React wrapper component for InstanceBuilder
- * Connects with global instance state management
- * 
- * @private
- */
-const InstanceBuilderWrapper: React.FC = () => {
-  const [instance, setInstance] = useState<IInputDataInstance>(() => 
-    InstanceStateManager.getInstance().getCurrentInstance()
-  );
-
-  useEffect(() => {
-    const stateManager = InstanceStateManager.getInstance();
-    
-    const handleInstanceChange = (newInstance: IInputDataInstance) => {
-      setInstance(newInstance);
-    };
-    
-    stateManager.onInstanceChange(handleInstanceChange);
-    
-    // Expose to global scope for legacy compatibility
-    (window as any).currentInstance = instance;
-    
-    // Trigger legacy update functions
-    if ((window as any).updateFromBuilder) {
-      (window as any).updateFromBuilder();
-    }
-  }, [instance]);
-
-  const handleInstanceChange = useCallback((newInstance: IInputDataInstance) => {
-    setInstance(newInstance);
-    
-    // Update global state
-    InstanceStateManager.getInstance().setCurrentInstance(newInstance);
-    
-    // Update global reference for legacy compatibility
-    (window as any).currentInstance = newInstance;
-    
-    // Notify legacy demo code
-    if ((window as any).updateFromBuilder) {
-      (window as any).updateFromBuilder();
-    }
-    
-    // Auto-render with delay for smooth updates
-    if ((window as any).autoRenderGraph) {
-      setTimeout(() => (window as any).autoRenderGraph(), 50);
-    }
-  }, []);
-
-  return (
-    <InstanceBuilder
-      instance={instance}
-      onChange={handleInstanceChange}
-      className="cnd-integrated-builder"
-    />
-  );
-};
-
-/**
  * React wrapper component for PyretReplInterface
  * Connects with global Pyret state management and external evaluator
  * 
@@ -749,70 +670,6 @@ const PyretReplInterfaceWrapper: React.FC<{ config?: PyretReplMountConfig }> = (
   );
 };
 
-/**
- * React wrapper component for ReplWithVisualization
- * Provides integrated REPL and visualization experience
- * 
- * @private
- */
-const ReplWithVisualizationWrapper: React.FC<{ config?: ReplWithVisualizationMountConfig }> = ({ config }) => {
-  const [instance, setInstance] = useState<IInputDataInstance>(() => {
-    if (config?.initialInstance) {
-      return config.initialInstance;
-    }
-    return InstanceStateManager.getInstance().getCurrentInstance();
-  });
-
-  useEffect(() => {
-    const stateManager = InstanceStateManager.getInstance();
-    
-    // Initialize with config if provided
-    if (config?.initialInstance) {
-      stateManager.setCurrentInstance(config.initialInstance);
-    }
-
-    const handleInstanceChange = (newInstance: IInputDataInstance) => {
-      setInstance(newInstance);
-    };
-    
-    stateManager.onInstanceChange(handleInstanceChange);
-    
-    // Expose to global scope for legacy compatibility
-    (window as any).currentVisualizationInstance = instance;
-  }, [config, instance]);
-
-  const handleInstanceChange = useCallback((newInstance: IInputDataInstance) => {
-    setInstance(newInstance);
-    
-    // Update global state
-    InstanceStateManager.getInstance().setCurrentInstance(newInstance);
-    
-    // Update global reference for legacy compatibility
-    (window as any).currentVisualizationInstance = newInstance;
-    
-    // Auto-render with delay for smooth updates
-    if ((window as any).autoRenderGraph) {
-      setTimeout(() => (window as any).autoRenderGraph(), 50);
-    }
-    
-    // Dispatch custom event for other listeners
-    window.dispatchEvent(new CustomEvent('repl-visualization-changed', { 
-      detail: { instance: newInstance } 
-    }));
-  }, []);
-
-  return (
-    <ReplWithVisualization
-      instance={instance}
-      onChange={handleInstanceChange}
-      initialCndSpec={config?.initialCndSpec}
-      showLayoutInterface={config?.showLayoutInterface}
-      replHeight={config?.replHeight}
-      visualizationHeight={config?.visualizationHeight}
-      style={config?.style}
-    />
-  );
-};
 
 
 
@@ -924,55 +781,13 @@ export function unmountCndLayoutInterface(
 }
 
 /**
- * Mount InstanceBuilder component into specified container
- * 
- * @param containerId - DOM element ID to mount into (default: 'instance-builder-container')
- * @returns Boolean indicating success
- * 
- * @example
- * ```javascript
- * // Mount into default container  
- * CnDCore.mountInstanceBuilder();
- * 
- * // Mount into custom container
- * CnDCore.mountInstanceBuilder('my-builder-container');
- * ```
- * 
- * @public
- */
-export function mountInstanceBuilder(containerId: string = 'instance-builder-container'): boolean {
-  const container = document.getElementById(containerId);
-  
-  if (!container) {
-    console.error(`Instance Builder: Container '${containerId}' not found`);
-    return false;
-  }
-
-  try {
-    const root = createRoot(container);
-    root.render(<InstanceBuilderWrapper />);
-    console.log(`Instance Builder mounted to #${containerId}`);
-
-    // Expose instance update function globally for legacy compatibility
-    (window as any).updateBuilderInstance = (newInstance: IInputDataInstance) => {
-      InstanceStateManager.getInstance().setCurrentInstance(newInstance);
-    };
-
-    return true;
-  } catch (error) {
-    console.error('Failed to mount Instance Builder:', error);
-    return false;
-  }
-}
-
-/**
- * Get current instance from InstanceBuilder component
+ * Get the data instance currently held in shared state.
  */
 export function getCurrentInstanceFromReact(): IInputDataInstance | undefined {
   try {
     return InstanceStateManager.getInstance().getCurrentInstance();
   } catch (error) {
-    console.error('Error accessing InstanceBuilder instance:', error);
+    console.error('Error accessing the current data instance:', error);
     return undefined;
   }
 }
@@ -1086,61 +901,6 @@ export function mountPyretRepl(
   }
 }
 
-/**
- * Mount ReplWithVisualization component into specified container
- * 
- * @param containerId - DOM element ID to mount into (default: 'repl-visualization-container')
- * @param config - Configuration options for the REPL with visualization
- * @returns Boolean indicating success
- * 
- * @example
- * ```javascript
- * // Mount into default container
- * CnDCore.mountReplWithVisualization();
- * 
- * // Mount with custom configuration
- * CnDCore.mountReplWithVisualization('my-container', {
- *   showLayoutInterface: true,
- *   replHeight: '400px',
- *   visualizationHeight: '600px'
- * });
- * ```
- * 
- * @public
- */
-export function mountReplWithVisualization(
-  containerId: string = 'repl-visualization-container',
-  config?: ReplWithVisualizationMountConfig
-): boolean {
-  const container = document.getElementById(containerId);
-  
-  if (!container) {
-    console.error(`REPL with Visualization: Container '${containerId}' not found`);
-    return false;
-  }
-
-  try {
-    const root = createRoot(container);
-    root.render(<ReplWithVisualizationWrapper config={config} />);
-
-    if (config) {
-      console.log(`REPL with Visualization mounted to #${containerId} with config:`, {
-        hasInitialInstance: !!config.initialInstance,
-        initialCndSpec: config.initialCndSpec ? `${config.initialCndSpec.length} characters` : 'none',
-        showLayoutInterface: config.showLayoutInterface ?? true,
-        replHeight: config.replHeight ?? '300px',
-        visualizationHeight: config.visualizationHeight ?? '400px'
-      });
-    } else {
-      console.log(`REPL with Visualization mounted to #${containerId}`);
-    }
-
-    return true;
-  } catch (error) {
-    console.error('Failed to mount REPL with Visualization:', error);
-    return false;
-  }
-}
 
 /**
  * Mount ErrorMessageModal component into specified container
@@ -1233,77 +993,6 @@ export function mountRelationHighlighter(containerId: string, graphElementId: st
   }
 }
 
-/**
- * Mount all CnD components into their default containers
- * Convenience function for quick setup
- * 
- * @returns Object with success status for each component
- * 
- * @example
- * ```javascript
- * // Mount all components at once
- * const results = CnDCore.mountAllComponents();
- * console.log('Mount results:', results);
- * ```
- * 
- * @public
- */
-export function mountAllComponents(): {
-  layoutInterface: boolean;
-  instanceBuilder: boolean;
-  errorModal: boolean;
-} {
-  console.log('Mounting all CnD components...');
-  
-  const results = {
-    layoutInterface: mountCndLayoutInterface(),
-    instanceBuilder: mountInstanceBuilder(),
-    errorModal: mountErrorMessageModal()
-  };
-
-  const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`Successfully mounted ${successCount}/3 CnD components`);
-  
-  return results;
-}
-
-/**
- * Mount all CnD components including Pyret REPL components into their default containers
- * Convenience function for comprehensive setup
- * 
- * @returns Object with success status for each component
- * 
- * @example
- * ```javascript
- * // Mount all components including Pyret ones at once
- * const results = CnDCore.mountAllComponentsWithPyret();
- * console.log('Mount results:', results);
- * ```
- * 
- * @public
- */
-export function mountAllComponentsWithPyret(): {
-  layoutInterface: boolean;
-  instanceBuilder: boolean;
-  errorModal: boolean;
-  pyretRepl: boolean;
-  replWithVisualization: boolean;
-} {
-  console.log('Mounting all CnD components with Pyret REPL...');
-  
-  const results = {
-    layoutInterface: mountCndLayoutInterface(),
-    instanceBuilder: mountInstanceBuilder(),
-    errorModal: mountErrorMessageModal(),
-    pyretRepl: mountPyretRepl(),
-    replWithVisualization: mountReplWithVisualization()
-  };
-
-  const successCount = Object.values(results).filter(Boolean).length;
-  console.log(`Successfully mounted ${successCount}/5 CnD components with Pyret integration`);
-  
-  return results;
-}
 
 
 
@@ -1813,7 +1502,7 @@ export const DataAPI = {
   },
 
   /**
-   * Get current data instance from InstanceBuilder component
+   * Get the data instance currently held in shared state
    * @returns Current data instance or undefined if not available
    */
   getCurrentInstance: (): IInputDataInstance | undefined => {
@@ -1938,17 +1627,13 @@ export const CnDCore = {
   // Mounting functions
   mountCndLayoutInterface,
   unmountCndLayoutInterface,
-  mountInstanceBuilder,
   mountErrorMessageModal,
-  mountAllComponents,
   mountEvaluatorRepl,
   mountRelationHighlighter,
   mountProjectionControls,
   mountProjectionOrchestrator,
   // Pyret REPL mounting functions
   mountPyretRepl,
-  mountReplWithVisualization,
-  mountAllComponentsWithPyret,
 
   // Projection functions
   updateProjectionData,
@@ -1994,9 +1679,7 @@ if (typeof window !== 'undefined') {
   // Legacy compatibility - expose individual functions
   globalWindow.mountCndLayoutInterface = mountCndLayoutInterface;
   globalWindow.unmountCndLayoutInterface = unmountCndLayoutInterface;
-  globalWindow.mountInstanceBuilder = mountInstanceBuilder;
   globalWindow.mountErrorMessageModal = mountErrorMessageModal;
-  globalWindow.mountIntegratedComponents = mountAllComponents;
   globalWindow.mountEvaluatorRepl = mountEvaluatorRepl;
   globalWindow.mountRelationHighlighter = mountRelationHighlighter;
   globalWindow.mountProjectionControls = mountProjectionControls;
@@ -2007,8 +1690,6 @@ if (typeof window !== 'undefined') {
   
   // Pyret REPL functions for legacy compatibility
   globalWindow.mountPyretRepl = mountPyretRepl;
-  globalWindow.mountReplWithVisualization = mountReplWithVisualization;
-  globalWindow.mountAllComponentsWithPyret = mountAllComponentsWithPyret;
 
   // Expose data functions for legacy compatibility
   globalWindow.getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;

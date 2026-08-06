@@ -74,7 +74,7 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
     expect(relationNamed(instance, 'studies_in').types).toEqual(['Student', 'City']);
   });
 
-  it('ignores placeholder types from the caller (InstanceBuilder sends "unknown")', () => {
+  it('ignores placeholder types from the caller (editors send "unknown")', () => {
     const instance = new JSONDataInstance(personStudentCity());
 
     instance.addRelationTuple('visits', { atoms: ['P1', 'C1'], types: ['unknown', 'unknown'] });

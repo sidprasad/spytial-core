@@ -262,36 +262,6 @@ help      // Shows available commands
 clear     // Removes all data
 ```
 
-## Integration with Other Components
-
-The REPL Interface works seamlessly with other spytial-core components:
-
-```tsx
-import { ReplInterface, InstanceBuilder, LayoutInstance } from 'spytial-core';
-
-function DataBuilderApp() {
-  const [instance, setInstance] = useState(new JSONDataInstance({...}));
-  const [useRepl, setUseRepl] = useState(true);
-
-  return (
-    <div>
-      <button onClick={() => setUseRepl(!useRepl)}>
-        Switch to {useRepl ? 'Form' : 'REPL'} Interface
-      </button>
-      
-      {useRepl ? (
-        <ReplInterface instance={instance} onChange={setInstance} />
-      ) : (
-        <InstanceBuilder instance={instance} onChange={setInstance} />
-      )}
-      
-      {/* Generate layout from the instance */}
-      <LayoutView instance={instance} />
-    </div>
-  );
-}
-```
-
 ## Complete Integration: Pyret REPL + External Evaluator + Visualization
 
 For production applications, the recommended approach combines all features for a complete data exploration and visualization experience:
@@ -301,8 +271,7 @@ For production applications, the recommended approach combines all features for 
 ```tsx
 import { 
   PyretReplInterface, 
-  CndLayoutInterface, 
-  ReplWithVisualization 
+  CndLayoutInterface 
 } from 'spytial-core';
 
 function CompleteIntegrationApp() {
@@ -343,14 +312,11 @@ function CompleteIntegrationApp() {
       </div>
     );
   } else {
-    // Fallback: Combined component without external evaluator
+    // Fallback: the REPL alone, wired to a layout view by the host.
     return (
-      <ReplWithVisualization
-        instance={pyretInstance}
-        onChange={setPyretInstance}
-        showLayoutInterface={true}
-        replHeight="350px"
-        visualizationHeight="450px"
+      <PyretReplInterface
+        initialInstance={pyretInstance}
+        onInstanceChange={setPyretInstance}
       />
     );
   }
@@ -381,11 +347,13 @@ function initializeCompleteSystem() {
     setupRealtimeSynchronization();
     
   } else {
-    // Fallback mode
-    CnDCore.mountReplWithVisualization('fallback-container', {
-      showLayoutInterface: true,
-      replHeight: '350px',
-      visualizationHeight: '450px'
+    // Fallback mode: the REPL alone, with the layout mounted alongside it.
+    CnDCore.mountPyretRepl('fallback-container', {
+      className: 'production-repl'
+    });
+
+    CnDCore.mountCndLayoutInterface('layout-container', {
+      initialIsNoCodeView: true
     });
   }
 }
