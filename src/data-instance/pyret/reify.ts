@@ -185,12 +185,19 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   const roots = allIds.filter((id) => !targets.has(id));
   if (roots.length === 1) return reifyAtom(roots[0]);
   if (roots.length === 0) {
-    // fully cyclic: no in-degree-0 atom. Use the last atom as an entry point.
-    return reifyAtom(allIds[allIds.length - 1]);
+    // Fully cyclic: every atom is pointed at, so there is no in-degree-0 root.
+    // Enter at the first atom that HAS fields — a leaf entry point (a primitive
+    // like a name string) would reify to just that leaf and drop the rest of
+    // the graph. Atom order starts at the value the instance was built from, so
+    // the first structured atom is the original root.
+    const entry = allIds.find((id) => (fields.get(id)?.size ?? 0) > 0) ?? allIds[0];
+    return reifyAtom(entry);
   }
 
-  // Multiple roots -> wrap them in a synthetic list (mirrors reify()'s [list-set:]).
-  // (Structural round-trip of multi-root instances is intentionally not claimed.)
+  // Multiple roots -> wrap them in a synthetic list, so `replit` renders them as
+  // [list: r1, r2]. (Structural round-trip of multi-root instances is
+  // intentionally not claimed.) Atoms in a cyclic component that no root reaches
+  // are not part of that list.
   const arr: ReifiedValue[] = roots.map((r) => reifyAtom(r));
   return arr;
 }
