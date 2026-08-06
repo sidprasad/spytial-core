@@ -37,9 +37,6 @@ export default defineConfig([
     splitting: false,
     sourcemap: false,
     clean: false,
-    // Not minified: when a case fails in someone else's CI, a readable stack
-    // trace is worth more than the bytes.
-    minify: false,
     target: 'es2020',
     outDir: 'dist/cli',
     external: ['react', 'react-dom', 'alasql', 'forge-expr-evaluator'],
@@ -47,6 +44,12 @@ export default defineConfig([
     bundle: true,
     treeshake: true,
     platform: 'node',
+    // Minified: this file is vendored into every non-JavaScript integration's
+    // repo, so its size is paid per-checkout, per-release. Unminified it is
+    // 3.3MB, most of it simple-graph-query's dependency bundle — frames nobody
+    // reads anyway. Failures are diagnosed from the RunResult diagnostics, not
+    // from stack traces into this bundle.
+    minify: true,
     // No `banner` shebang here: esbuild carries the one in the source file
     // through, and adding a second makes the output unparseable.
     //
