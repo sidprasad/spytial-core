@@ -43,11 +43,20 @@ interface RelationForm {
   atomIds: string[]; // Changed from sourceId/targetId to support n-ary
 }
 
+/** Warn on the first render only — this fires per instance, not per keystroke. */
+let deprecationWarned = false;
+
 /**
  * InstanceBuilder - A reusable React component for constructing IDataInstance objects
- * 
+ *
  * Provides forms to add/remove atoms and relations, working directly with the provided instance.
  * The parent component is responsible for providing and managing the instance.
+ *
+ * @deprecated Use the `<structured-input-graph>` custom element instead. It edits
+ * the same `IInputDataInstance`, and adds constraint enforcement while you edit,
+ * `reify()` export, and draggable edge endpoints. This component was the first
+ * pass at input support (July 2025) and has not been touched since
+ * StructuredInputGraph replaced it that September. Removed in the next major.
  */
 export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
   instance,
@@ -55,6 +64,16 @@ export const InstanceBuilder: React.FC<InstanceBuilderProps> = ({
   disabled = false,
   className = ''
 }) => {
+  useEffect(() => {
+    if (deprecationWarned) return;
+    deprecationWarned = true;
+    console.warn(
+      "[spytial] 'InstanceBuilder' is deprecated and will be removed in a future major; " +
+      'use the <structured-input-graph> custom element, which edits the same data ' +
+      'instance and also enforces constraints as you edit.'
+    );
+  }, []);
+
   // Form state for adding atoms
   const [atomForm, setAtomForm] = useState<AtomForm>({
     id: '',

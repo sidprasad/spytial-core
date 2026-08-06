@@ -937,12 +937,21 @@ export function unmountCndLayoutInterface(
  * // Mount into custom container
  * CnDCore.mountInstanceBuilder('my-builder-container');
  * ```
- * 
+ *
+ * @deprecated Use the `<structured-input-graph>` custom element instead — see the
+ * note on {@link InstanceBuilder}. Removed in the next major.
+ *
  * @public
  */
 export function mountInstanceBuilder(containerId: string = 'instance-builder-container'): boolean {
+  console.warn(
+    "[spytial] 'mountInstanceBuilder' is deprecated and will be removed in a future major; " +
+    'use the <structured-input-graph> custom element, which edits the same data ' +
+    'instance and also enforces constraints as you edit.'
+  );
+
   const container = document.getElementById(containerId);
-  
+
   if (!container) {
     console.error(`Instance Builder: Container '${containerId}' not found`);
     return false;

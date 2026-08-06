@@ -1,5 +1,18 @@
 # InstanceBuilder Component
 
+> **Deprecated — use `<structured-input-graph>` instead.**
+>
+> `InstanceBuilder` was the first pass at input support, added in July 2025. The
+> `<structured-input-graph>` custom element replaced it that September and has
+> received every improvement since: it edits the same `IInputDataInstance`, and
+> adds constraint enforcement while you edit, `reify()` export to JSON, Pyret and
+> Alloy, and draggable edge endpoints. See the custom-element row in
+> [the API reference](../site/api-reference.md).
+>
+> `InstanceBuilder` keeps working and keeps its behaviour until the next major
+> release of spytial-core, which is when it is removed. It warns once on first
+> render. The rest of this page documents it as it stands.
+
 The `InstanceBuilder` is a reusable, implementation-agnostic React component for constructing `IDataInstance` objects. It provides a user interface for adding and removing atoms (nodes) and relations (edges) from any implementation of `IInputDataInstance`.
 
 ## Key Features

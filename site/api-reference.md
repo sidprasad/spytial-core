@@ -191,7 +191,7 @@ These register themselves automatically when the bundle loads in a browser.
 |-------------------------|----------------------|-------------------------------------------------------------------------------|
 | `<webcola-cnd-graph>`   | `WebColaCnDGraph`    | The default visual renderer. Methods: `renderLayout`, `generateSequenceLayouts`, `getLayoutState`, `getNodePositions`, `clear`, `highlightNodes`, `highlightNodePairs`, `clearNodeHighlights`, `getAllRelations`, `highlightRelation`, `clearHighlightRelation`. |
 | `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
-| `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
+| `<structured-input-graph>` | `StructuredInputGraph` | `WebColaCnDGraph` + an instance editor: add atoms and relations on the diagram, with constraints enforced as you edit, `reify()` export (JSON, Pyret, Alloy) and draggable edge endpoints. Use this rather than the deprecated `InstanceBuilder` React component. |
 
 ---
 
@@ -207,7 +207,7 @@ Since 4.0.0 these live on their own entry: `import { … } from 'spytial-core/re
 |--------|------|
 | `ProjectionControls`, `ProjectionControlsProps`, `ProjectionChoice` | Type/atom dropdown UI for projections. |
 | `ProjectionOrchestrator`, `ProjectionOrchestratorProps`, `ProjectionOrchestratorResult` | Wraps `applyProjectionTransform` + controls into one component. |
-| `InstanceBuilder`, `InstanceBuilderProps`                    | Visual graph editor for building data instances. |
+| `InstanceBuilder`, `InstanceBuilderProps`                    | **Deprecated** — forms for adding atoms and relations to a data instance. Use `<structured-input-graph>`, which edits the same instance and also enforces constraints as you edit. Removed in the next major. |
 | `ReplInterface`, `ReplInterfaceProps`                        | Generic REPL component. |
 | `PyretReplInterface`, `PyretReplInterfaceProps`              | Pyret-flavoured REPL. |
 | `ReplWithVisualization`, `ReplWithVisualizationProps`        | REPL + linked diagram. |
