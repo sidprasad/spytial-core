@@ -25,6 +25,10 @@ describe('tokenizeSelector', () => {
       'x.y.z',
       '"a string" + iden',
       '-- a comment\nnext',
+      'next ++ peer',
+      'a.next ni b',
+      '`Node0`.next',
+      '`unterminated',
       '',
     ];
     for (const input of inputs) {
@@ -68,6 +72,41 @@ describe('tokenizeSelector', () => {
       .filter((t) => t.kind === 'operator')
       .map((t) => t.text);
     expect(ops).toEqual(['<:', ':>']);
+  });
+
+  it('treats ++ as one override operator, not two pluses', () => {
+    const ops = tokenizeSelector('next ++ peer')
+      .filter((t) => t.kind === 'operator')
+      .map((t) => t.text);
+    expect(ops).toEqual(['++']);
+  });
+
+  it('classifies ni as a keyword, like in', () => {
+    const toks = tokenizeSelector('a ni b in c').filter((t) => t.kind !== 'whitespace');
+    expect(toks.map((t) => [t.text, t.kind])).toEqual([
+      ['a', 'identifier'],
+      ['ni', 'keyword'],
+      ['b', 'identifier'],
+      ['in', 'keyword'],
+      ['c', 'identifier'],
+    ]);
+  });
+
+  it('tokenizes a backquoted atom literal as one identifier', () => {
+    const toks = tokenizeSelector('`Node0`.next').filter((t) => t.kind !== 'whitespace');
+    expect(toks.map((t) => [t.text, t.kind])).toEqual([
+      ['`Node0`', 'identifier'],
+      ['.', 'operator'],
+      ['next', 'identifier'],
+    ]);
+  });
+
+  it('stops an unterminated backquote at end-of-line', () => {
+    const toks = tokenizeSelector('`oops\nnext').filter((t) => t.kind !== 'whitespace');
+    expect(toks.map((t) => [t.text, t.kind])).toEqual([
+      ['`oops', 'identifier'],
+      ['next', 'identifier'],
+    ]);
   });
 
   it('tokenizes the set/unary operators', () => {

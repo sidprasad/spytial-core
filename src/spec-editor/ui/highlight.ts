@@ -64,13 +64,14 @@ const KEYWORDS = new Set<string>([
   'implies',
   'else',
   'in',
+  'ni',
 ]);
 
 /**
  * Multi-character operators, longest first so the matcher is greedy
- * (e.g. `->` before `-`, `<:`/`:>` before `<`/`>`/`:`).
+ * (e.g. `->` before `-`, `<:`/`:>` before `<`/`>`/`:`, `++` before `+`).
  */
-const MULTI_CHAR_OPERATORS = ['->', '<:', ':>', '<=', '>=', '=<', '=>', '!='];
+const MULTI_CHAR_OPERATORS = ['->', '<:', ':>', '<=', '>=', '=<', '=>', '!=', '++'];
 
 /** Single-character relational / set operators. */
 const SINGLE_CHAR_OPERATORS = new Set<string>([
@@ -162,6 +163,18 @@ export function tokenizeSelector(input: string): Token[] {
         while (i < n && DIGIT.test(input[i])) i++;
       }
       push('number', start, i);
+      continue;
+    }
+
+    // Backquoted atom literal: `` `A0` `` names one atom by id. The id is not
+    // an identifier by our rules (it may lead with a digit), so take the whole
+    // span. An unterminated backquote runs to end-of-line, matching strings.
+    if (ch === '`') {
+      const start = i;
+      i++;
+      while (i < n && input[i] !== '`' && input[i] !== '\n') i++;
+      if (i < n && input[i] === '`') i++; // closing backquote
+      push('identifier', start, i);
       continue;
     }
 
