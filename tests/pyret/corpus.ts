@@ -108,9 +108,27 @@ function twoCycle(): PyretObject {
   (b.dict as Record<string, unknown>).next = a;
   return a;
 }
+// Cyclic AND carrying primitive fields. These are the cases that catch a bad
+// entry-point choice: a fully cyclic value has no in-degree-0 atom, so reify
+// must fall back to an atom that has fields. Falling back to a leaf (one of the
+// name strings) reifies to just that string and drops the whole graph.
+function selfCycleWithData(): PyretObject {
+  const n: PyretObject = variant('cell', 14, { name: 'n' });
+  (n.dict as Record<string, unknown>).next = n;
+  return n;
+}
+function twoCycleWithData(): PyretObject {
+  const a: PyretObject = variant('cell', 14, { name: 'a' });
+  const b: PyretObject = variant('cell', 14, { name: 'b' });
+  (a.dict as Record<string, unknown>).next = b;
+  (b.dict as Record<string, unknown>).next = a;
+  return a;
+}
 const T3b: CorpusItem[] = [
   { name: 'self-cycle', category: 'T3b', value: selfCycle() },
   { name: 'two-cycle', category: 'T3b', value: twoCycle() },
+  { name: 'self-cycle-with-data', category: 'T3b', value: selfCycleWithData() },
+  { name: 'two-cycle-with-data', category: 'T3b', value: twoCycleWithData() },
 ];
 
 // ----------------------------------------------------------------------------
