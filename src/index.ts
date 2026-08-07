@@ -204,9 +204,8 @@ export const createCndCore = (config?: CoreConfig): CndCore => {
 export const version = '1.0.0';
 
 // Error state (shared with the separately-bundled error modal UI).
-// The React components themselves (ErrorMessageContainer, the REPL interfaces,
-// ProjectionControls/Orchestrator, CndLayoutInterface) moved
-// out of the default entry in 4.0.0: import them from 'spytial-core/react'
+// The React components themselves (ErrorMessageContainer, CndLayoutInterface)
+// moved out of the default entry in 4.0.0: import them from 'spytial-core/react'
 // (npm) or load dist/components/react-component-integration.global.js (CDN),
 // which also exposes the window.mount* API.
 export { ErrorStateManager } from './layout/error-state';

@@ -212,6 +212,6 @@ const projResult = applyProjectionTransform(originalInstance, projections, selec
 // 4. Generate layout on the projected instance
 const layoutResult = layoutInstance.generateLayout(projResult.instance);
 
-// 5. Populate projection controls with choices
-updateProjectionControls(projResult.choices);
+// 5. Feed the available choices into your own projection UI
+renderProjectionChoices(projResult.choices);
 ```

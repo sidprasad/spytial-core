@@ -404,7 +404,7 @@ const { instance, choices } = applyProjectionTransform(
 
 Without `orderBy`, atoms are ordered alphabetically by id; with it, the selector returns pairs `(a, b)` meaning "a comes before b" and atoms are topologically sorted, breaking cycles lexicographically. `evaluateOrderBy` is required for `orderBy` to have any effect.
 
-For the interactive version — a type/atom picker plus navigation — use the `ProjectionOrchestrator` React component, which wraps the transform and the controls together. See the [API Reference](api-reference.md#projection-transform).
+For an interactive version — a type/atom picker plus navigation — drive `applyProjectionTransform` from your own UI: it returns the projected instance along with the choices available for each projected type. See the [API Reference](api-reference.md#projection-transform).
 
 ---
 

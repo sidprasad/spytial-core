@@ -22,15 +22,6 @@ export type { ErrorMessageContainerProps, SystemError, SelectorErrorDetail } fro
 // removed in 4.5.0.
 
 
-// Projections
-export { ProjectionControls, ProjectionOrchestrator } from './ProjectionControls';
-export type {
-  ProjectionControlsProps,
-  ProjectionChoice,
-  ProjectionOrchestratorProps,
-  ProjectionOrchestratorResult,
-} from './ProjectionControls';
-
 // Spec authoring (embeds the CodeMirror-based SpecEditor)
 export { CndLayoutInterface } from './CndLayoutInterface';
 export type { CndLayoutInterfaceProps } from './CndLayoutInterface';

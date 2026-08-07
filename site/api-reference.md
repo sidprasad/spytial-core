@@ -205,8 +205,6 @@ and stays on the default entry too.
 
 | Export | Role |
 |--------|------|
-| `ProjectionControls`, `ProjectionControlsProps`, `ProjectionChoice` | Type/atom dropdown UI for projections. |
-| `ProjectionOrchestrator`, `ProjectionOrchestratorProps`, `ProjectionOrchestratorResult` | Wraps `applyProjectionTransform` + controls into one component. |
 | `ErrorMessageContainer`, `ErrorMessageContainerProps`        | UI surface for system errors. |
 | `ErrorStateManager`, `SystemError`, `SelectorErrorDetail`    | Error-state plumbing for surfacing selector / IIS errors. |
 
