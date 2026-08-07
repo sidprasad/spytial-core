@@ -10,9 +10,5 @@
  * they pull no component code into the bundle.
  */
 import './components/ErrorMessageModal/ErrorMessageModal.css';
-import './components/InstanceBuilder/InstanceBuilder.css';
-import './components/ReplInterface/ReplInterface.css';
-import './components/ProjectionControls/ProjectionControls.css';
-import './components/ProjectionControls/ProjectionOrchestrator.css';
 
 export * from './index';

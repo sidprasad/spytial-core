@@ -21,6 +21,11 @@ export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export type { DotTypeConfig, DotTypeDescriptor, DotDataInstanceOptions } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
+// The evaluator a PyretDataInstance runs against (`window.__internalRepl`).
+// These types were exported from the REPL's expression parser before it was
+// removed; they describe `fromExpression`'s third argument, so they keep their
+// place on this entry, now from the data instance that actually uses them.
+export type { PyretEvaluator, PyretEvaluationResult } from './data-instance/pyret/pyret-data-instance';
 // Pyret structural reify / replit + data-instance canonical form (building blocks;
 // the fidelity measurement harness that exercises these lives in tests/pyret/).
 export { reifyToValue } from './data-instance/pyret/reify';
@@ -199,9 +204,8 @@ export const createCndCore = (config?: CoreConfig): CndCore => {
 export const version = '1.0.0';
 
 // Error state (shared with the separately-bundled error modal UI).
-// The React components themselves (ErrorMessageContainer, InstanceBuilder, the
-// REPL interfaces, ProjectionControls/Orchestrator, CndLayoutInterface) moved
-// out of the default entry in 4.0.0: import them from 'spytial-core/react'
+// The React components themselves (ErrorMessageContainer, CndLayoutInterface)
+// moved out of the default entry in 4.0.0: import them from 'spytial-core/react'
 // (npm) or load dist/components/react-component-integration.global.js (CDN),
 // which also exposes the window.mount* API.
 export { ErrorStateManager } from './layout/error-state';
@@ -211,10 +215,6 @@ export { ErrorStateManager } from './layout/error-state';
 // the declaration, so the only way to annotate one was an indexed access into
 // InstanceLayout.
 export type { SystemError, SelectorErrorDetail, LayoutWarning } from './layout/error-state';
-
-// REPL expression parser (React-free; kept for Pyret hosts using the global)
-export { PyretExpressionParser } from './components/ReplInterface/parsers/PyretExpressionParser';
-export type { PyretEvaluator, PyretEvaluationResult } from './components/ReplInterface/parsers/PyretExpressionParser';
 
 // Projection Transform (pre-layout data instance transformation)
 export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';

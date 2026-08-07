@@ -200,18 +200,11 @@ These register themselves automatically when the bundle loads in a browser.
 Since 4.0.0 these live on their own entry: `import { … } from 'spytial-core/react'`
 (npm; styles via `spytial-core/react.css`), or the CDN component bundle
 `dist/components/react-component-integration.global.js`, which also exposes the
-`window.mount*` API. Exceptions: `ErrorStateManager` (+ its types) and
-`PyretExpressionParser` are React-free and stay on the default entry too.
+`window.mount*` API. Exception: `ErrorStateManager` (+ its types) is React-free
+and stays on the default entry too.
 
 | Export | Role |
 |--------|------|
-| `ProjectionControls`, `ProjectionControlsProps`, `ProjectionChoice` | Type/atom dropdown UI for projections. |
-| `ProjectionOrchestrator`, `ProjectionOrchestratorProps`, `ProjectionOrchestratorResult` | Wraps `applyProjectionTransform` + controls into one component. |
-| `InstanceBuilder`, `InstanceBuilderProps`                    | Visual graph editor for building data instances. |
-| `ReplInterface`, `ReplInterfaceProps`                        | Generic REPL component. |
-| `PyretReplInterface`, `PyretReplInterfaceProps`              | Pyret-flavoured REPL. |
-| `ReplWithVisualization`, `ReplWithVisualizationProps`        | REPL + linked diagram. |
-| `PyretExpressionParser`, `PyretEvaluator`, `PyretEvaluationResult` | Pyret expression parsing helpers used by `PyretReplInterface`. |
 | `ErrorMessageContainer`, `ErrorMessageContainerProps`        | UI surface for system errors. |
 | `ErrorStateManager`, `SystemError`, `SelectorErrorDetail`    | Error-state plumbing for surfacing selector / IIS errors. |
 
@@ -285,7 +278,7 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 | Path                                                                | Use                                            |
 |---------------------------------------------------------------------|------------------------------------------------|
 | `spytial-core` (default entry)                                      | NPM consumers (Vite, Webpack, esbuild, Node). Real ESM — tree-shakable, no React/SQL weight. |
-| `spytial-core/react`                                                | The React components (error modal, `InstanceBuilder`, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
+| `spytial-core/react`                                                | The React components (error modal, REPLs, projections, `CndLayoutInterface`). `react`/`react-dom` are optional peer deps. Styles: `spytial-core/react.css`. |
 | `spytial-core/sql-evaluator`                                        | `SQLEvaluator` (AlaSQL-backed). `alasql` is an optional peer dep. |
 | `spytial-core/explorer`                                             | `<spytial-explorer>` a11y element (registers itself on import). `data-navigator` is an optional peer dep. |
 | `spytial-core/alloy-instance`                                       | Standalone Alloy XML parser. |

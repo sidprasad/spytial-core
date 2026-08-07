@@ -12,3 +12,16 @@
 #evaluator-input {
   margin: 10px 0;
 }
+
+/*
+ * Output line spacing. This rule used to live in ReplInterface.css and reached
+ * this component only because both stylesheets happened to be loaded — the
+ * REPL's own markup never shared a tree with ours. That stylesheet went with
+ * the Pyret REPL, so the rule moves here, to the one component that renders
+ * the class. The `.command`/`.success`/`.error`/`.info`/`.help` modifiers that
+ * sat alongside it are not carried over: EvaluatorRepl never applies them.
+ */
+.repl-output-line {
+  margin: 2px 0;
+  padding: 2px 0;
+}

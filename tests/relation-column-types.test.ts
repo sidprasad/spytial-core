@@ -74,7 +74,7 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
     expect(relationNamed(instance, 'studies_in').types).toEqual(['Student', 'City']);
   });
 
-  it('ignores placeholder types from the caller (InstanceBuilder sends "unknown")', () => {
+  it('ignores placeholder types from the caller (editors send "unknown")', () => {
     const instance = new JSONDataInstance(personStudentCity());
 
     instance.addRelationTuple('visits', { atoms: ['P1', 'C1'], types: ['unknown', 'unknown'] });
@@ -103,8 +103,7 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
   });
 
   it('keeps the arity stable when the same relation is written with different types', () => {
-    // The ExtensibleParsers list shape: `link` written first as Item -> link,
-    // then as List -> link.
+    // A list shape: `link` written first as Item -> link, then as List -> link.
     const instance = new JSONDataInstance({
       atoms: [
         { id: 'i1', type: 'Item', label: '1' },
@@ -155,7 +154,7 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
   it('tolerates a tuple with no types at all', () => {
     const instance = new JSONDataInstance(personStudentCity());
 
-    // PyretIdAllocationParser writes tuples as just { atoms }.
+    // A caller writing tuples as just { atoms }, with no types field.
     instance.addRelationTuple('lives_in', { atoms: ['S1', 'C1'] } as unknown as ITuple);
     instance.addRelationTuple('born_in', { atoms: ['S1', 'C1'] } as unknown as ITuple);
 
