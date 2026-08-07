@@ -48,7 +48,7 @@ CDN:
 <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 ```
 
-For reproducibility, pin a version (e.g. `spytial-core@4.4.3`).
+For reproducibility, pin a version (e.g. `spytial-core@5.0.0`).
 
 ---
 
