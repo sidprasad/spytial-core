@@ -313,7 +313,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const select = this.shadowRoot?.querySelector('#theme-mode') as HTMLSelectElement | null;
     if (!select) return;
     const names = this.getThemeNames();
-    const signature = names.join('');
+    const signature = JSON.stringify(names);
     if (select.getAttribute('data-themes') !== signature) {
       select.textContent = '';
       for (const name of names) {
