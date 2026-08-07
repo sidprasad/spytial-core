@@ -14,7 +14,7 @@ import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-in
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
 import { ErrorMessages } from '../src/layout/constraint-validator';
-import { PyretDataInstance, PyretEvaluator } from '../src/data-instance/pyret/pyret-data-instance';
+import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from '../src/evaluators';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
@@ -303,108 +303,6 @@ export class InstanceStateManager {
   }
 }
 
-/**
- * Singleton state manager for Pyret REPL instances
- * Manages current Pyret data instance and external evaluator
- * 
- * @public
- */
-export class PyretReplStateManager {
-  private static instance: PyretReplStateManager;
-  private currentInstance: PyretDataInstance;
-  private externalEvaluator: PyretEvaluator | null = null;
-  private instanceChangeCallbacks: ((instance: PyretDataInstance) => void)[] = [];
-
-  private constructor() {
-    this.currentInstance = new PyretDataInstance();
-  }
-
-  /**
-   * Get singleton instance
-   * @returns The global Pyret REPL state manager
-   * @public
-   */
-  public static getInstance(): PyretReplStateManager {
-    if (!PyretReplStateManager.instance) {
-      PyretReplStateManager.instance = new PyretReplStateManager();
-    }
-    return PyretReplStateManager.instance;
-  }
-
-  /**
-   * Get current Pyret data instance
-   * @returns Current Pyret data instance
-   * @public
-   */
-  public getCurrentInstance(): PyretDataInstance {
-    return this.currentInstance;
-  }
-
-  /**
-   * Set current Pyret data instance and notify callbacks
-   * @param instance - New Pyret data instance
-   * @public
-   */
-  public setCurrentInstance(instance: PyretDataInstance): void {
-    this.currentInstance = instance;
-    this.notifyInstanceChange();
-  }
-
-  /**
-   * Get current external evaluator
-   * @returns Current external evaluator or null
-   * @public
-   */
-  public getExternalEvaluator(): PyretEvaluator | null {
-    return this.externalEvaluator;
-  }
-
-  /**
-   * Set external evaluator
-   * @param evaluator - External Pyret evaluator
-   * @public
-   */
-  public setExternalEvaluator(evaluator: PyretEvaluator | null): void {
-    this.externalEvaluator = evaluator;
-  }
-
-  /**
-   * Register callback for instance changes
-   * @param callback - Function to call when instance changes
-   * @public
-   */
-  public onInstanceChange(callback: (instance: PyretDataInstance) => void): void {
-    this.instanceChangeCallbacks.push(callback);
-  }
-
-  /**
-   * Notify all registered callbacks of instance change
-   * @private
-   */
-  private notifyInstanceChange(): void {
-    this.instanceChangeCallbacks.forEach(callback => {
-      try {
-        callback(this.currentInstance);
-      } catch (error) {
-        console.error('Error in Pyret instance change callback:', error);
-      }
-    });
-  }
-
-  /**
-   * Get Pyret constructor notation (reify) of current instance
-   * @returns Pyret constructor notation string
-   * @public
-   */
-  public reifyCurrentInstance(): string {
-    try {
-      return this.currentInstance.reify();
-    } catch (error) {
-      console.error('Error reifying current instance:', error);
-      return '/* Error generating Pyret notation */';
-    }
-  }
-}
 
 /**
  * Global error state manager instance
@@ -1037,68 +935,6 @@ export const DataAPI = {
     }
   },
 
-  /**
-   * Get the current Pyret data instance held by PyretReplStateManager
-   * @returns Current Pyret data instance or undefined if not available
-   */
-  getCurrentPyretInstance: (): PyretDataInstance | undefined => {
-    try {
-      return PyretReplStateManager.getInstance().getCurrentInstance();
-    } catch (error) {
-      console.error('Error accessing current Pyret instance:', error);
-      return undefined;
-    }
-  },
-
-  /**
-   * Update current Pyret data instance programmatically
-   * @param instance - New Pyret data instance
-   */
-  updatePyretInstance: (instance: PyretDataInstance): void => {
-    try {
-      PyretReplStateManager.getInstance().setCurrentInstance(instance);
-    } catch (error) {
-      console.error('Error updating Pyret instance:', error);
-    }
-  },
-
-  /**
-   * Get Pyret constructor notation (reify) of current Pyret instance
-   * @returns Pyret constructor notation string
-   */
-  reifyCurrentPyretInstance: (): string => {
-    try {
-      return PyretReplStateManager.getInstance().reifyCurrentInstance();
-    } catch (error) {
-      console.error('Error reifying current Pyret instance:', error);
-      return '/* Error generating Pyret notation */';
-    }
-  },
-
-  /**
-   * Set external Pyret evaluator for enhanced features
-   * @param evaluator - External Pyret evaluator (e.g., window.__internalRepl)
-   */
-  setExternalPyretEvaluator: (evaluator: PyretEvaluator | null): void => {
-    try {
-      PyretReplStateManager.getInstance().setExternalEvaluator(evaluator);
-    } catch (error) {
-      console.error('Error setting external Pyret evaluator:', error);
-    }
-  },
-
-  /**
-   * Get current external Pyret evaluator
-   * @returns Current external evaluator or null
-   */
-  getExternalPyretEvaluator: (): PyretEvaluator | null => {
-    try {
-      return PyretReplStateManager.getInstance().getExternalEvaluator();
-    } catch (error) {
-      console.error('Error getting external Pyret evaluator:', error);
-      return null;
-    }
-  }
 };
 
 
@@ -1130,7 +966,6 @@ export const CnDCore = {
   // State managers
   CndLayoutStateManager,
   InstanceStateManager,
-  PyretReplStateManager,
   globalErrorManager,
 
   // API namespaces
@@ -1177,14 +1012,7 @@ if (typeof window !== 'undefined') {
   // Push a new spec into the mounted editor (e.g. a host's "suggest layout"
   // feature) without remounting it.
   globalWindow.updateSpecFromReact = DataAPI.updateSpec;
-  
-  // Pyret-specific data functions for legacy compatibility
-  globalWindow.getCurrentPyretInstanceFromReact = DataAPI.getCurrentPyretInstance;
-  globalWindow.reifyCurrentPyretInstanceFromReact = DataAPI.reifyCurrentPyretInstance;
-  globalWindow.updatePyretInstanceFromReact = DataAPI.updatePyretInstance;
-  globalWindow.setExternalPyretEvaluator = DataAPI.setExternalPyretEvaluator;
-  globalWindow.getExternalPyretEvaluator = DataAPI.getExternalPyretEvaluator;
-  
+
   // Expose error functions for legacy compatibility
   globalWindow.showParseError = ErrorAPI.showParseError;
   globalWindow.showGroupOverlapError = ErrorAPI.showGroupOverlapError;
