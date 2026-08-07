@@ -20,13 +20,41 @@ export interface PyretInstanceOptions {
 /**
  * Result of evaluating a Pyret expression
  */
-interface PyretEvaluationResult {
+export interface PyretEvaluationResult {
   /** The raw Pyret JS value (if successful) */
   result?: unknown;
   /** Exception information (if failed) */
   exn?: unknown;
   /** Whether the evaluation was successful */
   success?: boolean;
+}
+
+/**
+ * An external Pyret evaluator — in practice `window.__internalRepl`, which the
+ * Pyret IDE installs.
+ *
+ * This lived in the REPL's expression parser until that component was removed,
+ * but it was never a REPL type: it describes the runtime a `PyretDataInstance`
+ * evaluates against, which is why `fromExpression` and `setExternalEvaluator`
+ * take one. It sits here now, next to the result type it returns — which this
+ * file had already redeclared privately rather than import across that
+ * boundary.
+ */
+export interface PyretEvaluator {
+  /**
+   * Run a Pyret expression and return the result
+   * @param code - Pyret code to evaluate
+   * @param sourceLocation - Optional source location identifier
+   * @returns Promise that resolves to evaluation result
+   */
+  run(code: string, sourceLocation?: string): Promise<PyretEvaluationResult>;
+
+  /**
+   * Runtime utilities for checking result types
+   */
+  runtime: {
+    isSuccessResult(result: PyretEvaluationResult): boolean;
+  };
 }
 
 /** Global constructor cache entry with pattern and instantiation priority */

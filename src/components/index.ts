@@ -21,13 +21,6 @@ export type { ErrorMessageContainerProps, SystemError, SelectorErrorDetail } fro
 // enforcing constraints as you go. The `InstanceBuilder` forms it replaced were
 // removed in 4.5.0.
 
-// REPL interfaces. `ReplInterface` is the substrate PyretReplInterface renders.
-export { ReplInterface } from './ReplInterface/ReplInterface';
-export type { ReplInterfaceProps } from './ReplInterface/ReplInterface';
-export { PyretReplInterface } from './ReplInterface/PyretReplInterface';
-export type { PyretReplInterfaceProps } from './ReplInterface/PyretReplInterface';
-export { PyretExpressionParser } from './ReplInterface/parsers/PyretExpressionParser';
-export type { PyretEvaluator, PyretEvaluationResult } from './ReplInterface/parsers/PyretExpressionParser';
 
 // Projections
 export { ProjectionControls, ProjectionOrchestrator } from './ProjectionControls';

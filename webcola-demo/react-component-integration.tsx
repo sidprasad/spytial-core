@@ -14,9 +14,7 @@ import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-in
 import { IInputDataInstance } from '../src/data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
 import { ErrorMessages } from '../src/layout/constraint-validator';
-import { PyretReplInterface, PyretReplInterfaceProps } from '../src/components/ReplInterface/PyretReplInterface';
-import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
-import { PyretEvaluator } from '../src/components/ReplInterface/parsers/PyretExpressionParser';
+import { PyretDataInstance, PyretEvaluator } from '../src/data-instance/pyret/pyret-data-instance';
 import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from '../src/evaluators';
 import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
@@ -38,21 +36,6 @@ export interface CndLayoutMountConfig {
   initialConstraints?: ConstraintData[];
   /** Initial directives array */
   initialDirectives?: DirectiveData[];
-}
-
-/**
- * Configuration options for mounting PyretReplInterface
- * @public
- */
-export interface PyretReplMountConfig {
-  /** Initial Pyret data instance. If not provided, an empty instance will be created */
-  initialInstance?: PyretDataInstance;
-  /** External Pyret evaluator (e.g., window.__internalRepl) for enhanced features */
-  externalEvaluator?: PyretEvaluator;
-  /** Whether the component is disabled */
-  disabled?: boolean;
-  /** CSS class name for styling */
-  className?: string;
 }
 
 /*******************************************************
@@ -596,79 +579,6 @@ const CndLayoutInterfaceWrapper: React.FC<{ config?: CndLayoutMountConfig }> = (
   );
 }
 
-/**
- * React wrapper component for PyretReplInterface
- * Connects with global Pyret state management and external evaluator
- * 
- * @private
- */
-const PyretReplInterfaceWrapper: React.FC<{ config?: PyretReplMountConfig }> = ({ config }) => {
-  const [instance, setInstance] = useState<PyretDataInstance>(() => {
-    if (config?.initialInstance) {
-      return config.initialInstance;
-    }
-    return PyretReplStateManager.getInstance().getCurrentInstance();
-  });
-
-  const [externalEvaluator, setExternalEvaluator] = useState<PyretEvaluator | null>(() => {
-    if (config?.externalEvaluator) {
-      return config.externalEvaluator;
-    }
-    return PyretReplStateManager.getInstance().getExternalEvaluator();
-  });
-
-  useEffect(() => {
-    const stateManager = PyretReplStateManager.getInstance();
-    
-    // Initialize state manager with config
-    if (config?.initialInstance) {
-      stateManager.setCurrentInstance(config.initialInstance);
-    }
-    if (config?.externalEvaluator) {
-      stateManager.setExternalEvaluator(config.externalEvaluator);
-    }
-
-    const handleInstanceChange = (newInstance: PyretDataInstance) => {
-      setInstance(newInstance);
-    };
-    
-    stateManager.onInstanceChange(handleInstanceChange);
-    
-    // Expose to global scope for legacy compatibility
-    (window as any).currentPyretInstance = instance;
-    
-    return () => {
-      // Cleanup would go here if we supported unsubscribing
-    };
-  }, [config, instance]);
-
-  const handleInstanceChange = useCallback((newInstance: IInputDataInstance) => {
-    if (newInstance instanceof PyretDataInstance) {
-      setInstance(newInstance);
-      
-      // Update global state
-      PyretReplStateManager.getInstance().setCurrentInstance(newInstance);
-      
-      // Update global reference for legacy compatibility
-      (window as any).currentPyretInstance = newInstance;
-      
-      // Dispatch custom event for other listeners
-      window.dispatchEvent(new CustomEvent('pyret-instance-changed', { 
-        detail: { instance: newInstance } 
-      }));
-    }
-  }, []);
-
-  return (
-    <PyretReplInterface
-      initialInstance={instance}
-      onChange={handleInstanceChange}
-      externalEvaluator={externalEvaluator || undefined}
-      disabled={config?.disabled}
-      className={config?.className}
-    />
-  );
-};
 
 
 
@@ -831,75 +741,6 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
   }
 }
 
-/**
- * Mount PyretReplInterface component into specified container
- * 
- * @param containerId - DOM element ID to mount into (default: 'pyret-repl-container')
- * @param config - Configuration options for the Pyret REPL
- * @returns Boolean indicating success
- * 
- * @example
- * ```javascript
- * // Mount into default container
- * CnDCore.mountPyretRepl();
- * 
- * // Mount with external evaluator
- * CnDCore.mountPyretRepl('my-repl', { 
- *   externalEvaluator: window.__internalRepl 
- * });
- * 
- * // Mount with initial instance
- * const instance = new PyretDataInstance(myPyretData);
- * CnDCore.mountPyretRepl('my-repl', { initialInstance: instance });
- * ```
- * 
- * @public
- */
-export function mountPyretRepl(
-  containerId: string = 'pyret-repl-container',
-  config?: PyretReplMountConfig
-): boolean {
-  const container = document.getElementById(containerId);
-  
-  if (!container) {
-    console.error(`Pyret REPL: Container '${containerId}' not found`);
-    return false;
-  }
-
-  try {
-    const root = createRoot(container);
-    root.render(<PyretReplInterfaceWrapper config={config} />);
-
-    if (config) {
-      console.log(`Pyret REPL mounted to #${containerId} with config:`, {
-        hasInitialInstance: !!config.initialInstance,
-        hasExternalEvaluator: !!config.externalEvaluator,
-        disabled: config.disabled ?? false,
-        className: config.className ?? 'default'
-      });
-    } else {
-      console.log(`Pyret REPL mounted to #${containerId}`);
-    }
-
-    // Expose Pyret-specific functions globally for legacy compatibility
-    (window as any).getCurrentPyretInstance = () => {
-      return PyretReplStateManager.getInstance().getCurrentInstance();
-    };
-    
-    (window as any).reifyCurrentPyretInstance = () => {
-      return PyretReplStateManager.getInstance().reifyCurrentInstance();
-    };
-
-    (window as any).updatePyretInstance = (newInstance: PyretDataInstance) => {
-      PyretReplStateManager.getInstance().setCurrentInstance(newInstance);
-    };
-
-    return true;
-  } catch (error) {
-    console.error('Failed to mount Pyret REPL:', error);
-    return false;
-  }
-}
 
 
 /**
@@ -1542,7 +1383,7 @@ export const DataAPI = {
   },
 
   /**
-   * Get current Pyret data instance from PyretReplInterface component
+   * Get the current Pyret data instance held by PyretReplStateManager
    * @returns Current Pyret data instance or undefined if not available
    */
   getCurrentPyretInstance: (): PyretDataInstance | undefined => {
@@ -1632,8 +1473,6 @@ export const CnDCore = {
   mountRelationHighlighter,
   mountProjectionControls,
   mountProjectionOrchestrator,
-  // Pyret REPL mounting functions
-  mountPyretRepl,
 
   // Projection functions
   updateProjectionData,
@@ -1688,9 +1527,6 @@ if (typeof window !== 'undefined') {
   globalWindow.updateProjectionOrchestratorInstance = updateProjectionOrchestratorInstance;
   globalWindow.updateProjectionOrchestratorEvaluator = updateProjectionOrchestratorEvaluator;
   
-  // Pyret REPL functions for legacy compatibility
-  globalWindow.mountPyretRepl = mountPyretRepl;
-
   // Expose data functions for legacy compatibility
   globalWindow.getCurrentCNDSpecFromReact = DataAPI.getCurrentCndSpec;
   globalWindow.getCurrentInstanceFromReact = DataAPI.getCurrentInstance;

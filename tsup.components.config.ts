@@ -3,7 +3,6 @@ import { defineConfig } from 'tsup';
 export default defineConfig({
   entry: [
     './webcola-demo/react-component-integration.tsx',
-    './webcola-demo/pyret-repl-demo-components.tsx',
     './webcola-demo/spec-editor-demo-components.tsx'
   ],
   format: ['iife'], // Immediately Invoked Function Expression for HTML
