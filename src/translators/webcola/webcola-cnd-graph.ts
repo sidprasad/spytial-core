@@ -4289,10 +4289,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // fallback is inlined markup (not a packaged asset path, which would resolve
     // against the host app and 404), so the <image> is *replaced* rather than
     // re-pointed — which also gets the fallback's own `currentColor` themed. The
-    // replacement carries the geometry and the datum over, so the tick paths
-    // keep positioning it. Plain DOM rather than d3 here: the listener's
-    // arguments differ between d3 versions, but `__data__` (what `.datum()`
-    // writes) does not.
+    // replacement carries the geometry over so the tick paths keep positioning
+    // it, and the datum so the title and the message below can read it; the tick
+    // paths re-propagate the node's datum themselves on every `select`.
+    //
+    // Plain DOM rather than d3 here: the listener's arguments differ between d3
+    // versions, but `__data__` (what `.datum()` writes, and what `.append()`
+    // already copied from the node) does not.
     const self = this;
     icons.on("error", function (this: SVGElement) {
       const d = (this as any).__data__;
@@ -4306,7 +4309,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       title.textContent = self.iconTitle(d);
       replacement.appendChild(title);
       this.replaceWith(replacement);
-      console.error(`Failed to load icon for node ${d?.id}: ${d?.icon}`);
+      console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
     });
 
     icons

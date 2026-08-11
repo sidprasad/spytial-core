@@ -183,6 +183,104 @@ describe('setupNodeIcons', () => {
     });
 });
 
+describe('tick paths keep the icon on its node', () => {
+    // `setupNodeIcons` writes the .node-icon class and all three tick paths read
+    // it. Renaming one side leaves icons stranded at their first position while
+    // everything else still moves — nothing else in the suite would notice, so
+    // these drive the real functions.
+    //
+    // Each node <g> here holds only its icon, so every other selection those
+    // functions make matches nothing and drops out. That keeps the scaffolding
+    // to real (if empty) d3 selections rather than stubs standing in for the
+    // behaviour under test.
+    const geometry = {
+        isBadgeIcon: proto.isBadgeIcon,
+        iconWidth: proto.iconWidth,
+        iconHeight: proto.iconHeight,
+        iconX: proto.iconX,
+        iconY: proto.iconY,
+    };
+
+    const mount = () => {
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        document.body.appendChild(svg);
+        const datum: any = {
+            id: 'n1',
+            label: 'n1',
+            icon: resolveIconPath('tic-x'),
+            iconPlacement: 'full',
+            x: 100,
+            y: 60,
+            width: 40,
+            height: 20,
+        };
+        const svgNodes = d3
+            .select(svg)
+            .selectAll('g.node')
+            .data([datum])
+            .enter()
+            .append('g')
+            .attr('class', 'node') as any;
+        proto.setupNodeIcons.call(
+            { ...geometry, buildIconElement: proto.buildIconElement, iconTitle: proto.iconTitle },
+            svgNodes
+        );
+        const icon = (): Element => svg.querySelector('.node-icon')!;
+        // The starting position, so a test that asserts movement cannot pass on
+        // an icon that never moved.
+        expect([icon().getAttribute('x'), icon().getAttribute('y')]).toEqual(['80', '50']);
+        return { svg, datum, svgNodes, icon };
+    };
+
+    it('follows the node while the solver runs (updateNodePositionsOnly)', () => {
+        const { datum, svgNodes, icon } = mount();
+        datum.x = 300;
+        datum.y = 200;
+
+        proto.updateNodePositionsOnly.call({ ...geometry, svgNodes });
+
+        expect(icon().getAttribute('x')).toBe('280');
+        expect(icon().getAttribute('y')).toBe('190');
+    });
+
+    it('follows the node on every tick (updatePositions)', () => {
+        const { svg, datum, svgNodes, icon } = mount();
+        const empty = d3.select(svg).selectAll('.not-in-this-fixture');
+        datum.x = 300;
+        datum.y = 200;
+
+        proto.updatePositions.call({
+            ...geometry,
+            svgNodes,
+            svgGroups: empty,
+            svgLinkGroups: empty,
+            svgGroupLabels: empty,
+            svgGroupLabelBgs: undefined,
+            // The real one: it returns early on a detached element.
+            updateEdgeEndpointMarkers: proto.updateEdgeEndpointMarkers,
+        });
+
+        expect(icon().getAttribute('x')).toBe('280');
+        expect(icon().getAttribute('y')).toBe('190');
+    });
+
+    it('tracks the WebCola bounds in grid mode (gridUpdatePositions)', () => {
+        const { svg, datum, icon } = mount();
+        // Grid mode registers a full-bleed icon with the bounds its rect is
+        // drawn from, not with the visual box.
+        datum.bounds = { x: 12, y: 34 };
+
+        proto.gridUpdatePositions.call({
+            ...geometry,
+            container: d3.select(svg),
+            ensureNodeBounds: () => undefined,
+        });
+
+        expect(icon().getAttribute('x')).toBe('12');
+        expect(icon().getAttribute('y')).toBe('34');
+    });
+});
+
 describe('themed glyph color', () => {
     it('points the inlined glyph at the label slot, black under the light baseline', () => {
         // `currentColor` is only half the fix — this rule is what it resolves
