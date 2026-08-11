@@ -12,7 +12,7 @@ import type { GridRouter, Group, Layout, Node, Link, ID3StyleLayoutAdaptor } fro
 type D3Layout = Layout & ID3StyleLayoutAdaptor;
 import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
-import { FALLBACK_ICON } from '../../layout/icon-registry';
+import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 import {
   type EdgeRouter as SpytialEdgeRouter,
@@ -1473,6 +1473,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       <style>
       ${this.getCSS()}
       </style>
+      <div id="graph-shell">
       <div id="graph-toolbar">
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
@@ -1519,6 +1520,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         </defs>
         <g class="zoomable"></g>
       </svg>
+      </div>
       </div>
       <div id="error" style="display: none; color: red;"></div>
     `;
@@ -4253,42 +4255,110 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Adds icon images to nodes that have icon properties.
+   * Adds icons to nodes that have icon properties.
    * Geometry comes from `atomStyle.iconStyle.placement` (full vs badge) and alpha
    * from its `opacity`. Includes error handling for failed icon loads.
+   *
+   * Two element kinds come out of this, both classed `.node-icon` so the tick
+   * paths can position either: an inlined `<svg>` for icons this package ships
+   * (see {@link buildIconElement}) and an `<image>` for author-supplied URLs,
+   * which cannot be inlined. A nested `<svg>` takes the same x/y/width/height as
+   * `<image>` and defaults to the same `xMidYMid meet` fit, so the geometry the
+   * `icon*` helpers feed it is unchanged.
    *
    * @param nodeSelection - D3 selection of node groups
    */
   private setupNodeIcons(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
-    const images = nodeSelection
+    const icons = nodeSelection
       .filter((d: any) => d.icon) // Only nodes with icons
-      .append("image")
-      .attr("xlink:href", (d: any) => d.icon)
+      .append((d: any) => this.buildIconElement(d.icon))
+      .attr("class", "node-icon")
       .attr("width", (d: any) => this.iconWidth(d))
       .attr("height", (d: any) => this.iconHeight(d))
       .attr("x", (d: any) => this.iconX(d))
       .attr("y", (d: any) => this.iconY(d))
-      // Set on the <image> itself, so the morph animation's group-level opacity
+      // Set on the icon itself, so the morph animation's group-level opacity
       // composes with it rather than being overwritten.
       .attr("opacity", (d: any) => d.iconOpacity ?? null);
 
-    // Bound to the <image>, not to the <title> appended below: chaining `.on`
-    // after `.append("title")` would attach the handler to the title element,
-    // which never emits `error`, leaving broken icons silently blank.
+    // Bound to the icon element, not to the <title> appended below: chaining
+    // `.on` after `.append("title")` would attach the handler to the title
+    // element, which never emits `error`, leaving broken icons silently blank.
     //
-    // The fallback is an inlined data URI (not a packaged asset path, which
-    // would resolve against the host app and 404), and the guard stops a
-    // fallback that somehow also failed from looping on its own error event.
-    images.on("error", function (this: SVGImageElement, _event: Event, d: any) {
-      const img = d3.select(this);
-      if (img.attr("xlink:href") === FALLBACK_ICON) return;
-      img.attr("xlink:href", FALLBACK_ICON);
-      console.error(`Failed to load icon for node ${d.id}: ${d.icon}`);
+    // Only an <image> can fail this way; an inlined <svg> fetches nothing. The
+    // fallback is inlined markup (not a packaged asset path, which would resolve
+    // against the host app and 404), so the <image> is *replaced* rather than
+    // re-pointed — which also gets the fallback's own `currentColor` themed. The
+    // replacement carries the geometry and the datum over, so the tick paths
+    // keep positioning it. Plain DOM rather than d3 here: the listener's
+    // arguments differ between d3 versions, but `__data__` (what `.datum()`
+    // writes) does not.
+    const self = this;
+    icons.on("error", function (this: SVGElement) {
+      const d = (this as any).__data__;
+      const replacement = self.buildIconElement(FALLBACK_ICON);
+      for (const attr of ["class", "width", "height", "x", "y", "opacity"]) {
+        const value = this.getAttribute(attr);
+        if (value !== null) replacement.setAttribute(attr, value);
+      }
+      (replacement as any).__data__ = d;
+      const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+      title.textContent = self.iconTitle(d);
+      replacement.appendChild(title);
+      this.replaceWith(replacement);
+      console.error(`Failed to load icon for node ${d?.id}: ${d?.icon}`);
     });
 
-    images
+    icons
       .append("title")
-      .text((d: any) => d.label || d.name || d.id || "Node");
+      .text((d: any) => this.iconTitle(d));
+  }
+
+  /** Tooltip text for a node's icon. */
+  private iconTitle(d: any): string {
+    return d.label || d.name || d.id || "Node";
+  }
+
+  /**
+   * The element that draws `icon`: an inlined `<svg>` when this package authored
+   * the markup, otherwise an `<image>` pointing at the reference.
+   *
+   * Inlining is what makes a bundled icon themeable. Its glyph is drawn with
+   * `currentColor`, and inside an SVG loaded through `<image>` that resolves
+   * against the *referenced* document — whose initial `color` is black — so the
+   * glyph tracked the browser's color scheme rather than the diagram's theme and
+   * was invisible on a dark canvas. Inlined, `color` cascades from the host in
+   * the normal way (see the `.node-icon` rule in {@link getCSS}).
+   *
+   * Only markup from {@link getInlinableIconSvg} is ever inlined — it returns
+   * `undefined` for anything this package did not author — so an author-supplied
+   * path can never be injected as markup.
+   */
+  private buildIconElement(icon: string): SVGElement {
+    const markup = getInlinableIconSvg(icon);
+    if (markup) return WebColaCnDGraph.inlineIconFromMarkup(markup);
+    const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    image.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', icon);
+    return image;
+  }
+
+  /**
+   * Parsed-once templates for the inlinable icons, keyed by markup. Parsing is
+   * cheap but repeated per node, and the same handful of glyphs recurs across a
+   * whole diagram.
+   */
+  private static readonly inlineIconTemplates = new Map<string, SVGElement>();
+
+  /** A fresh copy of `markup` as a live SVG element, via a cached template. */
+  private static inlineIconFromMarkup(markup: string): SVGElement {
+    let template = WebColaCnDGraph.inlineIconTemplates.get(markup);
+    if (!template) {
+      template = new DOMParser()
+        .parseFromString(markup, 'image/svg+xml')
+        .documentElement as unknown as SVGElement;
+      WebColaCnDGraph.inlineIconTemplates.set(markup, template);
+    }
+    return document.importNode(template, true) as SVGElement;
   }
 
   /**
@@ -4579,7 +4649,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr('width', (d: any) => d.visualWidth ?? d.width)
       .attr('height', (d: any) => d.visualHeight ?? d.height);
 
-    this.svgNodes.select('image')
+    this.svgNodes.select('.node-icon')
       .attr('x', (d: any) => d.x == null ? 0 : this.iconX(d))
       .attr('y', (d: any) => d.y == null ? 0 : this.iconY(d));
 
@@ -4630,7 +4700,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr('height', (d: any) => d.visualHeight ?? d.height);
 
     // Update node icons with proper positioning
-    this.svgNodes.select('image')
+    this.svgNodes.select('.node-icon')
       .attr('x', (d: any) => this.iconX(d))
       .attr('y', (d: any) => this.iconY(d));
 
@@ -4865,7 +4935,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     // A full-bleed icon tracks the WebCola bounds here (rather than the visual
     // box) so it stays registered with the rect drawn from those same bounds.
-    node.select("image")
+    node.select(".node-icon")
         .attr("x", (d: any) => this.iconX(d, d.bounds.x))
         .attr("y", (d: any) => this.iconY(d, d.bounds.y))
 
@@ -8197,11 +8267,33 @@ export class WebColaCnDGraph extends HTMLElementBase {
         height: 100%;
         font-family: ${this.getFontFamily()};
       }
-      
+
+      /* A column: the toolbar takes the height it needs, the canvas takes the
+         rest. It has to divide the height rather than have both children ask
+         for it — the canvas used to be height:100% *of the host*, which ignores
+         the toolbar stacked above it, so the canvas overhung the host by the
+         toolbar's height and the bottom of every diagram was cut off.
+
+         The column lives on this wrapper rather than on :host because a host
+         page's own rule for the element (say, one setting display: block on
+         webcola-cnd-graph) beats anything :host says, and that would leave the
+         canvas with no height at all. Nothing outside can restyle a shadow
+         child. */
+      #graph-shell {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+      }
+
       #svg-container {
         position: relative; /* Make this the positioning context for zoom controls */
         width: 100%;
-        height: 100%;
+        /* Fill what the toolbar leaves. min-height:0 because a flex item will
+           not shrink below its content otherwise, which would reinstate the
+           overflow this replaced. */
+        flex: 1 1 auto;
+        min-height: 0;
         border: 1px solid rgba(0, 0, 0, 0.08);
         border-radius: 8px;
         background-color: var(--cnd-canvas-bg, ${this.getCanvasBackground()}); /* light: warm-white / background attr; dark: --cnd-canvas-bg */
@@ -8553,6 +8645,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
         font-weight: 600;
         pointer-events: none;
       }
+
+      /* An icon this package ships is drawn inline (see buildIconElement) with
+         its glyph painted in currentColor, so the color it inherits here is the
+         glyph's color. It follows the label slot: black-on-warm-white as before
+         under the light baseline, light on a dark canvas. An <image> also lands
+         on this rule and simply ignores it — an external SVG resolves its own
+         currentColor against its own document, which is why bundled icons are
+         inlined in the first place. */
+      .node-icon {
+        color: var(--cnd-label-text, #000);
+      }
       
       #error {
         position: absolute;
@@ -8606,6 +8709,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
       /* Graph toolbar styling */
       #graph-toolbar {
         display: flex;
+        /* Keep its own height in the host's column — the canvas below takes
+           whatever is left, and squeezing the controls is never the answer. */
+        flex: 0 0 auto;
         justify-content: flex-start;
         align-items: center;
         padding: 8px 12px;
@@ -9380,6 +9486,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       'fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'stroke-linejoin',
       'opacity', 'text-anchor', 'dominant-baseline',
       'paint-order', 'visibility', 'display',
+      // `color` carries the inlined icons' `currentColor`. The serialized clone
+      // loses the shadow stylesheet (and the host's --cnd-* properties with it),
+      // so without this an inlined glyph would fall back to the initial black.
+      'color',
     ];
 
     const origChildren = original.children;
