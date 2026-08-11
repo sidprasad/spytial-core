@@ -251,6 +251,46 @@ export function getBundledIconSvg(name: string): string | undefined {
 }
 
 /**
+ * Every icon whose SVG *this package* authored, keyed by the string a renderer
+ * actually holds — the resolved `data:` URI, not the author's original name.
+ * {@link resolveIconPath} runs while the spec is parsed, so by the time a node
+ * datum reaches a renderer the bundled name is long gone.
+ *
+ * Covers the bundled set plus {@link FALLBACK_ICON}, which is drawn with
+ * `currentColor` for the same reason and so needs the same treatment.
+ */
+const INLINABLE_SVG_BY_PATH: Map<string, string> = new Map(
+  [...Object.values(BUNDLED_ICONS), FALLBACK_ICON].map((uri) => [
+    uri,
+    decodeURIComponent(uri.slice(BUNDLED_PREFIX.length)),
+  ])
+);
+
+/**
+ * The raw SVG markup a renderer may inline for `iconRef`, or `undefined` when
+ * it must draw the reference as an external image instead.
+ *
+ * Accepts either form a renderer might hold: a resolved bundled/fallback `data:`
+ * URI (the usual case — see {@link INLINABLE_SVG_BY_PATH}) or a bare bundled
+ * name. Everything else — a URL, a relative path, a `pack:name` reference, an
+ * author-supplied `data:` URI — returns `undefined`.
+ *
+ * Why a renderer wants this: `currentColor` inside an SVG loaded through
+ * `<image>`/`<img>` resolves against the *referenced* document, whose initial
+ * `color` is black, so the glyph is black on a dark canvas no matter what the
+ * host asked for. Inlining the markup lets `color` cascade in normally.
+ *
+ * Returning `undefined` for everything else is the safety property, not an
+ * omission: the only strings this can ever yield are markup compiled into this
+ * module, so a caller cannot be tricked into injecting author-supplied markup by
+ * passing it here.
+ */
+export function getInlinableIconSvg(iconRef: string): string | undefined {
+  if (!iconRef) return undefined;
+  return INLINABLE_SVG_BY_PATH.get(iconRef) ?? getBundledIconSvg(iconRef);
+}
+
+/**
  * Check if an icon path uses an icon pack prefix.
  */
 export function usesIconPack(iconPath: string): boolean {
