@@ -16,7 +16,7 @@ import {
     LayoutSpec,
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     RelativeDirection,
-    GroupByField, GroupBySelector, AlignConstraint,
+    GroupBySelector, AlignConstraint,
     EdgeColorDirective, InferredEdgeDirective, TagDirective,
     AtomHidingDirective
 } from './layoutspec';
@@ -747,40 +747,6 @@ export class LayoutInstance {
 
 
 
-    /**
-     * Gets GroupByField constraints that apply to a specific field and atoms.
-     * @param fieldName - The field name to match.
-     * @param sourceAtom - The source atom ID.
-     * @param targetAtom - The target atom ID.
-     * @returns Array of matching GroupByField constraints.
-     */
-    private getConstraintsRelatedToField(fieldName: string, sourceAtom: string, targetAtom: string): GroupByField[] {
-        const groupByFieldConstraints = this._layoutSpec.constraints.grouping.byfield;
-        
-        let fieldConstraints = groupByFieldConstraints.filter((d) => {
-            if (d.field !== fieldName) {
-                return false;
-            }
-            
-            if (!d.selector) {
-                // Legacy constraint without selector applies to all edges with this field
-                return true;
-            }
-            
-            try {
-                const selectorResult = this.evaluator.evaluate(d.selector, { instanceIndex: this.instanceNum });
-                const selectedAtoms = selectorResult.selectedAtoms();
-                
-                // Check if source atom is selected by the selector
-                return selectedAtoms.includes(sourceAtom);
-            } catch (error) {
-                this.recordSelectorError(d.selector, 'group by field selector', error);
-                return false;
-            }
-        });
-        return fieldConstraints;
-    }
-
     isAttributeField(fieldId: string, sourceAtom?: string, targetAtom?: string): boolean {
         const matchingDirectives = this._layoutSpec.directives.attributes.filter((ad) => ad.field === fieldId);
         
@@ -941,11 +907,9 @@ export class LayoutInstance {
         //let groupingConstraints : GroupingConstraint[] = this._layoutSpec.constraints.grouping;
 
 
-        let groupByFieldConstraints: GroupByField[] = this._layoutSpec.constraints.grouping.byfield;
-        let groupBySelectorConstraints: GroupBySelector[] = this._layoutSpec.constraints.grouping.byselector;
+        const groupBySelectorConstraints: GroupBySelector[] = this._layoutSpec.constraints.grouping.byselector;
 
-
-        if (!groupByFieldConstraints && !groupBySelectorConstraints) {
+        if (!groupBySelectorConstraints) {
             return [];
         }
 
@@ -1068,94 +1032,6 @@ export class LayoutInstance {
         }
 
 
-        // Now we go through the group by field constraints.
-
-        let graphEdges = [...g.edges()];
-
-
-        graphEdges.forEach((edge) => {
-            const edgeId = edge.name;
-            const relName = this.getRelationName(g, edge);
-
-
-            let relatedConstraints = this.getConstraintsRelatedToField(relName, edge.v, edge.w);
-
-            if (relatedConstraints.length === 0) {
-                return;
-            }
-
-            // let edgeLabel = this.getEdgeLabel(g, edge); // Unused for now
-
-
-            relatedConstraints.forEach((c) => {
-
-                const groupOn = c.groupOn; // This is the part of the relation tuple that is the key.
-                const addToGroup = c.addToGroup; // This is the part of the relation tuple that is IN the group.
-
-
-                const potentialTuples = this.getFieldTuplesForSourceAndTarget(a, relName, edge.v, edge.w);
-                if (!potentialTuples || potentialTuples.length === 0) {
-                    return;
-                }
-
-
-                for (var thisTuple of potentialTuples) {
-                    let arity = thisTuple?.length || 0;
-                    if (arity < 2 || (groupOn < 0 || groupOn >= arity) || (addToGroup < 0 || addToGroup >= arity)) {
-                        throw new Error(`Invalid grouping. groupOn=${groupOn} and addToGroup=${addToGroup} for ${arity}-ary relation ${relName}. These must be between 0 and ${arity - 1}.`);
-                    }
-                    // Now get the element of edge
-
-                    // let sourceInGraph = thisTuple[0]; // Unused for now
-                    // let targetInGraph = thisTuple[arity - 1]; // Unused for now
-
-                    let key = thisTuple[groupOn];
-                    let toAdd = thisTuple[addToGroup];
-
-
-                    let labelString = thisTuple.map((s, idx) => {
-                        if (idx === groupOn) {
-                            return s;
-                        }
-                        else return "_";
-                    }).join(",");
-
-                    let groupName = `${relName}[${labelString}]`; // TODO: THis?
-
-                    // Check if the group already exists
-                    let existingGroup: LayoutGroup | undefined = groups.find((group) => group.name === groupName);
-
-                    if (existingGroup) {
-                        existingGroup.nodeIds.push(toAdd);
-                        // But also remove this edge from the graph.
-                        g.removeEdge(edge.v, edge.w, edgeId);
-                    }
-                    else {
-
-                        let newGroup: LayoutGroup =
-                        {
-                            name: groupName,
-                            nodeIds: [toAdd],
-                            keyNodeId: key, // What if the key is in the graph?
-                            showLabel: !c.negated,
-                            sourceConstraint: c,
-                            negated: c.negated
-                        };
-                        groups.push(newGroup);
-
-                        const groupEdgePrefix = `_g_${groupOn}_${addToGroup}_`;
-                        const newId = groupEdgePrefix + edgeId;
-                        g.removeEdge(edge.v, edge.w, edgeId);
-                        g.setEdge(edge.v, edge.w, groupName, newId);
-                    }
-                }
-            });
-        });
-
-
-
-
-        
         return groups;
     }
 

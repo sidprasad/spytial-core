@@ -10,7 +10,7 @@ import {
     LayoutGroup,
     ImplicitConstraint
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 describe('Constraint Validation Performance', () => {
     
@@ -31,7 +31,7 @@ describe('Constraint Validation Performance', () => {
     }
 
     // Helper to create a left constraint
-    function createLeftConstraint(left: LayoutNode, right: LayoutNode, source: RelativeOrientationConstraint | ImplicitConstraint | GroupByField): LeftConstraint {
+    function createLeftConstraint(left: LayoutNode, right: LayoutNode, source: RelativeOrientationConstraint | ImplicitConstraint | GroupBySelector): LeftConstraint {
         return {
             left,
             right,
@@ -220,11 +220,7 @@ describe('Constraint Validation Performance', () => {
                     }
                 }
                 
-                const groupSource = new GroupByField(
-                    `field${g}`,
-                    0, // groupOn index
-                    1  // addToGroup index
-                );
+                const groupSource = new GroupBySelector(`field${g}`, `field${g}`);
                 
                 groups.push({
                     name: `group${g}`,

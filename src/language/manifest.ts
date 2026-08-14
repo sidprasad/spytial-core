@@ -3,10 +3,10 @@
  * constraints and directives to write in a spec, what each field means, what is
  * deprecated, and what to write instead.
  *
- * It describes what to *emit*, which is not quite everything the parser accepts.
- * The old group-by-field form (`group: { field, groupOn, addToGroup }`) still
- * parses but is described nowhere here, so the generated schema rejects it; see
- * the note in `DOCUMENT`. Anything else the parser takes, this file covers.
+ * It covers everything the parser accepts. The old group-by-field form
+ * (`group: { field, groupOn, addToGroup }`) is not in here because it is not in
+ * the parser either — it was removed, and writing it is now a parse error. See
+ * the note in `DOCUMENT` for the rewrite.
  *
  * ## Why this file exists
  *
@@ -1026,11 +1026,11 @@ const DOCUMENT = {
     'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
     'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
       'a `specType` naming the form, so a consumer can surface them without matching prose.',
-    'One form is deliberately absent: the old group-by-field shape, `group: { field, groupOn, addToGroup }`. ' +
-      'The parser still accepts it and still groups the same way, but it is no longer described here and the ' +
-      'generated JSON Schema rejects it — do not emit it. Write a `group` whose binary `selector` has the key ' +
-      'in its first column and the members in its second; over `worksIn: Employee -> Department`, ' +
-      '`groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a `name`.',
+    'The old group-by-field shape, `group: { field, groupOn, addToGroup }`, is removed. It is a parse error, ' +
+      'not a silently ignored key, so an old spec fails loudly instead of losing its grouping. Write a `group` ' +
+      'whose binary `selector` has the key in its first column and the members in its second; over ' +
+      '`worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a ' +
+      '`name`, and `groupOn: 0` / `addToGroup: 1` becomes `selector: worksIn`.',
   ],
 };
 

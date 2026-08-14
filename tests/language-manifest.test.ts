@@ -437,33 +437,11 @@ describe('language manifest — agreement with the spec-editor registry', () => 
     groupselector: 'group',
   };
 
-  /**
-   * Forms the editor still knows but the manifest deliberately does not.
-   *
-   * The two surfaces answer different questions. The registry has to *render*
-   * whatever an author opens, including forms nobody should write any more; the
-   * manifest says what to *emit*. `groupfield` is the one place they part: the
-   * parser still accepts it, the editor still shows it to anyone who has it, and
-   * no integration should generate it.
-   */
-  const REGISTRY_ONLY = ['groupfield'];
-
   const manifestId = (registryType: string): string => REGISTRY_TO_MANIFEST[registryType] ?? registryType;
-  const shared = () => getAllDefinitions().filter((d) => !REGISTRY_ONLY.includes(d.type));
+  const shared = () => getAllDefinitions();
 
-  it('describes every form the editor offers, bar the ones it deliberately drops', () => {
+  it('describes exactly the same set of forms as the editor registry', () => {
     expect(shared().map((d) => manifestId(d.type)).sort()).toEqual(manifest.items.map((i) => i.id).sort());
-  });
-
-  it('the forms it drops are ones the editor never offers to add', () => {
-    // Dropping a form the builder can still *create* would leave the editor
-    // producing specs the manifest calls invalid. Only render-for-back-compat
-    // forms may be dropped, so each one has to be deprecated in the registry.
-    for (const type of REGISTRY_ONLY) {
-      const def = getAllDefinitions().find((d) => d.type === type);
-      expect(def, `${type} is still in the registry`).toBeDefined();
-      expect(def!.deprecated, `${type} is deprecated in the registry`).toBe(true);
-    }
   });
 
   it('marks the same forms deprecated', () => {

@@ -204,51 +204,6 @@ export class GroupBySelector extends ConstraintOperation{
 }
 
 
-/**
- * Grouping by a relational field: `groupOn` and `addToGroup` index into each
- * tuple of `field` to pick the group key and its members.
- *
- * @deprecated Use {@link GroupBySelector} instead — a binary selector whose
- * first column is the key and whose second is the members says the same thing
- * without the tuple indices. Retained for backwards compatibility: it still
- * parses and groups exactly as before, behind a deprecation warning raised by
- * {@link parseLayoutSpec}.
- */
-export class GroupByField  {
-    // And applies to selects the thing to group ON
-    field : string;
-
-    // Optional selector to specify which atoms this grouping applies to
-    selector? : string;
-
-    // And this is the element upon WHICH to group (ie. the key)
-    groupOn : number;
-
-    // And this is what gets grouped
-    addToGroup : number;
-
-    negated : boolean;
-
-    constructor(field: string, groupOn: number, addToGroup: number, selector?: string, negated: boolean = false) {
-        this.field = field;
-        this.groupOn = groupOn;
-        this.addToGroup = addToGroup;
-        this.selector = selector;
-        this.negated = negated;
-    }
-
-    toHTML(): string {
-        if (this.negated) {
-            const selectorText = this.selector ? ` (selector: <code>${this.selector}</code>)` : '';
-            return `Members grouped by field <code>${this.field}</code> cannot form a group${selectorText}`;
-        }
-        const selectorText = this.selector ? ` with selector <pre>${this.selector}</pre>` : '';
-        return `GroupByField on field <pre>${this.field}</pre> grouping field index <pre>${this.groupOn}</pre>
-        adding to group index <pre>${this.addToGroup}</pre>${selectorText}.`;
-    }
-}
-
-
 
 
 
@@ -430,7 +385,6 @@ interface ConstraintsBlock
     };
     alignment: AlignConstraint[];
     grouping : {
-        byfield : GroupByField[];
         byselector : GroupBySelector[];
     }
 
@@ -517,7 +471,6 @@ function DEFAULT_LAYOUT() : LayoutSpec
             },
             alignment: [] as AlignConstraint[],
             grouping : {
-                byfield : [] as GroupByField[],
                 byselector : [] as GroupBySelector[]
             }
         },
@@ -761,26 +714,6 @@ function removeDuplicateGroupBySelectorConstraints(constraints: GroupBySelector[
 }
 
 /**
- * Removes duplicate group by field constraints based on field, groupOn, addToGroup, and selector.
- * @param constraints Array of group by field constraints
- * @returns Array with duplicates removed
- */
-function removeDuplicateGroupByFieldConstraints(constraints: GroupByField[]): GroupByField[] {
-    const seen = new Map<string, GroupByField>();
-    const result: GroupByField[] = [];
-    
-    for (const constraint of constraints) {
-        const key = `${constraint.field}|${constraint.groupOn}|${constraint.addToGroup}|${constraint.selector || ''}`;
-        if (!seen.has(key)) {
-            seen.set(key, constraint);
-            result.push(constraint);
-        }
-    }
-    
-    return result;
-}
-
-/**
  * Parses the constraints from the YAML specification.
  * @param constraints List of constraints from the YAML specification.
  * @returns List of CnD constraints
@@ -873,55 +806,25 @@ function parseConstraints(constraints: unknown[], warnings: ParseWarning[] = [])
     relativeOrientationConstraints = removeDuplicateRelativeOrientationConstraints(relativeOrientationConstraints);
 
 
-    // group-by-field (`field` + `groupOn` + `addToGroup`) is the deprecated flat
-    // form of grouping. It still parses and groups exactly as before; the
-    // supported form is a group-by-selector over a binary relation.
+    // group-by-field (`field` + `groupOn` + `addToGroup`) is removed. Reject it
+    // outright rather than letting it through: `field` is not a key this parser
+    // knows any more, and unknown keys are ignored silently, so a spec written
+    // in the old form would parse clean and quietly lose its grouping. Failing
+    // here costs the author a one-line rewrite; the silent version costs them a
+    // wrong diagram they have no reason to suspect.
     const rawByField = typedConstraints.filter(c => c.group).filter(c => c.group.field);
     if (rawByField.length > 0) {
-        deprecate(
-            'group',
-            "[spytial] group's 'field'/'groupOn'/'addToGroup' are deprecated and will be " +
-            "removed in a future major; use a group with a binary 'selector' instead — " +
-            "its first column is the group key, its second the members."
+        const fields = [...new Set(rawByField.map(c => String(c.group.field)))].join(', ');
+        throw new Error(
+            `group's 'field'/'groupOn'/'addToGroup' were removed. Use a group with a binary 'selector' ` +
+            `instead — its first column is the group key, its second the members. For '${fields}' with ` +
+            `groupOn: 1 / addToGroup: 0, write 'selector: ~${rawByField[0].group.field}' plus the 'name' ` +
+            `that form requires; with groupOn: 0 / addToGroup: 1, drop the '~'.`
         );
     }
-    let byfield: GroupByField[] = rawByField
-        .map(c => {
-
-            // If not, we parse from the CORE constraint
-            if(c.group.groupOn == undefined) {
-                throw new Error("Grouping constraint must have groupOn field");
-            }
-
-            if(c.group.field == undefined) {
-                throw new Error("Grouping constraint must specify a field");
-            }
-
-            if(c.group.addToGroup == undefined) {
-                throw new Error("Grouping constraint must specify addToGroup");
-            }
-
-
-            return new GroupByField(
-                c.group.field,
-                c.group.groupOn,
-                c.group.addToGroup,
-                c.group.selector,
-                c._negated
-            );
-
-            // return {
-            //     groupOn: c.group.groupOn,
-            //     field: c.group.field,
-            //     addToGroup: c.group.addToGroup,
-            // }
-        });
-
-    // Remove duplicate group by field constraints
-    byfield = removeDuplicateGroupByFieldConstraints(byfield);
 
     let byselector: GroupBySelector[] = typedConstraints.filter(c => c.group)
-        .filter(c => c.group.selector && !c.group.field)
+        .filter(c => c.group.selector)
         .map(c => {
             if(!c.group.selector) {
                 throw new Error("Grouping constraint must have a selector.");
@@ -982,7 +885,6 @@ function parseConstraints(constraints: unknown[], warnings: ParseWarning[] = [])
         },
         alignment: alignConstraints,
         grouping: {
-            byfield: byfield,
             byselector: byselector
         }
     }

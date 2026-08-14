@@ -890,14 +890,14 @@ directives:
     });
 
     it('carries spec warnings on the counterfactual result (the second pass does not lose them)', () => {
-      // The deprecated group-by-field form raises a parse warning AND builds a
-      // group whose hidden member conflicts — both must survive the re-run.
+      // `hideAtom` under `directives:` is a deprecated placement and raises a
+      // parse warning; the group it interacts with has a hidden member, so the
+      // layout also conflicts. Both must survive the re-run.
       const result = createLayout(`
 constraints:
   - group:
-      field: edge
-      groupOn: 0
-      addToGroup: 1
+      selector: edge
+      name: g
 directives:
   - hideAtom:
       selector: D

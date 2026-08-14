@@ -76,10 +76,8 @@ const FIELD_SELECTORS_SPEC = `directives:
       selector: 'User'
 constraints:
   - group:
-      field: 'owns'
-      groupOn: 0
-      addToGroup: 1
-      selector: 'Car'
+      selector: 'owns'
+      name: 'owners'
 `;
 
 const TAG_SPEC = `directives:
@@ -107,7 +105,7 @@ describe('yaml-codec — real-world round trips', () => {
     expect(spec.directives.hideDisconnectedBuiltIns).toBe(true);
   });
 
-  it('round-trips field-selector directives + deprecated group-by-field', () => {
+  it('round-trips field-selector directives + a group', () => {
     const out = assertRoundTrips(FIELD_SELECTORS_SPEC);
     const spec = parseLayoutSpec(out);
     // edgeColor round-trips through the codec, then desugars to edgeStyle on parse.
@@ -117,7 +115,7 @@ describe('yaml-codec — real-world round trips', () => {
     expect(spec.directives.inferredEdges).toHaveLength(1);
     expect(spec.directives.attributes).toHaveLength(1);
     expect(spec.directives.hiddenFields).toHaveLength(1);
-    expect(spec.constraints.grouping.byfield).toHaveLength(1);
+    expect(spec.constraints.grouping.byselector).toHaveLength(1);
   });
 
   it('round-trips the tag directive (toTag/name/value)', () => {
@@ -209,12 +207,14 @@ describe('yaml-codec — flag scalar form', () => {
 });
 
 describe('yaml-codec — group disambiguation', () => {
-  it('classifies group with `field` as groupfield (deprecated)', () => {
+  it('leaves a group with `field` unrecognised, to be preserved verbatim', () => {
+    // group-by-field is removed from the language, so no definition claims it.
+    // The codec keeps the node in `raw` rather than dropping it, which is what
+    // lets the editor show an old spec back to its author unchanged.
     const state = parseYamlToState(
       'constraints:\n  - group:\n      field: owns\n      groupOn: 0\n      addToGroup: 1\n',
     );
-    expect(state.constraints[0].type).toBe('groupfield');
-    expect(state.constraints[0].params.field).toBe('owns');
+    expect(state.constraints[0].raw).toBeDefined();
   });
 
   it('classifies group with only `selector` as groupselector', () => {

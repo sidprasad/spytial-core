@@ -51,7 +51,6 @@ import {
     RelativeOrientationConstraint,
     CyclicOrientationConstraint,
     AlignConstraint,
-    GroupByField,
     GroupBySelector,
 } from './layoutspec';
 

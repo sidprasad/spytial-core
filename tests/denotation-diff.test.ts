@@ -6,7 +6,7 @@ import {
     CyclicOrientationConstraint,
     AlignConstraint,
     GroupBySelector,
-    GroupByField,
+    GroupBySelector,
 } from '../src/layout/layoutspec';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import {
@@ -89,15 +89,6 @@ describe('flipConstraint', () => {
         expect(f.negated).toBe(true);
         expect(f.name).toBe('grp');
         expect(f.addEdge).toBe('fromgroup');
-    });
-
-    it('flips GroupByField', () => {
-        const c = new GroupByField('field1', 0, 1, 'r', false);
-        const f = flipConstraint(c) as GroupByField;
-        expect(f.negated).toBe(true);
-        expect(f.field).toBe('field1');
-        expect(f.groupOn).toBe(0);
-        expect(f.addToGroup).toBe(1);
     });
 
     it('is an involution (flip twice = identity)', () => {

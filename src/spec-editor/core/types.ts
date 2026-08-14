@@ -102,7 +102,7 @@ export interface ItemDefinition {
   /** human name in the add menu */
   label: string;
   description?: string;
-  /** parse + render, but hide from add menu (e.g. 'groupfield') */
+  /** parse + render, but hide from add menu */
   deprecated?: boolean;
   /**
    * When `deprecated`, the label of the type that supersedes it (e.g. 'atomStyle'

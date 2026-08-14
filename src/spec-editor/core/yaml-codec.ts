@@ -262,7 +262,7 @@ function scanHeaderComment(yamlStr: string): string | undefined {
 function nodeToItem(node: unknown, kind: SpecItem['kind']): SpecItem | null {
   // `node` is a single-key mapping, e.g. `{ orientation: {...} }` or the scalar
   // form `{ flag: 'x' }`. `yamlKey` is that key (e.g. `group`), which may map to
-  // multiple registry types (groupselector/groupfield).
+  // more than one registry type.
   const yamlKey = nodeType(node);
   if (yamlKey === undefined) {
     return null;
@@ -276,8 +276,7 @@ function nodeToItem(node: unknown, kind: SpecItem['kind']): SpecItem | null {
   const candidates = getDefinitionsForYamlKey(yamlKey);
 
   // Try each candidate's custom ingestion (fromYamlNode) in registry order; the
-  // first that accepts wins. This disambiguates `group` into groupselector vs
-  // groupfield.
+  // first that accepts wins.
   for (const def of candidates) {
     if (!def.fromYamlNode) {
       continue;

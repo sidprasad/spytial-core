@@ -1,7 +1,7 @@
 {
   "language": "spytial-layout-spec",
   "languageVersion": "2026-08-14",
-  "spytialCoreVersion": "5.0.1",
+  "spytialCoreVersion": "5.1.0",
   "versioning": {
     "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
     "deprecations": "A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of spytial-core. Each entry in `deprecations` names its replacement and the rewrite to apply."
@@ -20,7 +20,7 @@
       "`size` and `hideAtom` are constraints. Both are still accepted among the directives, with identical meaning, but that placement is deprecated and warns — emit them under `constraints`. Each item lists where to write it in `sections`, and any tolerated-but-deprecated placement in `deprecatedSections`.",
       "Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.",
       "Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and a `specType` naming the form, so a consumer can surface them without matching prose.",
-      "One form is deliberately absent: the old group-by-field shape, `group: { field, groupOn, addToGroup }`. The parser still accepts it and still groups the same way, but it is no longer described here and the generated JSON Schema rejects it — do not emit it. Write a `group` whose binary `selector` has the key in its first column and the members in its second; over `worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a `name`."
+      "The old group-by-field shape, `group: { field, groupOn, addToGroup }`, is removed. It is a parse error, not a silently ignored key, so an old spec fails loudly instead of losing its grouping. Write a `group` whose binary `selector` has the key in its first column and the members in its second; over `worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a `name`, and `groupOn: 0` / `addToGroup: 1` becomes `selector: worksIn`."
     ]
   },
   "hold": {

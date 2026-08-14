@@ -1,8 +1,8 @@
 import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, GroupBoundaryConstraint, ImplicitConstraint } from './interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from './layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from './layoutspec';
 
 
-export type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupByField | GroupBySelector;
+export type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupBySelector;
 
 export interface ErrorMessages {
     conflictingConstraint: string;

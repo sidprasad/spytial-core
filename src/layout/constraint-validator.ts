@@ -1,6 +1,6 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, ImplicitConstraint, GroupBoundaryConstraint, isGroupBoundaryConstraint } from './interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector } from './layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from './layoutspec';
 
 // Re-export all shared types from constraint-types.ts for backward compatibility
 export {

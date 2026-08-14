@@ -157,16 +157,14 @@ constraints:
         expect(groupConstraints[0].name).toBe('myGroup');
     });
 
-    it('parses group by field with hold: never', () => {
+    it('parses a group with hold: never', () => {
         const spec = parseLayoutSpec(`
 constraints:
   - group:
-      field: r
-      groupOn: 0
-      addToGroup: 1
+      selector: r
       hold: never
 `);
-        const groupConstraints = spec.constraints.grouping.byfield;
+        const groupConstraints = spec.constraints.grouping.byselector;
         expect(groupConstraints).toHaveLength(1);
         expect(groupConstraints[0].negated).toBe(true);
     });
@@ -392,18 +390,16 @@ constraints:
 `)).toThrow();
     });
 
-    it('hold: never on group by field is negated', () => {
+    it('hold: never on a group is negated', () => {
         const spec = parseLayoutSpec(`
 constraints:
   - group:
-      field: worksIn
-      groupOn: 1
-      addToGroup: 0
+      selector: ~worksIn
       hold: never
 `);
-        const byfield = spec.constraints.grouping.byfield;
-        expect(byfield).toHaveLength(1);
-        expect(byfield[0].negated).toBe(true);
+        const byselector = spec.constraints.grouping.byselector;
+        expect(byselector).toHaveLength(1);
+        expect(byselector[0].negated).toBe(true);
     });
 
 });

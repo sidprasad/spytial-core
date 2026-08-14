@@ -23,7 +23,7 @@ import {
     isLeftConstraint,
     isTopConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

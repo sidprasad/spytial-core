@@ -10,7 +10,7 @@ import { validateSpytialSpec } from '../src/components/NoCodeView';
  * Tests that using a deprecated spec form is *visible* — on the diagram, the
  * same badge selector warnings use, and in the spec editor.
  *
- * The parse has always warned about `atomColor`, `edgeColor`, group-by-field and
+ * The parse has always warned about `atomColor`, `edgeColor` and
  * `inferredEdge`'s inline line styling, but only to `console.warn` and to a
  * field on the parse result. Neither reaches the person editing the spec: the
  * console is a place you have to already suspect something to look, and the
@@ -73,10 +73,6 @@ describe('Deprecation warnings', () => {
                 'inferredEdge',
                 "directives:\n  - inferredEdge: { name: n, selector: next, color: '#00ff00' }",
             ],
-            [
-                'group',
-                'constraints:\n  - group: { field: next, groupOn: 0, addToGroup: 1 }',
-            ],
             // Right form, wrong section: size and hideAtom are constraints.
             ['size', 'directives:\n  - size: { selector: Node, width: 10, height: 10 }'],
             ['hideAtom', 'directives:\n  - hideAtom: { selector: Node }'],
@@ -94,11 +90,13 @@ describe('Deprecation warnings', () => {
             });
         }
 
-        it('names the replacement for group-by-field', () => {
-            const warnings = parseQuietly(
-                'constraints:\n  - group: { field: next, groupOn: 0, addToGroup: 1 }',
-            ).warnings!;
-            expect(warnings[0].message).toMatch(/selector/);
+        it('rejects group-by-field outright, naming the replacement', () => {
+            // Removed rather than deprecated. It has to throw: `field` is not a
+            // key the parser knows any more, and unknown keys are ignored, so
+            // anything softer would drop the grouping without a word.
+            expect(() =>
+                parseQuietly('constraints:\n  - group: { field: next, groupOn: 0, addToGroup: 1 }'),
+            ).toThrow(/were removed.*selector/s);
         });
 
         it('leaves a spec on the supported forms clean', () => {

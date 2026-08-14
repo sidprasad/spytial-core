@@ -10,7 +10,7 @@ import {
     LayoutGroup,
     BoundingBoxConstraint
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField, AlignConstraint } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector, AlignConstraint } from '../src/layout/layoutspec';
 
 describe('IIS Minimality with Disjunctions', () => {
     
@@ -115,7 +115,7 @@ describe('IIS Minimality with Disjunctions', () => {
         const orderSource1 = new RelativeOrientationConstraint(['left'], '0->1');
         const orderSource2 = new RelativeOrientationConstraint(['left'], '1->2');
         const alignSource = new AlignConstraint(['0', '1', '2'], 'horizontally');
-        const groupSource = new GroupByField('type', 'n');
+        const groupSource = new GroupBySelector('type', 'type');
 
         // Conjunctive constraints: ordering and alignment
         const constraints: (LeftConstraint | AlignmentConstraint)[] = [
@@ -185,7 +185,7 @@ describe('IIS Minimality with Disjunctions', () => {
         const alignSource2 = new AlignConstraint(['0', '2'], 'horizontally');
         const alignSource3 = new AlignConstraint(['1', '2'], 'horizontally');
         
-        const groupSource = new GroupByField('type', 'n');
+        const groupSource = new GroupBySelector('type', 'type');
 
         // Conjunctive constraints
         const constraints: (LeftConstraint | AlignmentConstraint)[] = [
@@ -278,7 +278,7 @@ describe('IIS Minimality with Disjunctions', () => {
         const alignSource2 = new AlignConstraint(['0', '2'], 'horizontally');
         const alignSource3 = new AlignConstraint(['1', '2'], 'horizontally');
         
-        const groupSource = new GroupByField('type', 'n');
+        const groupSource = new GroupBySelector('type', 'type');
 
         const constraints: (LeftConstraint | AlignmentConstraint)[] = [
             createLeftConstraint(node0, node1, orderSource1),

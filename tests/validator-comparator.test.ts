@@ -30,7 +30,7 @@ import {
     isLeftConstraint,
     isTopConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -240,7 +240,7 @@ describe('Validator Comparator', () => {
 
         it('group with non-members (SAT)', () => {
             const nodes = Array.from({ length: 5 }, (_, i) => createNode(`N${i}`));
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
             const group: LayoutGroup = {
                 name: 'G1',
                 nodeIds: ['N0', 'N1', 'N2'],
@@ -267,7 +267,7 @@ describe('Validator Comparator', () => {
             const a = createNode('A');
             const b = createNode('B');
             const c = createNode('C');
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g1: LayoutGroup = { name: 'G1', nodeIds: ['A', 'B'], keyNodeId: 'A', showLabel: true, sourceConstraint: gbf };
             const g2: LayoutGroup = { name: 'G2', nodeIds: ['B', 'C'], keyNodeId: 'B', showLabel: true, sourceConstraint: gbf };
 
@@ -386,7 +386,7 @@ describe('Validator Comparator', () => {
             for (let g = 0; g < 10; g++) {
                 const memberIds: string[] = [];
                 for (let n = 0; n < 5; n++) memberIds.push(nodes[g * 5 + n].id);
-                const gbf = new GroupByField(`field${g}`, 0, 1);
+                const gbf = new GroupBySelector(`field${g}`, `field${g}`);
                 groups.push({
                     name: `G${g}`,
                     nodeIds: memberIds,
@@ -450,7 +450,7 @@ describe('Validator Comparator', () => {
 
             const groups: LayoutGroup[] = [];
             for (let g = 0; g < 3; g++) {
-                const gbf = new GroupByField(`field${g}`, 0, 1);
+                const gbf = new GroupBySelector(`field${g}`, `field${g}`);
                 groups.push({
                     name: `G${g}`,
                     nodeIds: [members[g * 3].id, members[g * 3 + 1].id, members[g * 3 + 2].id],

@@ -248,46 +248,18 @@ For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed b
 
 ---
 
-### Group Constraint (by Field) — *legacy*
+### Group Constraint (by Field) — *removed*
 
-> **Deprecated:** prefer [group by selector](#group-constraint-by-selector) above. The field form still groups exactly as before, but it raises a deprecation warning. To migrate, give a binary selector whose first column is the group key and whose second is the members (plus the `name` that form requires). Over `worksIn: Employee -> Department`, `field: worksIn` with `groupOn: 1` / `addToGroup: 0` keys on Department, so it becomes `selector: ~worksIn`.
-
-Groups elements based on a relational field (tuple-based grouping).
-
-```yaml
-- group:
-    field: <field-name>          # Required: Relation field name
-    groupOn: <index>             # Required: Tuple index for the group key (0-based)
-    addToGroup: <index>          # Required: Tuple index for grouped element (0-based)
-    selector: <unary-selector>   # Optional: Filter which source atoms apply
-```
-
-**Fields:**
-
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `field` | ✅ Yes | string | Name of the relation/field |
-| `groupOn` | ✅ Yes | integer | Index of the tuple element to use as group key |
-| `addToGroup` | ✅ Yes | integer | Index of the tuple element to add to the group |
-| `selector` | ❌ No | string | Unary selector to filter which atoms this applies to |
-
-**Examples:**
-
-```yaml
-# Group employees by their department
-# For relation: worksIn: Employee -> Department
-- group:
-    field: worksIn
-    groupOn: 1      # Department is the group key
-    addToGroup: 0   # Employee gets added to the group
-
-# Group with selector filter
-- group:
-    field: owns
-    groupOn: 0
-    addToGroup: 1
-    selector: Person
-```
+> **Removed.** `group: { field, groupOn, addToGroup }` no longer parses: writing it is an error, not a silently ignored key, so an old spec fails loudly instead of quietly losing its grouping.
+>
+> To migrate, give a binary selector whose first column is the group key and whose second is the members, plus the `name` that form requires. Over `worksIn: Employee -> Department`:
+>
+> | Old | New |
+> |---|---|
+> | `field: worksIn`, `groupOn: 1`, `addToGroup: 0` | `selector: ~worksIn` (keys on Department) |
+> | `field: worksIn`, `groupOn: 0`, `addToGroup: 1` | `selector: worksIn` (keys on Employee) |
+>
+> A `selector` that used to narrow which atoms the grouping applied to becomes part of the binary selector itself — `selector: Person <: owns` rather than a separate field.
 
 ---
 
