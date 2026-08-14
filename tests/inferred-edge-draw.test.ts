@@ -121,6 +121,39 @@ directives:
     expect(parsed.directives.inferredEdges[0].draw).toEqual({ source: 'zones', target: 'regions' });
   });
 
+  it('reports one missing name once, however many ends mention it', () => {
+    const spec = `
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> zones
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const parsed = parseLayoutSpec(spec);
+      expect(parsed.warnings!.filter(w => w.code === 'unresolved-reference')).toHaveLength(1);
+      expect(warn.mock.calls.filter(c => String(c[0]).includes("group 'zones'"))).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reports each distinct missing name when the ends differ', () => {
+    const spec = `
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> regions
+`;
+    const parsed = quietly(() => parseLayoutSpec(spec));
+    const names = parsed.warnings!
+      .filter(w => w.code === 'unresolved-reference')
+      .map(w => w.message.match(/references group '(\w+)'/)![1]);
+    expect(names).toEqual(['zones', 'regions']);
+  });
+
   it('says so when the spec defines no groups at all', () => {
     const spec = `
 directives:

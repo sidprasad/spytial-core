@@ -658,8 +658,13 @@ function warnUnresolvedInferredEdgeDrawReferences(spec: LayoutSpec, warnings: Pa
     const groupNames = new Set(spec.constraints.grouping.byselector.map(gc => gc.name));
     for (const ie of spec.directives.inferredEdges) {
         if (!ie.draw) continue;
-        for (const end of [ie.draw.source, ie.draw.target]) {
-            if (end !== null && !groupNames.has(end)) {
+        // Deduped, so `draw: zones -> zones` reports the one missing name once
+        // rather than twice. Same shape `addDrawInferredEdges` uses on the same
+        // pair of ends.
+        const namedEnds = [...new Set([ie.draw.source, ie.draw.target])]
+            .filter((end): end is string => end !== null);
+        for (const end of namedEnds) {
+            if (!groupNames.has(end)) {
                 const known = groupNames.size > 0
                     ? ` Known group names: ${[...groupNames].join(', ')}.`
                     : ` No group constraints are defined.`;
