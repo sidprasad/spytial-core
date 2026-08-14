@@ -53,7 +53,9 @@ Each section must be a **list** of single-key entries. The parser ignores anythi
 
 `size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Writing them here still parses, identically, but is deprecated and warns.
 
-Deprecated, still parsed: [`icon`](directives.md#icons) → `atomStyle.iconStyle`, `atomColor` → `atomStyle.borderStyle`, `edgeColor` → `edgeStyle.lineStyle`, and `group`'s `field`/`groupOn`/`addToGroup` → a binary `selector`. Each raises a deprecation warning on the parsed spec.
+Deprecated, still parsed: [`icon`](directives.md#icons) → `atomStyle.iconStyle`, `atomColor` → `atomStyle.borderStyle`, `edgeColor` → `edgeStyle.lineStyle`. Each raises a deprecation warning on the parsed spec.
+
+Removed: `group`'s `field`/`groupOn`/`addToGroup`. Write a binary `selector` instead — its first column is the group key, its second the members. This one is a parse error, not a warning.
 
 `projection` is **not** a directive — it is a [pre-layout data transformation](directives.md#projection--not-a-directive). A `projection:` entry in a spec is silently ignored.
 

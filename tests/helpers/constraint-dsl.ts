@@ -32,13 +32,15 @@ import {
     AlignmentConstraint,
     LayoutConstraint,
 } from '../../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../../src/layout/layoutspec';
 import type { ConstraintError, IConstraintValidator } from '../../src/layout/constraint-types';
 
 // ─── Internals ──────────────────────────────────────────────────────────────
 
 const SRC = new RelativeOrientationConstraint(['left'], 'dsl');
-const GBF = new GroupByField('type', 0, 1, 'type');
+// A stand-in group constraint for validator tests: they only need *a* group
+// source, not a particular grouping form.
+const GBF = new GroupBySelector('type', 'type');
 
 const DEFAULT_WIDTH = 100;
 const DEFAULT_HEIGHT = 60;

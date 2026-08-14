@@ -13,7 +13,7 @@ import {
     isLeftConstraint,
     isTopConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -437,7 +437,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -458,7 +458,7 @@ describe('QualitativeConstraintValidator', () => {
             const a = createNode('A');
             const b = createNode('B');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -512,7 +512,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -548,7 +548,7 @@ describe('QualitativeConstraintValidator', () => {
             const c = createNode('C');
             const d = createNode('D');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -729,7 +729,7 @@ describe('QualitativeConstraintValidator', () => {
                 createNode(`X${i}`, { width: 80, height: 50 })
             );
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
             const group: LayoutGroup = {
                 name: 'MainGroup',
                 nodeIds: groupMembers.map(n => n.id),
@@ -1340,7 +1340,7 @@ describe('QualitativeConstraintValidator', () => {
             const e = createNode('E');
             const orphan = createNode('Orphan');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g1: LayoutGroup = {
                 name: 'G1', nodeIds: ['A', 'B', 'C'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1362,7 +1362,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const outer: LayoutGroup = {
                 name: 'Outer', nodeIds: ['A', 'B', 'C'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1384,7 +1384,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g1: LayoutGroup = {
                 name: 'G1', nodeIds: ['A', 'B'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1407,7 +1407,7 @@ describe('QualitativeConstraintValidator', () => {
             const a = createNode('A');
             const b = createNode('B');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g: LayoutGroup = {
                 name: 'Singleton', nodeIds: ['A'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1426,7 +1426,7 @@ describe('QualitativeConstraintValidator', () => {
             const c = createNode('C');
             const d = createNode('D');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g: LayoutGroup = {
                 name: 'G1', nodeIds: ['A', 'B', 'C'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1636,7 +1636,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g: LayoutGroup = {
                 name: 'G1', nodeIds: ['A', 'B'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,
@@ -1657,7 +1657,7 @@ describe('QualitativeConstraintValidator', () => {
             const members = Array.from({ length: 3 }, (_, i) => createNode(`M${i}`));
             const outside = Array.from({ length: 4 }, (_, i) => createNode(`Out${i}`));
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g: LayoutGroup = {
                 name: 'G', nodeIds: members.map(m => m.id),
                 keyNodeId: members[0].id, showLabel: true, sourceConstraint: gbf,
@@ -1682,7 +1682,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const out = createNode('Out');
 
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const g: LayoutGroup = {
                 name: 'G', nodeIds: ['A', 'B'],
                 keyNodeId: 'A', showLabel: true, sourceConstraint: gbf,

@@ -18,7 +18,7 @@ import { ConstraintType, DirectiveType } from './types';
 export interface ConstraintData {
   /** Unique identifier for constraint management */
   id: string;
-  /** Type of constraint (orientation, cyclic, groupfield, groupselector) */
+  /** Type of constraint (orientation, cyclic, groupselector) */
   type: ConstraintType;
   /** Constraint-specific parameters (directions, selector, etc.) */
   params: Record<string, unknown>;

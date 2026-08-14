@@ -13,7 +13,7 @@ import {
     isLeftConstraint,
     isTopConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -466,7 +466,7 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -488,7 +488,7 @@ describe('QualitativeConstraintValidator', () => {
             const a = createNode('A');
             const b = createNode('B');
 
-            const groupByField = new GroupByField('type', 0, 1, 'type');
+            const groupByField = new GroupBySelector('type', 'type');
 
             const group1: LayoutGroup = {
                 name: 'Group1',
@@ -537,8 +537,8 @@ describe('QualitativeConstraintValidator', () => {
             const e = createNode('E');
             const f = createNode('F');
 
-            const positiveSource = new GroupByField('type', 0, 1, 'keyX');
-            const negatedSource = new GroupByField('type', 0, 1, 'neg-group2');
+            const positiveSource = new GroupBySelector('type', 'keyX');
+            const negatedSource = new GroupBySelector('type', 'neg-group2');
 
             // Positive group: X → {A, B, C}
             const positiveGroup: LayoutGroup = {
@@ -591,7 +591,7 @@ describe('QualitativeConstraintValidator', () => {
             const c = createNode('C');
             const d = createNode('D');
 
-            const negatedSource = new GroupByField('type', 0, 1, 'neg-group2');
+            const negatedSource = new GroupBySelector('type', 'neg-group2');
 
             const negGroup1: LayoutGroup = {
                 name: 'neg-key1',
@@ -640,8 +640,8 @@ describe('QualitativeConstraintValidator', () => {
             const b = createNode('B');
             const c = createNode('C');
 
-            const source1 = new GroupByField('type', 0, 1, 'neg1');
-            const source2 = new GroupByField('color', 0, 1, 'neg2');
+            const source1 = new GroupBySelector('type', 'neg1');
+            const source2 = new GroupBySelector('color', 'neg2');
 
             const negGroup1: LayoutGroup = {
                 name: 'neg-s1',

@@ -1,5 +1,5 @@
 import { Group } from "webcola";
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupByField, GroupBySelector, RelativeDirection } from "./layoutspec";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector, RelativeDirection } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import type { TextStyle } from "./style/text-style";
 import type { IconPlacement } from "./style/atom-style-spec";
@@ -22,8 +22,8 @@ export interface LayoutGroup {
     // Only `color` is consumed today; `size` is deferred (group labels auto-fit).
     labelTextStyle?: TextStyle;
 
-    // The source constraint that created this group (GroupByField or GroupBySelector)
-    sourceConstraint?: GroupByField | GroupBySelector;
+    // The group constraint that created this group
+    sourceConstraint?: GroupBySelector;
 
     // If true, this is a negated group: "no clean rectangle can contain exactly these members."
     // Negated groups don't draw a visual rectangle; they generate anti-containment disjunctions.
@@ -191,7 +191,7 @@ export class ImplicitConstraint {
 }
 
 export interface LayoutConstraint {
-    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupByField | GroupBySelector;
+    sourceConstraint: RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupBySelector;
 }
 
 
@@ -354,11 +354,11 @@ export function isInstanceLayout(obj: any): obj is InstanceLayout {
 export class DisjunctiveConstraint {
     /**
      * Creates a new disjunctive constraint.
-     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint, GroupByField, or ImplicitConstraint) that led to this disjunction.
+     * @param sourceConstraint - The original constraint (e.g., CyclicOrientationConstraint, GroupBySelector, or ImplicitConstraint) that led to this disjunction.
      * @param alternatives - An array of alternatives, where each alternative is an array of constraints that must be satisfied together.
      */
     constructor(
-        public sourceConstraint:  CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint | AlignConstraint | RelativeOrientationConstraint,
+        public sourceConstraint:  CyclicOrientationConstraint | GroupBySelector | ImplicitConstraint | AlignConstraint | RelativeOrientationConstraint,
         public alternatives: LayoutConstraint[][]
     ) {}
 

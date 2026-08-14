@@ -59,7 +59,6 @@ const NEGATABLE_TYPES: ReadonlySet<string> = new Set([
   'cyclic',
   'align',
   'groupselector',
-  'groupfield',
 ]);
 
 export interface BuilderViewProps {

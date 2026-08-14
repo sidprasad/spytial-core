@@ -64,11 +64,10 @@ describe('validateAgainstDomain — relationName fields', () => {
 
 describe('validateAgainstDomain — typeName fields', () => {
   it('warns when a relationName/typeName value is unknown', () => {
-    // groupfield.field is a relationName; build a synthetic typeName check via
-    // a directive carrying a typeName-kind field. The registry's only typeName
-    // surface today is none, so we exercise the rule directly through the
-    // selector path; here we assert relationName behaviour and rely on the
-    // selector identifier tests for type-name coverage.
+    // Build a synthetic typeName check via a directive carrying a relationName
+    // field. The registry has no typeName surface today, so we assert
+    // relationName behaviour here and rely on the selector identifier tests for
+    // type-name coverage.
     const item = directive('hideField', { field: 'Node' });
     const diags = validateAgainstDomain(stateOf([item]), DOMAIN);
     // 'Node' is a type, not a relation, so it is NOT a known relation → warns.

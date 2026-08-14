@@ -34,10 +34,10 @@ import {
     LayoutGroup,
     LayoutNode,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 const SRC = new RelativeOrientationConstraint(['left'], 'undo-integrity');
-const GBF = new GroupByField('type', 0, 1, 'type');
+const GBF = new GroupBySelector('type', 'type');
 
 function node(id: string, width = 100, height = 60): LayoutNode {
     return {

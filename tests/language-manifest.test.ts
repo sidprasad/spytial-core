@@ -77,7 +77,6 @@ const landsIn: Record<string, (spec: LayoutSpec) => number> = {
   cyclic: (s) => s.constraints.orientation.cyclic.length,
   align: (s) => s.constraints.alignment.length,
   group: (s) => s.constraints.grouping.byselector.length,
-  'group.byField': (s) => s.constraints.grouping.byfield.length,
   size: (s) => s.directives.sizes.length,
   hideAtom: (s) => s.directives.hiddenAtoms.length,
   flag: (s) => (s.directives.hideDisconnected || s.directives.hideDisconnectedBuiltIns ? 1 : 0),
@@ -436,18 +435,17 @@ describe('language manifest — agreement with the spec-editor registry', () => 
   /** registry type key → manifest item id. */
   const REGISTRY_TO_MANIFEST: Readonly<Record<string, string>> = {
     groupselector: 'group',
-    groupfield: 'group.byField',
   };
 
   const manifestId = (registryType: string): string => REGISTRY_TO_MANIFEST[registryType] ?? registryType;
+  const shared = () => getAllDefinitions();
 
   it('describes exactly the same set of forms as the editor registry', () => {
-    const fromRegistry = getAllDefinitions().map((d) => manifestId(d.type));
-    expect(fromRegistry.sort()).toEqual(manifest.items.map((i) => i.id).sort());
+    expect(shared().map((d) => manifestId(d.type)).sort()).toEqual(manifest.items.map((i) => i.id).sort());
   });
 
   it('marks the same forms deprecated', () => {
-    for (const def of getAllDefinitions()) {
+    for (const def of shared()) {
       const item = manifest.items.find((i) => i.id === manifestId(def.type))!;
       expect(Boolean(item.deprecated), `${def.type} deprecation flag`).toBe(Boolean(def.deprecated));
     }
@@ -458,7 +456,7 @@ describe('language manifest — agreement with the spec-editor registry', () => 
     // integrations generate. If they disagree about `size` being a constraint,
     // one of the two is telling someone the wrong thing.
     const sectionOf = { constraint: 'constraints', directive: 'directives' } as const;
-    for (const def of getAllDefinitions()) {
+    for (const def of shared()) {
       const item = manifest.items.find((i) => i.id === manifestId(def.type))!;
       expect(item.sections, `${def.type} home section`).toEqual([sectionOf[def.kind]]);
       expect(
@@ -490,7 +488,7 @@ describe('language manifest — agreement with the spec-editor registry', () => 
       }
     };
 
-    for (const def of getAllDefinitions()) {
+    for (const def of shared()) {
       const item = manifest.items.find((i) => i.id === manifestId(def.type))!;
       walk(item.id, '', def.fields, item.fields);
     }

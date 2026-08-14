@@ -19,7 +19,7 @@ import {
     InstanceLayout,
     LayoutConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 import {
     isZ3Available,
     shutdownZ3,
@@ -451,7 +451,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
     describe('Group constraints', () => {
 
         it('random groups on 6 nodes', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const arbGroupLayout = arbNodePool(6).chain(nodes =>
                 fc.tuple(
                     fc.constant(nodes),
@@ -572,7 +572,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         // ── Randomized negated group cross-checks (small M) ──────────
 
         it('random negated group with 2 members on 4 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(4).chain(nodes =>
                     fc.tuple(
@@ -599,7 +599,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('random negated group with 3 members on 5 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(5).chain(nodes =>
                     fc.tuple(
@@ -626,7 +626,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('random negated group with 4 members on 6 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(6).chain(nodes =>
                     fc.tuple(
@@ -684,7 +684,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('random pair of same-source negated 2-member groups on 5 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(5).chain(nodes =>
                     fc.tuple(
@@ -748,7 +748,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('groups + ordering disjunctions on 6 nodes', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const arbLayout = arbNodePool(6).chain(nodes => {
                 const group: LayoutGroup = {
                     name: 'G0', nodeIds: [nodes[0].id, nodes[1].id, nodes[2].id],
@@ -807,7 +807,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('random nested groups on 6 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(6).chain(nodes =>
                     fc.tuple(
@@ -837,7 +837,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('random partially-overlapping groups on 6 nodes (Z3 cross-check)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             await fc.assert(fc.asyncProperty(
                 arbNodePool(6).chain(nodes =>
                     fc.tuple(
@@ -1018,7 +1018,7 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
         });
 
         it('6 nodes + group + disjunctions (full feature combo)', async () => {
-            const gbf = new GroupByField('type', 0, 1, 'type');
+            const gbf = new GroupBySelector('type', 'type');
             const arbFullLayout = arbNodePool(6).chain(nodes =>
                 fc.tuple(
                     fc.constant(nodes),

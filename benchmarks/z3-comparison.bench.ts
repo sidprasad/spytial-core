@@ -31,7 +31,7 @@ import {
     AlignmentConstraint,
     LayoutConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 import { initZ3, shutdownZ3, resetZ3, solveZ3 } from '../tests/helpers/z3-oracle';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -291,7 +291,7 @@ function hashTable(buckets: number, chainLen: number): InstanceLayout {
         }
 
         // Group for this bucket
-        const gbf = new GroupByField(`bucket${b}`, 0, 1);
+        const gbf = new GroupBySelector(`bucket${b}`, `bucket${b}`);
         groups.push({
             name: `Bucket${b}`,
             nodeIds: chain.map(nd => nd.id),
@@ -355,7 +355,7 @@ function disjointSets(nSets: number, setSize: number): InstanceLayout {
         }
 
         // Group per set
-        const gbf = new GroupByField(`set${s}`, 0, 1);
+        const gbf = new GroupBySelector(`set${s}`, `set${s}`);
         groups.push({
             name: `Set${s}`,
             nodeIds: members.map(nd => nd.id),
@@ -524,7 +524,7 @@ function randomLayout(
             memberIds.push(nodes[start + m].id);
         }
         if (memberIds.length >= 2) {
-            const gbf = new GroupByField(`rg${g}`, 0, 1);
+            const gbf = new GroupBySelector(`rg${g}`, `rg${g}`);
             groups.push({
                 name: `RG${g}`, nodeIds: memberIds,
                 keyNodeId: memberIds[0], showLabel: true, sourceConstraint: gbf,
@@ -761,7 +761,7 @@ describe('Custom solver vs Z3 oracle', () => {
                 // One ordering involving first non-member (SAT: it can be placed between members)
                 constraints.push(leftOf(members[0], extras[0]));
 
-                const gbf = new GroupByField('neg', 0, 1);
+                const gbf = new GroupBySelector('neg', 'neg');
                 const layout: InstanceLayout = {
                     nodes: [...members, ...extras],
                     edges: [],
@@ -799,7 +799,7 @@ describe('Custom solver vs Z3 oracle', () => {
                 }
                 constraints.push(leftOf(members[0], extras[0]));
 
-                const gbf = new GroupByField('neg', 0, 1);
+                const gbf = new GroupBySelector('neg', 'neg');
                 const layout: InstanceLayout = {
                     nodes: [...members, ...extras],
                     edges: [],

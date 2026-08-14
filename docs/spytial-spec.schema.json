@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:spytial:layout-spec-schema:2026-08-14",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-14, from spytial-core 5.0.1. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-14, from spytial-core 5.1.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
   "x-spytial-language-version": "2026-08-14",
-  "x-spytial-core-version": "5.0.1",
+  "x-spytial-core-version": "5.1.0",
   "type": "object",
   "properties": {
     "constraints": {
@@ -26,9 +26,6 @@
           },
           {
             "$ref": "#/$defs/group"
-          },
-          {
-            "$ref": "#/$defs/group_byField"
           },
           {
             "$ref": "#/$defs/size"
@@ -538,54 +535,6 @@
         "group"
       ],
       "additionalProperties": false
-    },
-    "group_byField": {
-      "title": "Group (by field)",
-      "description": "Group by indexing into the tuples of a relation. DEPRECATED — use `group` instead. A binary selector whose first column is the key and whose second is the members says the same thing without tuple indices.",
-      "type": "object",
-      "properties": {
-        "group": {
-          "type": "object",
-          "properties": {
-            "field": {
-              "description": "The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector. Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.",
-              "type": "string",
-              "minLength": 1
-            },
-            "groupOn": {
-              "description": "0-based index of the tuple column to use as the group key.",
-              "type": "integer"
-            },
-            "addToGroup": {
-              "description": "0-based index of the tuple column whose atom joins the group.",
-              "type": "integer"
-            },
-            "selector": {
-              "description": "Restrict which atoms this grouping applies to. Selector arity: unary — 1 column.",
-              "type": "string"
-            },
-            "hold": {
-              "type": "string",
-              "enum": [
-                "always",
-                "never"
-              ],
-              "description": "Negation. `never` asserts the constraint must not hold; `always` (the default) is the positive form."
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "field",
-            "groupOn",
-            "addToGroup"
-          ]
-        }
-      },
-      "required": [
-        "group"
-      ],
-      "additionalProperties": false,
-      "deprecated": true
     },
     "size": {
       "title": "Size",

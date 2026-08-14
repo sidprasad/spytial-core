@@ -1,7 +1,12 @@
 /**
- * The Spytial spec-language manifest: a machine-readable description of every
- * constraint and directive the YAML spec language accepts, what each field
- * means, what is deprecated, and what to write instead.
+ * The Spytial spec-language manifest: a machine-readable description of the
+ * constraints and directives to write in a spec, what each field means, what is
+ * deprecated, and what to write instead.
+ *
+ * It covers everything the parser accepts. The old group-by-field form
+ * (`group: { field, groupOn, addToGroup }`) is not in here because it is not in
+ * the parser either — it was removed, and writing it is now a parse error. See
+ * the note in `DOCUMENT` for the rewrite.
  *
  * ## Why this file exists
  *
@@ -56,8 +61,11 @@ export const LANGUAGE_VERSIONING = {
     'the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` ' +
     'records which release produced this file.',
   deprecations:
-    'A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of ' +
-    'spytial-core. Each entry in `deprecations` names its replacement and the rewrite to apply.',
+    'A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and ' +
+    'each entry names its replacement and the rewrite to apply. Removal is signalled by ' +
+    '`languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this ' +
+    'manifest and becomes a parse error, so check `languageVersion` before assuming a spec you ' +
+    'generated earlier still parses.',
 } as const;
 
 // ---- shared style blocks -------------------------------------------------
@@ -457,69 +465,6 @@ const GROUP_BY_SELECTOR: LanguageItem = {
     blockField('textStyle', "The group's own label. Only `color` applies today — group labels auto-fit their box, so `size` is reserved."),
   ],
   example: { selector: 'Team.members', name: 'Team' },
-};
-
-const GROUP_BY_FIELD: LanguageItem = {
-  id: 'group.byField',
-  yamlKey: 'group',
-  label: 'Group (by field)',
-  description: 'Group by indexing into the tuples of a relation.',
-  sections: ['constraints'],
-  valueShape: 'mapping',
-  discriminator: { field: 'field', present: true },
-  supportsHold: true,
-  deprecated: {
-    replacedBy: 'group',
-    reason:
-      'A binary selector whose first column is the key and whose second is the members says the same thing ' +
-      'without tuple indices.',
-    mapping: {
-      // `field` + the two indices collapse into one transposed-or-not selector;
-      // there is no key-for-key rewrite, so the mapping names the target shape.
-      field: 'selector',
-      groupOn: 'selector (column order)',
-      addToGroup: 'selector (column order)',
-      selector: 'selector',
-    },
-    warningSpecType: 'group',
-  },
-  fields: [
-    {
-      name: 'field',
-      type: 'relation',
-      required: true,
-      enforcement: 'unchecked',
-      description: 'The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector.',
-      note:
-        'Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a ' +
-        'group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.',
-    },
-    {
-      name: 'groupOn',
-      type: 'integer',
-      required: true,
-      enforcement: 'parse-error',
-      description: '0-based index of the tuple column to use as the group key.',
-    },
-    {
-      name: 'addToGroup',
-      type: 'integer',
-      required: true,
-      enforcement: 'parse-error',
-      description: '0-based index of the tuple column whose atom joins the group.',
-    },
-    {
-      name: 'selector',
-      type: 'selector',
-      arity: 'unary',
-      accepts: onlyUnary('The atoms this grouping is narrowed to.'),
-      description: 'Restrict which atoms this grouping applies to.',
-    },
-  ],
-  example: { field: 'worksIn', groupOn: 1, addToGroup: 0 },
-  note:
-    'To migrate: over `worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` keys on Department, ' +
-    'so it becomes `selector: ~worksIn` plus the `name` that form requires.',
 };
 
 const SIZE: LanguageItem = {
@@ -1042,7 +987,6 @@ const ITEMS: readonly LanguageItem[] = [
   CYCLIC,
   ALIGN,
   GROUP_BY_SELECTOR,
-  GROUP_BY_FIELD,
   SIZE,
   HIDE_ATOM,
   // directives
@@ -1085,6 +1029,11 @@ const DOCUMENT = {
     'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
     'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
       'a `specType` naming the form, so a consumer can surface them without matching prose.',
+    'The old group-by-field shape, `group: { field, groupOn, addToGroup }`, is removed. It is a parse error, ' +
+      'not a silently ignored key, so an old spec fails loudly instead of losing its grouping. Write a `group` ' +
+      'whose binary `selector` has the key in its first column and the members in its second; over ' +
+      '`worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a ' +
+      '`name`, and `groupOn: 0` / `addToGroup: 1` becomes `selector: worksIn`.',
   ],
 };
 

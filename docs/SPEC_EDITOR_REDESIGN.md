@@ -120,7 +120,7 @@ export interface ItemDefinition {
   type: string;
   label: string;                    // human name in the add menu
   description?: string;
-  deprecated?: boolean;             // parse + render, but hide from add menu (e.g. 'groupfield')
+  deprecated?: boolean;             // parse + render, but hide from add menu
   fields: FieldSpec[];
   /** one-line summary for the collapsed row, e.g. "left, above · parent" */
   summary(params: Record<string, unknown>): string;
@@ -355,9 +355,8 @@ replacement).
 Constraints: `orientation` (directions multi-enum: above/below/left/right/
 directlyAbove/directlyBelow/directlyLeft/directlyRight + binary selector),
 `cyclic` (direction enum + selector), `align` (direction enum + selector),
-`groupselector` (binary selector + addEdge boolean), `groupfield`
-(**deprecated: true** — parse/render but hide from add menu; prefer
-groupselector), `size` (width/height numbers + selector), `hideAtom` (unary selector).
+`groupselector` (binary selector + addEdge boolean), `size` (width/height numbers
++ selector), `hideAtom` (unary selector).
 
 Directives: `flag` (text; scalar YAML form via toYamlNode/fromYamlNode),
 `attribute` (field + optional selector), `hideField` (relationName),
@@ -395,9 +394,10 @@ authoritative parser (`src/layout/layoutspec.ts`):
   (not `color`); the parser maps `edgeColor.value → color` internally. The
   registry models color via a `value` field for `atomColor`/`edgeColor` and a
   `color` field for `inferredEdge`, matching each parser branch exactly.
-- **`group` YAML-key aliasing.** Both `groupselector` and `groupfield` emit
-  under the `group:` key and are disambiguated on ingestion by `fromYamlNode`
-  (presence of `field` ⇒ groupfield). The codec resolves a YAML key to its
+- **`group` YAML-key aliasing.** `groupselector` emits under the `group:` key
+  rather than its own type name. The mechanism handles several types per key,
+  disambiguated on ingestion by `fromYamlNode` — `groupfield` used it until it
+  was removed from the language. The codec resolves a YAML key to its
   candidate definitions via the registry helpers `getDefinitionsForYamlKey` /
   `isKnownYamlKey` and tries each `fromYamlNode` in registry order. WP4 (code
   view) and any tooling that maps YAML keys ↔ types must use these helpers, not

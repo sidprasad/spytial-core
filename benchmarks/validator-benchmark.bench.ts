@@ -19,7 +19,7 @@ import {
     AlignmentConstraint,
     BoundingBoxConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -259,7 +259,7 @@ describe('Validator benchmark: Kiwi vs Qualitative', () => {
             groups.push({
                 name: `group${g}`,
                 nodeIds: memberIds,
-                sourceConstraint: new GroupByField(`field${g}`, 0, 1),
+                sourceConstraint: new GroupBySelector(`field${g}`, `field${g}`),
             });
         }
         for (let f = 0; f < numFree; f++) {
@@ -292,7 +292,7 @@ describe('Validator benchmark: Kiwi vs Qualitative', () => {
             groups.push({
                 name: `group${g}`,
                 nodeIds: memberIds,
-                sourceConstraint: new GroupByField(`field${g}`, 0, 1),
+                sourceConstraint: new GroupBySelector(`field${g}`, `field${g}`),
             });
         }
         for (let f = 0; f < numFree; f++) {

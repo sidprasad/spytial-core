@@ -23,7 +23,6 @@ describe('registry — definitions and defaults', () => {
       'cyclic',
       'align',
       'groupselector',
-      'groupfield',
       'size',
       'hideAtom',
       // directives
@@ -39,16 +38,6 @@ describe('registry — definitions and defaults', () => {
     for (const type of expected) {
       expect(getDefinition(type), `missing definition: ${type}`).toBeDefined();
     }
-  });
-
-  it('marks groupfield deprecated and hides it from the add menu', () => {
-    expect(getDefinition('groupfield')?.deprecated).toBe(true);
-    const menu = getDefinitions('constraint').map((d) => d.type);
-    expect(menu).not.toContain('groupfield');
-    // but it is included when explicitly requested
-    expect(
-      getDefinitions('constraint', { includeDeprecated: true }).map((d) => d.type),
-    ).toContain('groupfield');
   });
 
   it('seeds defaults from FieldSpec defaults only', () => {

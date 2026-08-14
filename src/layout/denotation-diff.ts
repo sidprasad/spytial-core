@@ -18,7 +18,6 @@ import {
     CyclicOrientationConstraint,
     AlignConstraint,
     GroupBySelector,
-    GroupByField,
 } from './layoutspec';
 import { InstanceLayout } from './interfaces';
 import { LayoutInstance } from './layoutinstance';
@@ -35,8 +34,7 @@ export type SpytialConstraint =
     | RelativeOrientationConstraint
     | CyclicOrientationConstraint
     | AlignConstraint
-    | GroupBySelector
-    | GroupByField;
+    | GroupBySelector;
 
 /** Result of a single flip-and-solve attempt. */
 export interface FlipAttempt {
@@ -67,7 +65,6 @@ export function flattenConstraints(spec: LayoutSpec): SpytialConstraint[] {
         ...c.orientation.cyclic,
         ...c.alignment,
         ...c.grouping.byselector,
-        ...c.grouping.byfield,
     ];
 }
 
@@ -88,9 +85,6 @@ export function flipConstraint(c: SpytialConstraint): SpytialConstraint {
     if (c instanceof GroupBySelector) {
         return new GroupBySelector(c.selector, c.name, c.addEdge, !c.negated);
     }
-    if (c instanceof GroupByField) {
-        return new GroupByField(c.field, c.groupOn, c.addToGroup, c.selector, !c.negated);
-    }
     throw new Error('Unknown constraint type');
 }
 
@@ -110,7 +104,6 @@ export function mergeSpecWithFlip(specA: LayoutSpec, flipped: SpytialConstraint)
             },
             alignment: [...specA.constraints.alignment],
             grouping: {
-                byfield: [...specA.constraints.grouping.byfield],
                 byselector: [...specA.constraints.grouping.byselector],
             },
         },
@@ -126,9 +119,7 @@ export function mergeSpecWithFlip(specA: LayoutSpec, flipped: SpytialConstraint)
         merged.constraints.alignment.push(flipped);
     } else if (flipped instanceof GroupBySelector) {
         merged.constraints.grouping.byselector.push(flipped);
-    } else if (flipped instanceof GroupByField) {
-        merged.constraints.grouping.byfield.push(flipped);
-    }
+        }
 
     return merged;
 }

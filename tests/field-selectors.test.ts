@@ -25,10 +25,8 @@ directives:
       selector: 'User'
 constraints:
   - group:
-      field: 'owns'
-      groupOn: 0
-      addToGroup: 1
-      selector: 'Car'
+      selector: 'owns'
+      name: 'owners'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -58,10 +56,10 @@ constraints:
     expect(layoutSpec.directives.hiddenFields[0].field).toBe('secret');
     expect(layoutSpec.directives.hiddenFields[0].selector).toBe('User');
     
-    // Test group by field constraint with selector
-    expect(layoutSpec.constraints.grouping.byfield).toHaveLength(1);
-    expect(layoutSpec.constraints.grouping.byfield[0].field).toBe('owns');
-    expect(layoutSpec.constraints.grouping.byfield[0].selector).toBe('Car');
+    // Test group constraint with selector
+    expect(layoutSpec.constraints.grouping.byselector).toHaveLength(1);
+    expect(layoutSpec.constraints.grouping.byselector[0].selector).toBe('owns');
+    expect(layoutSpec.constraints.grouping.byselector[0].name).toBe('owners');
   });
 
   it('should parse field directives without selectors (legacy)', () => {

@@ -636,11 +636,12 @@ menu, the generated form, defaults (`defaultParamsFor`), validation, and YAML
 round-tripping all pick it up automatically.
 
 For a directive with a non-standard YAML shape, see `flag` (a bare scalar
-`- flag: hideDisconnectedBuiltIns` via `toYamlNode`/`fromYamlNode`). For two types
-that share one YAML key, see `groupselector` and `groupfield`, both of which emit
-under `group:` and are disambiguated on ingestion by their `fromYamlNode` (the
-presence of `field` ⇒ groupfield). Any tooling mapping YAML keys ↔ types should
-use the registry helpers `getDefinitionsForYamlKey` / `isKnownYamlKey` rather than
+`- flag: hideDisconnectedBuiltIns` via `toYamlNode`/`fromYamlNode`). A type's YAML
+key need not equal its type name — `groupselector` emits under `group:` — and the
+registry supports several types sharing one key, disambiguated on ingestion by
+their `fromYamlNode`, though nothing does so today (`groupfield` did until it was
+removed from the language). Any tooling mapping YAML keys ↔ types should use the
+registry helpers `getDefinitionsForYamlKey` / `isKnownYamlKey` rather than
 assuming `yamlKey === type`.
 
 > **Important:** YAML shapes here are pinned against the authoritative
@@ -695,10 +696,13 @@ a form, edit the registry entry (see
    into constraints.** Items stay in whatever YAML section they appear in; the
    editor renders them wherever they are. The old directive→constraint migration
    is gone.
-3. **`groupfield` is deprecated.** It is still parsed and rendered (so existing
-   specs keep working), but is hidden from the add menu. Prefer `groupselector`
-   with a binary relation. (See the auto-memory note: `group: { field, groupOn,
-   addToGroup }` is the deprecated by-field form.)
+3. **`groupfield` is gone.** `group: { field, groupOn, addToGroup }` was removed
+   from the language, so the registry no longer defines it and the parser
+   rejects it. The editor keeps such a node verbatim in `raw` and re-emits it
+   unchanged, so opening an old spec does not silently rewrite it — but it will
+   not render as a structured item, and the spec will not parse. Use
+   `groupselector` with a binary relation: the first column is the group key,
+   the second the members.
 4. **Full undo/redo history** replaces the old single-snapshot undo. The
    `SpecDocument` keeps a full history stack; Cmd/Ctrl+Z undoes and
    Shift+Cmd/Ctrl+Z redoes when focus is inside the editor, and toolbar buttons

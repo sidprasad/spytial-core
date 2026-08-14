@@ -16,7 +16,6 @@
  *     - cyclic:      { selector, direction, hold? }
  *     - align:       { selector, direction, hold? }
  *     - group:       { selector, name, addEdge?: none|togroup|fromgroup | {points,lineStyle,textStyle}, textStyle?:{color}, hold? }  (groupselector)
- *     - group:       { field, groupOn, addToGroup, selector?, hold? }  (groupfield, deprecated)
  *     - size:        { selector, width, height }
  *     - hideAtom:    { selector }
  *   directives:
@@ -265,8 +264,8 @@ const align: ItemDefinition = {
 };
 
 /**
- * Group by selector. Emits under the `group:` key. The authoritative parser
- * distinguishes byselector from byfield by the presence of `field`.
+ * Group by selector. Emits under the `group:` key — the only grouping form the
+ * language has, since group-by-field was removed.
  */
 const groupselector: ItemDefinition = {
   kind: 'constraint',
@@ -349,90 +348,6 @@ const groupselector: ItemDefinition = {
     // Preserve the group's own label styling (whatever leaves were authored).
     if (isRecord(group.textStyle)) {
       params.textStyle = { ...group.textStyle };
-    }
-    if (group.hold !== undefined) {
-      params.hold = group.hold;
-    }
-    return params;
-  },
-};
-
-/**
- * Group by field — DEPRECATED. Parsed/rendered for back-compat but hidden from
- * the add menu. Prefer `groupselector` with a binary relation.
- */
-const groupfield: ItemDefinition = {
-  kind: 'constraint',
-  type: 'groupfield',
-  label: 'Group (by field)',
-  description: 'Group elements based on a field. Deprecated — prefer Group (by selector).',
-  deprecated: true,
-  deprecatedInFavorOf: 'groupselector',
-  fields: [
-    {
-      key: 'field',
-      kind: 'relationName',
-      label: 'Field',
-      required: true,
-    },
-    {
-      key: 'groupOn',
-      kind: 'number',
-      label: 'Group on (index)',
-      required: true,
-      default: 0,
-    },
-    {
-      key: 'addToGroup',
-      kind: 'number',
-      label: 'Add to group (index)',
-      required: true,
-      default: 1,
-    },
-    {
-      key: 'selector',
-      kind: 'selector',
-      label: 'Selector',
-      selectorArity: 'unary',
-    },
-  ],
-  summary(params) {
-    const field = asString(params.field);
-    const base = field ? `group on "${field}"` : 'group on field';
-    const selector = asString(params.selector);
-    return selector ? `${base} · ${selector}` : base;
-  },
-  toYamlNode(params) {
-    const node: Record<string, unknown> = {
-      field: asString(params.field),
-      groupOn: typeof params.groupOn === 'number' ? params.groupOn : Number(params.groupOn ?? 0),
-      addToGroup:
-        typeof params.addToGroup === 'number' ? params.addToGroup : Number(params.addToGroup ?? 1),
-    };
-    if (!missing(params.selector)) {
-      node.selector = asString(params.selector);
-    }
-    if (params.hold !== undefined) {
-      node.hold = params.hold;
-    }
-    return { group: node };
-  },
-  fromYamlNode(node) {
-    if (!isRecord(node)) {
-      return null;
-    }
-    const group = node.group;
-    if (!isRecord(group) || group.field === undefined) {
-      return null; // not a byfield group
-    }
-    const params: Record<string, unknown> = {
-      field: asString(group.field),
-      groupOn: typeof group.groupOn === 'number' ? group.groupOn : Number(group.groupOn ?? 0),
-      addToGroup:
-        typeof group.addToGroup === 'number' ? group.addToGroup : Number(group.addToGroup ?? 1),
-    };
-    if (group.selector !== undefined) {
-      params.selector = asString(group.selector);
     }
     if (group.hold !== undefined) {
       params.hold = group.hold;
@@ -913,7 +828,6 @@ const DEFINITIONS: readonly ItemDefinition[] = [
   cyclic,
   align,
   groupselector,
-  groupfield,
   size,
   hideAtom,
   // directives
@@ -933,14 +847,11 @@ const BY_TYPE = new Map<string, ItemDefinition>(DEFINITIONS.map((d) => [d.type, 
 
 /**
  * The YAML top-level key each registry type emits under. This is usually the
- * type itself, but the two grouping definitions (`groupselector`, `groupfield`)
- * both emit under `group:` and are disambiguated on ingestion by their
- * `fromYamlNode`. The codec uses this to map a parsed YAML key back to its
- * candidate definitions.
+ * type itself; `groupselector` is the exception, emitting under `group:`. The
+ * codec uses this to map a parsed YAML key back to its candidate definitions.
  */
 const YAML_KEY_BY_TYPE: Readonly<Record<string, string>> = {
   groupselector: 'group',
-  groupfield: 'group',
 };
 
 function yamlKeyForType(type: string): string {
@@ -963,8 +874,8 @@ const CANDIDATES_BY_YAML_KEY = ((): Map<string, ItemDefinition[]> => {
 
 /**
  * Candidate definitions that emit under a given YAML key, in registry order.
- * For `group` this returns `[groupselector, groupfield]`; for everything else a
- * single-element array (or empty if the key is unknown).
+ * A single-element array for every key today, or empty if the key is unknown;
+ * the list shape is kept because a key may again map to more than one form.
  */
 export function getDefinitionsForYamlKey(yamlKey: string): readonly ItemDefinition[] {
   return CANDIDATES_BY_YAML_KEY.get(yamlKey) ?? [];

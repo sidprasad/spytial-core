@@ -31,7 +31,7 @@ describe('DisjunctiveConstraintValidator', () => {
     }
 
     // Helper to create a simple constraint for testing
-    function createLeftConstraint(left: LayoutNode, right: LayoutNode, source: CyclicOrientationConstraint | GroupByField | GroupBySelector | ImplicitConstraint): LeftConstraint {
+    function createLeftConstraint(left: LayoutNode, right: LayoutNode, source: CyclicOrientationConstraint | GroupBySelector | ImplicitConstraint): LeftConstraint {
         return {
             left,
             right,

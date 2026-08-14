@@ -640,7 +640,7 @@ function extractConstraintReason(constraint: LayoutConstraint): string {
     if ('selector' in src && typeof src.selector === 'string') {
         return src.selector;
     }
-    // GroupByField has a `field` field
+    // Field-scoped directives (attribute, hideField, edgeStyle) name a relation
     if ('field' in src && typeof src.field === 'string') {
         return src.field;
     }

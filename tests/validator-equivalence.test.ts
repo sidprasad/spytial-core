@@ -21,7 +21,7 @@ import {
     AlignmentConstraint,
     LayoutConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -407,7 +407,7 @@ describe('Validator Equivalence (Property-Based)', () => {
                     fc.boolean(), // whether to include second group
                     fc.array(arbOrdering(nodes), { minLength: 0, maxLength: 3 }),
                 ).map(([nodes, g1Size, hasG2, constraints]) => {
-                    const gbf = new GroupByField('type', 0, 1, 'type');
+                    const gbf = new GroupBySelector('type', 'type');
                     const groups: LayoutGroup[] = [];
 
                     const g1Ids = nodes.slice(0, g1Size).map(n => n.id);
@@ -440,7 +440,7 @@ describe('Validator Equivalence (Property-Based)', () => {
 
         it('groups + ordering disjunctions on 6 nodes', () => {
             const arbLayout = arbNodes(6).chain(nodes => {
-                const gbf = new GroupByField('type', 0, 1, 'type');
+                const gbf = new GroupBySelector('type', 'type');
                 const group: LayoutGroup = {
                     name: 'G0', nodeIds: [nodes[0].id, nodes[1].id, nodes[2].id],
                     keyNodeId: nodes[0].id, showLabel: true, sourceConstraint: gbf,
@@ -662,7 +662,7 @@ describe('Validator Equivalence (Property-Based)', () => {
 
         it('6 nodes + group + disjunctions (full feature combo)', () => {
             const arbFullLayout = arbNodes(6).chain(nodes => {
-                const gbf = new GroupByField('type', 0, 1, 'type');
+                const gbf = new GroupBySelector('type', 'type');
                 return fc.tuple(
                     fc.constant(nodes),
                     fc.array(arbConjunctive(nodes), { minLength: 0, maxLength: 4 }),
