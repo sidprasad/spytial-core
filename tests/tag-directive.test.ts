@@ -167,6 +167,52 @@ directives:
     expect(aliceNode?.attributes?.['score[English]']).toContain('87');
   });
 
+  it('keeps every value for one node under one key, in tuple order', () => {
+    // Tuples are looked up by their first atom through an index rather than by
+    // rescanning the list per node. Same-key values accumulate into one list,
+    // so this pins that the index neither drops nor reorders them.
+    const jsonData: IJsonDataInstance = {
+      atoms: [
+        { id: 'Alice', type: 'Person', label: 'Alice' },
+        { id: 'Bob', type: 'Person', label: 'Bob' },
+        { id: 'red', type: 'Color', label: 'red' },
+        { id: 'blue', type: 'Color', label: 'blue' },
+        { id: 'green', type: 'Color', label: 'green' }
+      ],
+      relations: [
+        {
+          id: 'likes',
+          name: 'likes',
+          types: ['Person', 'Color'],
+          tuples: [
+            { atoms: ['Alice', 'red'], types: ['Person', 'Color'] },
+            { atoms: ['Bob', 'green'], types: ['Person', 'Color'] },
+            { atoms: ['Alice', 'blue'], types: ['Person', 'Color'] }
+          ]
+        }
+      ]
+    };
+
+    const dataInstance = new JSONDataInstance(jsonData);
+    const evaluator = createEvaluator(dataInstance);
+
+    const layoutSpec = parseLayoutSpec(`
+directives:
+  - tag:
+      toTag: 'Person'
+      name: 'likes'
+      value: 'likes'
+`);
+    const result = new LayoutInstance(layoutSpec, evaluator, 0).generateLayout(dataInstance);
+
+    const alice = result.layout.nodes.find(n => n.id === 'Alice');
+    const bob = result.layout.nodes.find(n => n.id === 'Bob');
+    // Alice's two tuples are not adjacent in the relation — the index must still
+    // gather both, in the order they appear.
+    expect(alice?.attributes?.['likes']).toEqual(['red', 'blue']);
+    expect(bob?.attributes?.['likes']).toEqual(['green']);
+  });
+
   it('should only add tags to nodes matching toTag selector', () => {
     const jsonData: IJsonDataInstance = {
       atoms: [

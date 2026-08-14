@@ -1318,7 +1318,8 @@ export class LayoutInstance {
                 const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
                 const selectedAtoms = toTagResult.selectedAtoms();
                 
-                // Then, evaluate the value selector to get the n-ary result.
+                // Then, evaluate the value selector. Its result becomes the tag
+                // values, one line per tuple, at whatever arity it comes back.
                 //
                 // `selectedTuplesAll` drops single-atom tuples in the data
                 // evaluators, so a unary value selector used to reach the loop
@@ -1331,7 +1332,18 @@ export class LayoutInstance {
                 const allTuples: string[][] = valueResult.maxArity() > 1
                     ? valueResult.selectedTuplesAll()
                     : valueResult.selectedAtoms().map((atom: string) => [atom]);
-                
+
+                // Index by first atom, which is what each tagged node looks up.
+                // Scanning the whole list per node was affordable while a unary
+                // value produced no tuples at all; a membership tag returns one
+                // per atom, so the same scan would be |toTag| x |value|.
+                const tuplesByFirstAtom = new Map<string, string[][]>();
+                for (const tuple of allTuples) {
+                    const bucket = tuplesByFirstAtom.get(tuple[0]);
+                    if (bucket) bucket.push(tuple);
+                    else tuplesByFirstAtom.set(tuple[0], [tuple]);
+                }
+
                 // For each node that should receive this tag
                 for (const atomId of selectedAtoms) {
                     // Only add tags to nodes that exist in the graph
@@ -1345,8 +1357,8 @@ export class LayoutInstance {
                     }
                     
                     // Find tuples where the first element matches this atom
-                    const matchingTuples = allTuples.filter(tuple => tuple[0] === atomId);
-                    
+                    const matchingTuples = tuplesByFirstAtom.get(atomId) ?? [];
+
                     if (matchingTuples.length === 0) {
                         // No matching tuples for this atom, skip
                         continue;
