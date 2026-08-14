@@ -47,7 +47,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-07-29';
+export const LANGUAGE_VERSION = '2026-08-14';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -751,16 +751,23 @@ const TAG: LanguageItem = {
           meaning:
             'One line per tuple whose first atom is the tagged atom: the last column is the value and any ' +
             'columns between become the key, as `name[k1][k2]: value`. A binary result is the plain ' +
-            '`name: value` case. A unary result tags nothing — single-atom tuples are dropped before the tag ' +
-            'is built.',
+            '`name: value` case.',
+        },
+        {
+          arity: 'unary',
+          minColumns: 1,
+          maxColumns: 1,
+          meaning:
+            'A membership tag: an atom in the result is tagged with its own label, as `name: <label>`. ' +
+            'The value carries no more than "this atom is in the set".',
         },
       ],
       required: true,
       enforcement: 'unchecked',
       description:
         'Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; ' +
-        'a longer tuple shows one line per tuple, as `name[k1][k2]: value`. It must return tuples: a unary ' +
-        'selector produces no tags at all.',
+        'a longer tuple shows one line per tuple, as `name[k1][k2]: value`. A unary result tags each ' +
+        "selected atom with its own label.",
     },
     blockField('textStyle', "This tag line's own styling."),
   ],
