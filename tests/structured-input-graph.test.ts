@@ -21,6 +21,8 @@ vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
     getLayoutState() {
       return { positions: [] };
     }
+
+    protected rerenderGraph() {}
   }
 }));
 

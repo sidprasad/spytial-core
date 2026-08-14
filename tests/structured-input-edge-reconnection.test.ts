@@ -33,6 +33,12 @@ vi.mock('../src/translators/webcola/webcola-cnd-graph', () => ({
     async renderLayout() {
       return Promise.resolve();
     }
+
+    getLayoutState() {
+      return { positions: [] };
+    }
+
+    protected rerenderGraph() {}
   }
 }));
 
