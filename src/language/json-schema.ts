@@ -65,13 +65,26 @@ function describeField(field: LanguageField): string {
     // Name the extra shapes too. Arity is semantic, not syntactic — nothing here
     // can be validated against a string — so the schema's job is to stop a reader
     // concluding that the primary arity is the only one the engine takes.
-    const alsoAccepted = (field.accepts ?? []).filter((a) => a.arity !== field.arity);
+    //
+    // Spelled as column counts, not arity words: `n-ary` means "two or more",
+    // so "binary, also accepted: n-ary" reads as if two shapes both cover a
+    // two-column result. "2 columns, also accepted: 3+ columns" cannot.
+    const columns = (a: { minColumns: number; maxColumns?: number }): string =>
+      a.maxColumns === undefined
+        ? `${a.minColumns}+ columns`
+        : a.maxColumns === 1
+          ? '1 column'
+          : `${a.maxColumns} columns`;
+    const accepted = field.accepts ?? [];
+    const primary = accepted.find((a) => a.arity === field.arity);
+    const alsoAccepted = accepted.filter((a) => a !== primary);
+    const primaryPart = primary ? `${field.arity} — ${columns(primary)}` : field.arity;
     parts.push(
       alsoAccepted.length > 0
-        ? `Selector arity: ${field.arity} (also accepted: ${alsoAccepted
-            .map((a) => (a.requires ? `${a.arity}, with \`${a.requires}\`` : a.arity))
+        ? `Selector arity: ${primaryPart} (also accepted: ${alsoAccepted
+            .map((a) => (a.requires ? `${columns(a)}, with \`${a.requires}\`` : columns(a)))
             .join('; ')}).`
-        : `Selector arity: ${field.arity}.`,
+        : `Selector arity: ${primaryPart}.`,
     );
   }
   if (field.default !== undefined) {

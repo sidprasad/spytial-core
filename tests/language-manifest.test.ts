@@ -345,6 +345,24 @@ describe('language manifest — selector arities', () => {
         `${path} lists each arity once`,
       ).toBe(field.accepts!.length);
       for (const accepted of field.accepts!) {
+        // The arity words are not disjoint — `n-ary` is "two or more", so it
+        // covers `binary` too — which is why the column range is what a
+        // generator matches on. Each label still has to agree with its range.
+        const bounds: Record<string, [number, number | undefined]> = {
+          unary: [1, 1],
+          binary: [2, 2],
+        };
+        const expected = bounds[accepted.arity];
+        if (expected) {
+          expect([accepted.minColumns, accepted.maxColumns], `${path}/${accepted.arity} bounds`).toEqual(expected);
+        } else {
+          expect(accepted.minColumns, `${path}/n-ary starts at two or more`).toBeGreaterThanOrEqual(2);
+        }
+        expect(
+          accepted.maxColumns === undefined || accepted.maxColumns >= accepted.minColumns,
+          `${path}/${accepted.arity} range is not inverted`,
+        ).toBe(true);
+
         expect(accepted.meaning, `${path}/${accepted.arity} says what it means`).toBeTruthy();
         if (accepted.requires) {
           const siblings = manifest.items.flatMap((i) => (i.id === path.split('.')[0] ? i.fields : []));
@@ -352,6 +370,23 @@ describe('language manifest — selector arities', () => {
             accepted.requires,
           );
         }
+      }
+    }
+  });
+
+  it('no two accepted shapes cover the same column count', () => {
+    // The one property that makes `accepts` usable as a lookup: a generator
+    // holding a k-column expression must find exactly one entry. Arity words
+    // alone cannot give that — `n-ary` subsumes `binary` — so the ranges are
+    // what has to be disjoint.
+    const CHECK_UP_TO = 6;
+    for (const { path, field } of selectorFields) {
+      for (let k = 1; k <= CHECK_UP_TO; k++) {
+        const covering = field.accepts!.filter(
+          (a) => k >= a.minColumns && (a.maxColumns === undefined || k <= a.maxColumns),
+        );
+        expect(covering.length, `${path} at ${k} column(s): ${covering.map((a) => a.arity).join(' + ')}`)
+          .toBeLessThanOrEqual(1);
       }
     }
   });
@@ -384,11 +419,15 @@ describe('language manifest — selector arities', () => {
     const describes = (defId: string, yamlKey: string, fieldName: string) =>
       defs[defId].properties[yamlKey].properties[fieldName].description;
 
+    // Spelled in column counts, so "binary" and "n-ary" cannot read as two
+    // descriptions of the same two-column result.
     const inferredEdge = describes('inferredEdge', 'inferredEdge', 'selector');
-    expect(inferredEdge).toMatch(/Selector arity: binary \(also accepted: n-ary; unary, with `draw`\)\./);
-    expect(describes('group', 'group', 'selector')).toMatch(/also accepted: n-ary; unary/);
+    expect(inferredEdge).toMatch(
+      /Selector arity: binary — 2 columns \(also accepted: 3\+ columns; 1 column, with `draw`\)\./,
+    );
+    expect(describes('group', 'group', 'selector')).toMatch(/also accepted: 3\+ columns; 1 column/);
     expect(describes('hideAtom', 'hideAtom', 'selector'), 'single-arity fields stay terse').toMatch(
-      /Selector arity: unary\./,
+      /Selector arity: unary — 1 column\./,
     );
   });
 });

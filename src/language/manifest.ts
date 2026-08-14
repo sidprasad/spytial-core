@@ -36,7 +36,6 @@ import type {
   LanguageField,
   LanguageItem,
   LanguageManifest,
-  SelectorArity,
 } from './types';
 
 /**
@@ -188,21 +187,30 @@ const blockField = (name: string, description: string): LanguageField => ({
   description,
 });
 
-/** A selector field that accepts exactly one shape. */
-const onlyArity = (arity: SelectorArity, meaning: string): readonly AcceptedArity[] => [{ arity, meaning }];
+/** A selector field that takes exactly one atom per result. */
+const onlyUnary = (meaning: string): readonly AcceptedArity[] => [
+  { arity: 'unary', minColumns: 1, maxColumns: 1, meaning },
+];
 
 /**
  * The two shapes every pair-taking selector accepts. A longer tuple is not
  * rejected anywhere: the engine reads a tuple's first and last atom as the pair
  * and ignores the columns between (`selectedTwoples`), so `a.rel.b` works where
  * a generator might assume only a plain binary relation would.
+ *
+ * Split at 3 columns rather than lumped under `n-ary`, because `n-ary` means
+ * "two or more" and would otherwise also cover the binary case — two entries
+ * matching one expression, saying different things.
  */
 const PAIR: AcceptedArity = {
   arity: 'binary',
+  minColumns: 2,
+  maxColumns: 2,
   meaning: 'Each tuple is one (first, last) pair, and the constraint applies to it.',
 };
 const PAIR_FROM_LONGER_TUPLE: AcceptedArity = {
   arity: 'n-ary',
+  minColumns: 3,
   meaning: "Accepted: the pair is the tuple's first and last atom. The columns between are ignored.",
 };
 const PAIR_ARITIES: readonly AcceptedArity[] = [PAIR, PAIR_FROM_LONGER_TUPLE];
@@ -212,7 +220,7 @@ const SOURCE_SELECTOR: LanguageField = {
   name: 'selector',
   type: 'selector',
   arity: 'unary',
-  accepts: onlyArity('unary', 'The set of source atoms the directive is narrowed to.'),
+  accepts: onlyUnary('The set of source atoms the directive is narrowed to.'),
   description: 'Apply only to edges whose source atom is in this set. Omit to apply to every source atom.',
 };
 
@@ -221,11 +229,15 @@ const TUPLE_FILTER: LanguageField = {
   name: 'filter',
   type: 'selector',
   arity: 'n-ary',
-  accepts: onlyArity(
-    'n-ary',
-    "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. " +
-      'A unary result matches nothing — the directive is then scoped to no tuples at all.',
-  ),
+  accepts: [
+    {
+      arity: 'n-ary',
+      minColumns: 2,
+      meaning:
+        'A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair ' +
+        'would. A unary result matches nothing — the directive is then scoped to no tuples at all.',
+    },
+  ],
   description:
     'Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to ' +
     'part of a relation, e.g. only the tuples whose value is True.',
@@ -377,16 +389,21 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       accepts: [
         {
           arity: 'binary',
+          minColumns: 2,
+          maxColumns: 2,
           meaning:
             'One group per distinct first atom: the first column is the key, the last the members. ' +
             'The group is named `<name>[<key>]`, which is what a keyed `inferredEdge` `draw` end attaches to.',
         },
         {
           arity: 'n-ary',
+          minColumns: 3,
           meaning: "As binary — the key is the tuple's first atom and the member its last, ignoring the columns between.",
         },
         {
           arity: 'unary',
+          minColumns: 1,
+          maxColumns: 1,
           meaning:
             'One single group holding every selected atom, with no key. It is named `<name>` with no `[key]` ' +
             'suffix, and a `draw` end naming it attaches there whatever the end\'s atom is.',
@@ -495,7 +512,7 @@ const GROUP_BY_FIELD: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms this grouping is narrowed to.'),
+      accepts: onlyUnary('The atoms this grouping is narrowed to.'),
       description: 'Restrict which atoms this grouping applies to.',
     },
   ],
@@ -542,7 +559,7 @@ const SIZE: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The nodes to resize.'),
+      accepts: onlyUnary('The nodes to resize.'),
       description: 'Which nodes to resize. Omit to resize every node.',
     },
   ],
@@ -571,7 +588,7 @@ const HIDE_ATOM: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms to hide.'),
+      accepts: onlyUnary('The atoms to hide.'),
       required: true,
       enforcement: 'unchecked',
       description: 'Which atoms to hide.',
@@ -626,7 +643,7 @@ const ATOM_STYLE: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms this rule styles.'),
+      accepts: onlyUnary('The atoms this rule styles.'),
       description: 'Which atoms to style. Omit to style every atom.',
     },
     blockField('fillStyle', "The node's interior fill."),
@@ -711,7 +728,7 @@ const TAG: LanguageItem = {
       name: 'toTag',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms that receive the tag.'),
+      accepts: onlyUnary('The atoms that receive the tag.'),
       required: true,
       enforcement: 'unchecked',
       description: 'Which atoms receive the tag.',
@@ -727,12 +744,17 @@ const TAG: LanguageItem = {
       name: 'value',
       type: 'selector',
       arity: 'n-ary',
-      accepts: onlyArity(
-        'n-ary',
-        'One line per tuple whose first atom is the tagged atom: the last column is the value and any columns ' +
-          'between become the key, as `name[k1][k2]: value`. A binary result is the plain `name: value` case. ' +
-          'A unary result tags nothing — single-atom tuples are dropped before the tag is built.',
-      ),
+      accepts: [
+        {
+          arity: 'n-ary',
+          minColumns: 2,
+          meaning:
+            'One line per tuple whose first atom is the tagged atom: the last column is the value and any ' +
+            'columns between become the key, as `name[k1][k2]: value`. A binary result is the plain ' +
+            '`name: value` case. A unary result tags nothing — single-atom tuples are dropped before the tag ' +
+            'is built.',
+        },
+      ],
       required: true,
       enforcement: 'unchecked',
       description:
@@ -791,16 +813,21 @@ const INFERRED_EDGE: LanguageItem = {
       accepts: [
         {
           arity: 'binary',
+          minColumns: 2,
+          maxColumns: 2,
           meaning: 'One edge per tuple, from its first atom to its last.',
         },
         {
           arity: 'n-ary',
+          minColumns: 3,
           meaning:
             "One edge from the tuple's first atom to its last. Unlike the constraints, the columns between are " +
             'not discarded: their labels are appended to the edge label as `<name>[m1,m2]`.',
         },
         {
           arity: 'unary',
+          minColumns: 1,
+          maxColumns: 1,
           requires: 'draw',
           meaning:
             'One edge per atom, the atom feeding both ends — the shape `draw: _ -> <group>` needs, connecting ' +
@@ -897,7 +924,7 @@ const ICON: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms that get the icon.'),
+      accepts: onlyUnary('The atoms that get the icon.'),
       required: true,
       enforcement: 'unchecked',
       description: 'Which atoms get the icon. Omitting it drops the directive entirely — it never means "every atom".',
@@ -947,7 +974,7 @@ const ATOM_COLOR: LanguageItem = {
       name: 'selector',
       type: 'selector',
       arity: 'unary',
-      accepts: onlyArity('unary', 'The atoms to recolor.'),
+      accepts: onlyUnary('The atoms to recolor.'),
       required: true,
       enforcement: 'unchecked',
       description: 'Which atoms to recolor. Omitting it drops the directive — it never means "every atom".',

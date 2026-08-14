@@ -55,12 +55,27 @@ export type SelectorArity = 'unary' | 'binary' | 'n-ary';
  * shape, each asserted against the engine in `tests/language-manifest.test.ts`.
  */
 export interface AcceptedArity {
+  /**
+   * The shape, as a label. Not a key: {@link SelectorArity} values are not
+   * disjoint — `n-ary` is "two or more", so it covers `binary` too. Match on
+   * {@link minColumns}/{@link maxColumns} instead; this names the entry for a
+   * human and says which word the prose docs use for it.
+   */
   arity: SelectorArity;
-  /** What the engine does with a result of this arity. */
+  /**
+   * The column counts this entry covers: `minColumns` at least, `maxColumns` at
+   * most, with `maxColumns` absent meaning unbounded. Within one field these
+   * ranges never overlap, so a generator holding a k-column expression finds
+   * exactly one entry — which is the whole point of stating them.
+   */
+  minColumns: number;
+  /** Absent means unbounded. */
+  maxColumns?: number;
+  /** What the engine does with a result in this range. */
   meaning: string;
   /**
-   * The field that must also be present for this arity to be meaningful.
-   * Absent means the arity stands on its own.
+   * The field that must also be present for this shape to be meaningful.
+   * Absent means the shape stands on its own.
    */
   requires?: string;
 }

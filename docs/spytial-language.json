@@ -176,10 +176,13 @@
           "accepts": [
             {
               "arity": "binary",
+              "minColumns": 2,
+              "maxColumns": 2,
               "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
             },
             {
               "arity": "n-ary",
+              "minColumns": 3,
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -262,10 +265,13 @@
           "accepts": [
             {
               "arity": "binary",
+              "minColumns": 2,
+              "maxColumns": 2,
               "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
             },
             {
               "arity": "n-ary",
+              "minColumns": 3,
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -309,10 +315,13 @@
           "accepts": [
             {
               "arity": "binary",
+              "minColumns": 2,
+              "maxColumns": 2,
               "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
             },
             {
               "arity": "n-ary",
+              "minColumns": 3,
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -359,14 +368,19 @@
           "accepts": [
             {
               "arity": "binary",
+              "minColumns": 2,
+              "maxColumns": 2,
               "meaning": "One group per distinct first atom: the first column is the key, the last the members. The group is named `<name>[<key>]`, which is what a keyed `inferredEdge` `draw` end attaches to."
             },
             {
               "arity": "n-ary",
+              "minColumns": 3,
               "meaning": "As binary — the key is the tuple's first atom and the member its last, ignoring the columns between."
             },
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "One single group holding every selected atom, with no key. It is named `<name>` with no `[key]` suffix, and a `draw` end naming it attaches there whatever the end's atom is."
             }
           ],
@@ -491,6 +505,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms this grouping is narrowed to."
             }
           ],
@@ -545,6 +561,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The nodes to resize."
             }
           ],
@@ -583,6 +601,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms to hide."
             }
           ],
@@ -642,6 +662,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms this rule styles."
             }
           ],
@@ -711,6 +733,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The set of source atoms the directive is narrowed to."
             }
           ],
@@ -723,6 +747,7 @@
           "accepts": [
             {
               "arity": "n-ary",
+              "minColumns": 2,
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -787,6 +812,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The set of source atoms the directive is narrowed to."
             }
           ],
@@ -799,6 +826,7 @@
           "accepts": [
             {
               "arity": "n-ary",
+              "minColumns": 2,
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -835,6 +863,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms that receive the tag."
             }
           ],
@@ -856,6 +886,7 @@
           "accepts": [
             {
               "arity": "n-ary",
+              "minColumns": 2,
               "meaning": "One line per tuple whose first atom is the tagged atom: the last column is the value and any columns between become the key, as `name[k1][k2]: value`. A binary result is the plain `name: value` case. A unary result tags nothing — single-atom tuples are dropped before the tag is built."
             }
           ],
@@ -902,6 +933,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The set of source atoms the directive is narrowed to."
             }
           ],
@@ -914,6 +947,7 @@
           "accepts": [
             {
               "arity": "n-ary",
+              "minColumns": 2,
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -949,14 +983,19 @@
           "accepts": [
             {
               "arity": "binary",
+              "minColumns": 2,
+              "maxColumns": 2,
               "meaning": "One edge per tuple, from its first atom to its last."
             },
             {
               "arity": "n-ary",
+              "minColumns": 3,
               "meaning": "One edge from the tuple's first atom to its last. Unlike the constraints, the columns between are not discarded: their labels are appended to the edge label as `<name>[m1,m2]`."
             },
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "requires": "draw",
               "meaning": "One edge per atom, the atom feeding both ends — the shape `draw: _ -> <group>` needs, connecting each atom to its own group. Without `draw` a unary selector draws nothing at all: the engine reads this field as tuples, and single-atom tuples are dropped before any edge is made."
             }
@@ -1063,6 +1102,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms that get the icon."
             }
           ],
@@ -1124,6 +1165,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The atoms to recolor."
             }
           ],
@@ -1185,6 +1228,8 @@
           "accepts": [
             {
               "arity": "unary",
+              "minColumns": 1,
+              "maxColumns": 1,
               "meaning": "The set of source atoms the directive is narrowed to."
             }
           ],
@@ -1197,6 +1242,7 @@
           "accepts": [
             {
               "arity": "n-ary",
+              "minColumns": 2,
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
