@@ -173,6 +173,16 @@
           "name": "selector",
           "type": "selector",
           "arity": "binary",
+          "accepts": [
+            {
+              "arity": "binary",
+              "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
+            },
+            {
+              "arity": "n-ary",
+              "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
+            }
+          ],
           "required": true,
           "enforcement": "parse-error",
           "description": "Returns (source, target) pairs. The constraint applies to each pair."
@@ -249,6 +259,16 @@
           "name": "selector",
           "type": "selector",
           "arity": "binary",
+          "accepts": [
+            {
+              "arity": "binary",
+              "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
+            },
+            {
+              "arity": "n-ary",
+              "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
+            }
+          ],
           "required": true,
           "enforcement": "parse-error",
           "description": "Returns (a, b) pairs meaning \"b follows a around the circle\"."
@@ -286,6 +306,16 @@
           "name": "selector",
           "type": "selector",
           "arity": "binary",
+          "accepts": [
+            {
+              "arity": "binary",
+              "meaning": "Each tuple is one (first, last) pair, and the constraint applies to it."
+            },
+            {
+              "arity": "n-ary",
+              "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
+            }
+          ],
           "required": true,
           "enforcement": "parse-error",
           "description": "Returns the pairs of atoms to align with one another."
@@ -326,6 +356,20 @@
           "name": "selector",
           "type": "selector",
           "arity": "binary",
+          "accepts": [
+            {
+              "arity": "binary",
+              "meaning": "One group per distinct first atom: the first column is the key, the last the members. The group is named `<name>[<key>]`, which is what a keyed `inferredEdge` `draw` end attaches to."
+            },
+            {
+              "arity": "n-ary",
+              "meaning": "As binary — the key is the tuple's first atom and the member its last, ignoring the columns between."
+            },
+            {
+              "arity": "unary",
+              "meaning": "One single group holding every selected atom, with no key. It is named `<name>` with no `[key]` suffix, and a `draw` end naming it attaches there whatever the end's atom is."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group.",
@@ -444,6 +488,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms this grouping is narrowed to."
+            }
+          ],
           "description": "Restrict which atoms this grouping applies to."
         }
       ],
@@ -492,6 +542,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The nodes to resize."
+            }
+          ],
           "description": "Which nodes to resize. Omit to resize every node."
         }
       ],
@@ -524,6 +580,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms to hide."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "Which atoms to hide."
@@ -577,6 +639,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms this rule styles."
+            }
+          ],
           "description": "Which atoms to style. Omit to style every atom."
         },
         {
@@ -640,12 +708,24 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The set of source atoms the directive is narrowed to."
+            }
+          ],
           "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom."
         },
         {
           "name": "filter",
           "type": "selector",
           "arity": "n-ary",
+          "accepts": [
+            {
+              "arity": "n-ary",
+              "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
+            }
+          ],
           "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True."
         },
         {
@@ -704,12 +784,24 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The set of source atoms the directive is narrowed to."
+            }
+          ],
           "description": "Apply only to these source atoms. Omit to apply to every source atom."
         },
         {
           "name": "filter",
           "type": "selector",
           "arity": "n-ary",
+          "accepts": [
+            {
+              "arity": "n-ary",
+              "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
+            }
+          ],
           "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True."
         },
         {
@@ -740,6 +832,12 @@
           "name": "toTag",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms that receive the tag."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "Which atoms receive the tag."
@@ -755,9 +853,15 @@
           "name": "value",
           "type": "selector",
           "arity": "n-ary",
+          "accepts": [
+            {
+              "arity": "n-ary",
+              "meaning": "One line per tuple whose first atom is the tagged atom: the last column is the value and any columns between become the key, as `name[k1][k2]: value`. A binary result is the plain `name: value` case. A unary result tags nothing — single-atom tuples are dropped before the tag is built."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
-          "description": "Evaluated per tagged atom; its result becomes the value. A unary result shows as `name: value`; an n-ary result shows one line per tuple, as `name[k1][k2]: value`."
+          "description": "Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; a longer tuple shows one line per tuple, as `name[k1][k2]: value`. It must return tuples: a unary selector produces no tags at all."
         },
         {
           "name": "textStyle",
@@ -795,12 +899,24 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The set of source atoms the directive is narrowed to."
+            }
+          ],
           "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom."
         },
         {
           "name": "filter",
           "type": "selector",
           "arity": "n-ary",
+          "accepts": [
+            {
+              "arity": "n-ary",
+              "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
+            }
+          ],
           "description": "Hide only the tuples this selector returns."
         }
       ],
@@ -830,6 +946,21 @@
           "name": "selector",
           "type": "selector",
           "arity": "binary",
+          "accepts": [
+            {
+              "arity": "binary",
+              "meaning": "One edge per tuple, from its first atom to its last."
+            },
+            {
+              "arity": "n-ary",
+              "meaning": "One edge from the tuple's first atom to its last. Unlike the constraints, the columns between are not discarded: their labels are appended to the edge label as `<name>[m1,m2]`."
+            },
+            {
+              "arity": "unary",
+              "requires": "draw",
+              "meaning": "One edge per atom, the atom feeding both ends — the shape `draw: _ -> <group>` needs, connecting each atom to its own group. Without `draw` a unary selector draws nothing at all: the engine reads this field as tuples, and single-atom tuples are dropped before any edge is made."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends."
@@ -929,6 +1060,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms that get the icon."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\"."
@@ -984,6 +1121,12 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The atoms to recolor."
+            }
+          ],
           "required": true,
           "enforcement": "unchecked",
           "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\"."
@@ -1039,12 +1182,24 @@
           "name": "selector",
           "type": "selector",
           "arity": "unary",
+          "accepts": [
+            {
+              "arity": "unary",
+              "meaning": "The set of source atoms the directive is narrowed to."
+            }
+          ],
           "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom."
         },
         {
           "name": "filter",
           "type": "selector",
           "arity": "n-ary",
+          "accepts": [
+            {
+              "arity": "n-ary",
+              "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
+            }
+          ],
           "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True."
         },
         {

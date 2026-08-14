@@ -62,7 +62,17 @@ const SCALAR_TYPES: Readonly<Record<string, string>> = {
 function describeField(field: LanguageField): string {
   const parts = [field.description];
   if (field.arity) {
-    parts.push(`Selector arity: ${field.arity}.`);
+    // Name the extra shapes too. Arity is semantic, not syntactic — nothing here
+    // can be validated against a string — so the schema's job is to stop a reader
+    // concluding that the primary arity is the only one the engine takes.
+    const alsoAccepted = (field.accepts ?? []).filter((a) => a.arity !== field.arity);
+    parts.push(
+      alsoAccepted.length > 0
+        ? `Selector arity: ${field.arity} (also accepted: ${alsoAccepted
+            .map((a) => (a.requires ? `${a.arity}, with \`${a.requires}\`` : a.arity))
+            .join('; ')}).`
+        : `Selector arity: ${field.arity}.`,
+    );
   }
   if (field.default !== undefined) {
     parts.push(`Default when omitted: ${JSON.stringify(field.default)}.`);

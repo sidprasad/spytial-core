@@ -203,7 +203,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns (source, target) pairs. The constraint applies to each pair. Selector arity: binary.",
+              "description": "Returns (source, target) pairs. The constraint applies to each pair. Selector arity: binary (also accepted: n-ary).",
               "type": "string",
               "minLength": 1
             },
@@ -355,7 +355,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns (a, b) pairs meaning \"b follows a around the circle\". Selector arity: binary.",
+              "description": "Returns (a, b) pairs meaning \"b follows a around the circle\". Selector arity: binary (also accepted: n-ary).",
               "type": "string",
               "minLength": 1
             },
@@ -396,7 +396,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns the pairs of atoms to align with one another. Selector arity: binary.",
+              "description": "Returns the pairs of atoms to align with one another. Selector arity: binary (also accepted: n-ary).",
               "type": "string",
               "minLength": 1
             },
@@ -438,7 +438,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary. A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
+              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary (also accepted: n-ary; unary). A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
               "type": "string",
               "minLength": 1
             },
@@ -812,7 +812,7 @@
               "minLength": 1
             },
             "value": {
-              "description": "Evaluated per tagged atom; its result becomes the value. A unary result shows as `name: value`; an n-ary result shows one line per tuple, as `name[k1][k2]: value`. Selector arity: n-ary.",
+              "description": "Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; a longer tuple shows one line per tuple, as `name[k1][k2]: value`. It must return tuples: a unary selector produces no tags at all. Selector arity: n-ary.",
               "type": "string",
               "minLength": 1
             },
@@ -881,7 +881,7 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends. Selector arity: binary.",
+              "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends. Selector arity: binary (also accepted: n-ary; unary, with `draw`).",
               "type": "string",
               "minLength": 1
             },
