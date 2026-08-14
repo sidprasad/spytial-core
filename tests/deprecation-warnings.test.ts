@@ -99,6 +99,38 @@ describe('Deprecation warnings', () => {
             ).toThrow(/were removed.*selector/s);
         });
 
+        it('quotes the indices each removed group actually used', () => {
+            // The rewrite depends on the indices, so a message that assumed one
+            // pair would mislead anyone who used another.
+            const rewriteOf = (yaml: string): string => {
+                try {
+                    parseQuietly(yaml);
+                } catch (e) {
+                    return (e as Error).message;
+                }
+                throw new Error('expected a parse error');
+            };
+
+            expect(rewriteOf('constraints:\n  - group: { field: owns, groupOn: 0, addToGroup: 1 }')).toContain(
+                "'owns' (groupOn: 0, addToGroup: 1) becomes 'selector: owns'",
+            );
+            expect(rewriteOf('constraints:\n  - group: { field: owns, groupOn: 1, addToGroup: 0 }')).toContain(
+                "'owns' (groupOn: 1, addToGroup: 0) becomes 'selector: ~owns'",
+            );
+            // Indexing a longer relation: no one-line rewrite exists, so state
+            // the rule with the real columns rather than guess at a selector.
+            expect(rewriteOf('constraints:\n  - group: { field: path, groupOn: 0, addToGroup: 2 }')).toContain(
+                "column 0 of 'path' as the key, column 2 as the member",
+            );
+            // Several offending constraints each get their own clause.
+            const many = rewriteOf(
+                'constraints:\n  - group: { field: a, groupOn: 1, addToGroup: 0 }\n' +
+                    '  - group: { field: b, groupOn: 0, addToGroup: 2 }\n',
+            );
+            expect(many).toContain("'selector: ~a'");
+            expect(many).toContain("column 0 of 'b'");
+        });
+
         it('leaves a spec on the supported forms clean', () => {
             const spec = parseQuietly(
                 "directives:\n  - atomStyle: { selector: Node, fillStyle: { color: '#ff0000' } }\n" +

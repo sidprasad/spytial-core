@@ -814,12 +814,24 @@ function parseConstraints(constraints: unknown[], warnings: ParseWarning[] = [])
     // wrong diagram they have no reason to suspect.
     const rawByField = typedConstraints.filter(c => c.group).filter(c => c.group.field);
     if (rawByField.length > 0) {
-        const fields = [...new Set(rawByField.map(c => String(c.group.field)))].join(', ');
+        // One clause per offending constraint, quoting the indices it actually
+        // used. The two common index pairs have an exact rewrite; any other pair
+        // indexes a longer relation, where the replacement selector depends on
+        // the relation and only the rule can be stated.
+        const rewriteFor = (group: Record<string, unknown>): string => {
+            const field = String(group.field);
+            const on = group.groupOn;
+            const add = group.addToGroup;
+            const where = `'${field}' (groupOn: ${on}, addToGroup: ${add})`;
+            if (on === 0 && add === 1) return `${where} becomes 'selector: ${field}'`;
+            if (on === 1 && add === 0) return `${where} becomes 'selector: ~${field}'`;
+            return `${where} needs a selector returning (key, member) pairs — column ${on} of '${field}' `
+                + `as the key, column ${add} as the member`;
+        };
         throw new Error(
-            `group's 'field'/'groupOn'/'addToGroup' were removed. Use a group with a binary 'selector' ` +
-            `instead — its first column is the group key, its second the members. For '${fields}' with ` +
-            `groupOn: 1 / addToGroup: 0, write 'selector: ~${rawByField[0].group.field}' plus the 'name' ` +
-            `that form requires; with groupOn: 0 / addToGroup: 1, drop the '~'.`
+            `group's 'field'/'groupOn'/'addToGroup' were removed. Use a group with a binary 'selector' `
+            + `instead: its first column is the group key, its second the members, and it needs a 'name'. `
+            + rawByField.map(c => rewriteFor(c.group)).join('; ') + '.'
         );
     }
 

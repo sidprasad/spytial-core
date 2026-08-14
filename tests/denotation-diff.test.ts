@@ -6,7 +6,6 @@ import {
     CyclicOrientationConstraint,
     AlignConstraint,
     GroupBySelector,
-    GroupBySelector,
 } from '../src/layout/layoutspec';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import {
