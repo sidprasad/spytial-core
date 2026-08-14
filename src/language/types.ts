@@ -44,6 +44,43 @@ export type FieldType =
 export type SelectorArity = 'unary' | 'binary' | 'n-ary';
 
 /**
+ * One arity a selector field accepts, and what the engine does with a result of
+ * that shape.
+ *
+ * Several fields accept more than one arity and mean something different by
+ * each — a `group` selector is one group per key when binary and a single
+ * unkeyed group when unary; an `inferredEdge` selector may be unary, but only
+ * alongside `draw`. Stating that in a field's `description` is no use to a
+ * generator, which reads structure, not prose. Hence one entry per accepted
+ * shape, each asserted against the engine in `tests/language-manifest.test.ts`.
+ */
+export interface AcceptedArity {
+  /**
+   * The shape, as a label. Not a key: {@link SelectorArity} values are not
+   * disjoint — `n-ary` is "two or more", so it covers `binary` too. Match on
+   * {@link minColumns}/{@link maxColumns} instead; this names the entry for a
+   * human and says which word the prose docs use for it.
+   */
+  arity: SelectorArity;
+  /**
+   * The column counts this entry covers: `minColumns` at least, `maxColumns` at
+   * most, with `maxColumns` absent meaning unbounded. Within one field these
+   * ranges never overlap, so a generator holding a k-column expression finds
+   * exactly one entry — which is the whole point of stating them.
+   */
+  minColumns: number;
+  /** Absent means unbounded. */
+  maxColumns?: number;
+  /** What the engine does with a result in this range. */
+  meaning: string;
+  /**
+   * The field that must also be present for this shape to be meaningful.
+   * Absent means the shape stands on its own.
+   */
+  requires?: string;
+}
+
+/**
  * Whether `parseLayoutSpec` actually enforces a rule, or merely documents it.
  *
  *  - `parse-error`   — the parser throws when the rule is broken.
@@ -87,8 +124,17 @@ export interface LanguageField {
     atMostOneOf?: readonly (readonly string[])[];
     narrowsListTo?: Readonly<Record<string, readonly string[]>>;
   };
-  /** For `selector`: how many columns the expression should return. */
+  /**
+   * For `selector`: how many columns the expression should return — the shape
+   * to generate by default when nothing else decides it.
+   */
   arity?: SelectorArity;
+  /**
+   * For `selector`: every arity the engine accepts here, including {@link arity},
+   * each with what it means. Read this rather than `arity` when the generator
+   * can emit more than one shape; `arity` is the pick-one-and-move-on answer.
+   */
+  accepts?: readonly AcceptedArity[];
   /**
    * What the engine does when the field is omitted. This is the *engine*
    * default (the observable behaviour), not a value the editor happens to seed

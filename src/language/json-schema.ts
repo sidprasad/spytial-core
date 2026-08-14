@@ -62,7 +62,30 @@ const SCALAR_TYPES: Readonly<Record<string, string>> = {
 function describeField(field: LanguageField): string {
   const parts = [field.description];
   if (field.arity) {
-    parts.push(`Selector arity: ${field.arity}.`);
+    // Name the extra shapes too. Arity is semantic, not syntactic — nothing here
+    // can be validated against a string — so the schema's job is to stop a reader
+    // concluding that the primary arity is the only one the engine takes.
+    //
+    // Spelled as column counts, not arity words: `n-ary` means "two or more",
+    // so "binary, also accepted: n-ary" reads as if two shapes both cover a
+    // two-column result. "2 columns, also accepted: 3+ columns" cannot.
+    const columns = (a: { minColumns: number; maxColumns?: number }): string =>
+      a.maxColumns === undefined
+        ? `${a.minColumns}+ columns`
+        : a.maxColumns === 1
+          ? '1 column'
+          : `${a.maxColumns} columns`;
+    const accepted = field.accepts ?? [];
+    const primary = accepted.find((a) => a.arity === field.arity);
+    const alsoAccepted = accepted.filter((a) => a !== primary);
+    const primaryPart = primary ? `${field.arity} — ${columns(primary)}` : field.arity;
+    parts.push(
+      alsoAccepted.length > 0
+        ? `Selector arity: ${primaryPart} (also accepted: ${alsoAccepted
+            .map((a) => (a.requires ? `${columns(a)}, with \`${a.requires}\`` : columns(a)))
+            .join('; ')}).`
+        : `Selector arity: ${primaryPart}.`,
+    );
   }
   if (field.default !== undefined) {
     parts.push(`Default when omitted: ${JSON.stringify(field.default)}.`);

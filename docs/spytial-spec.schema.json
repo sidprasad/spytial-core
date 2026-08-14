@@ -203,7 +203,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns (source, target) pairs. The constraint applies to each pair. Selector arity: binary.",
+              "description": "Returns (source, target) pairs. The constraint applies to each pair. Selector arity: binary — 2 columns (also accepted: 3+ columns).",
               "type": "string",
               "minLength": 1
             },
@@ -355,7 +355,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns (a, b) pairs meaning \"b follows a around the circle\". Selector arity: binary.",
+              "description": "Returns (a, b) pairs meaning \"b follows a around the circle\". Selector arity: binary — 2 columns (also accepted: 3+ columns).",
               "type": "string",
               "minLength": 1
             },
@@ -396,7 +396,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Returns the pairs of atoms to align with one another. Selector arity: binary.",
+              "description": "Returns the pairs of atoms to align with one another. Selector arity: binary — 2 columns (also accepted: 3+ columns).",
               "type": "string",
               "minLength": 1
             },
@@ -438,7 +438,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary. A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
+              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary — 2 columns (also accepted: 3+ columns; 1 column). A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
               "type": "string",
               "minLength": 1
             },
@@ -561,7 +561,7 @@
               "type": "integer"
             },
             "selector": {
-              "description": "Restrict which atoms this grouping applies to. Selector arity: unary.",
+              "description": "Restrict which atoms this grouping applies to. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "hold": {
@@ -606,7 +606,7 @@
               "exclusiveMinimum": 0
             },
             "selector": {
-              "description": "Which nodes to resize. Omit to resize every node. Selector arity: unary.",
+              "description": "Which nodes to resize. Omit to resize every node. Selector arity: unary — 1 column.",
               "type": "string"
             }
           },
@@ -631,7 +631,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Which atoms to hide. Selector arity: unary.",
+              "description": "Which atoms to hide. Selector arity: unary — 1 column.",
               "type": "string",
               "minLength": 1
             }
@@ -675,7 +675,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Which atoms to style. Omit to style every atom. Selector arity: unary.",
+              "description": "Which atoms to style. Omit to style every atom. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "fillStyle": {
@@ -721,11 +721,11 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",
+              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "filter": {
-              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary.",
+              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary — 2+ columns.",
               "type": "string"
             },
             "lineStyle": {
@@ -770,11 +770,11 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Apply only to these source atoms. Omit to apply to every source atom. Selector arity: unary.",
+              "description": "Apply only to these source atoms. Omit to apply to every source atom. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "filter": {
-              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary.",
+              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary — 2+ columns.",
               "type": "string"
             },
             "textStyle": {
@@ -802,7 +802,7 @@
           "type": "object",
           "properties": {
             "toTag": {
-              "description": "Which atoms receive the tag. Selector arity: unary.",
+              "description": "Which atoms receive the tag. Selector arity: unary — 1 column.",
               "type": "string",
               "minLength": 1
             },
@@ -812,7 +812,7 @@
               "minLength": 1
             },
             "value": {
-              "description": "Evaluated per tagged atom; its result becomes the value. A unary result shows as `name: value`; an n-ary result shows one line per tuple, as `name[k1][k2]: value`. Selector arity: n-ary.",
+              "description": "Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; a longer tuple shows one line per tuple, as `name[k1][k2]: value`. It must return tuples: a unary selector produces no tags at all. Selector arity: n-ary — 2+ columns.",
               "type": "string",
               "minLength": 1
             },
@@ -848,11 +848,11 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",
+              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "filter": {
-              "description": "Hide only the tuples this selector returns. Selector arity: n-ary.",
+              "description": "Hide only the tuples this selector returns. Selector arity: n-ary — 2+ columns.",
               "type": "string"
             }
           },
@@ -881,7 +881,7 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends. Selector arity: binary.",
+              "description": "Returns the (source, target) pairs to connect. May be unary when `draw` is given — the single atom then feeds both ends. Selector arity: binary — 2 columns (also accepted: 3+ columns; 1 column, with `draw`).",
               "type": "string",
               "minLength": 1
             },
@@ -946,7 +946,7 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\". Selector arity: unary.",
+              "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\". Selector arity: unary — 1 column.",
               "type": "string",
               "minLength": 1
             },
@@ -987,7 +987,7 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\". Selector arity: unary.",
+              "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\". Selector arity: unary — 1 column.",
               "type": "string",
               "minLength": 1
             }
@@ -1024,11 +1024,11 @@
               "minLength": 1
             },
             "selector": {
-              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary.",
+              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary — 1 column.",
               "type": "string"
             },
             "filter": {
-              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary.",
+              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary — 2+ columns.",
               "type": "string"
             },
             "style": {

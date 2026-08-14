@@ -33,7 +33,7 @@ import {
 } from '../scripts/generate-language-artifacts';
 import { buildJsonSchema } from '../src/language/json-schema';
 import { getLanguageManifest, LANGUAGE_VERSION } from '../src/language/manifest';
-import type { LanguageItem, LanguageManifest } from '../src/language/types';
+import type { LanguageField, LanguageItem, LanguageManifest } from '../src/language/types';
 import { GROUP_EDGE_DIRECTIONS, parseInferredEdgeDraw, parseLayoutSpec } from '../src/layout/layoutspec';
 import type { LayoutSpec } from '../src/layout/layoutspec';
 import { ICON_PLACEMENTS } from '../src/layout/style/atom-style-spec';
@@ -314,6 +314,121 @@ describe('language manifest — agreement with the engine constants', () => {
     expect(blockEnum('lineStyle', 'pattern')).toEqual([...EDGE_STYLES]);
     expect(blockEnum('textStyle', 'size')).toEqual([...TEXT_SIZES]);
     expect(blockEnum('iconStyle', 'placement')).toEqual([...ICON_PLACEMENTS]);
+  });
+});
+
+describe('language manifest — selector arities', () => {
+  /** Every selector-typed field in the manifest, including nested block leaves. */
+  const selectorFields: { path: string; field: LanguageField }[] = [];
+  const collect = (path: string, fields: readonly LanguageField[]) => {
+    for (const field of fields) {
+      if (field.type === 'selector') selectorFields.push({ path: `${path}.${field.name}`, field });
+      if (field.fields) collect(`${path}.${field.name}`, field.fields);
+      if (field.alternativeForm?.fields) collect(`${path}.${field.name}`, field.alternativeForm.fields);
+    }
+  };
+  for (const item of manifest.items) collect(item.id, item.fields);
+  for (const block of manifest.blocks) collect(block.name, block.fields);
+
+  it('every selector field declares the shapes it accepts', () => {
+    // The gap this closes: `arity` is one value, several fields take more than
+    // one, and the extras used to live only in the `description`. A generator
+    // reads structure, not prose, so a shape the engine accepts and the manifest
+    // does not list is a shape no integration will ever emit.
+    expect(selectorFields.length).toBeGreaterThan(0);
+    for (const { path, field } of selectorFields) {
+      expect(field.arity, `${path} declares an arity`).toBeDefined();
+      expect(field.accepts?.length, `${path} lists what it accepts`).toBeGreaterThan(0);
+      expect(field.accepts!.map((a) => a.arity), `${path} accepts its own primary arity`).toContain(field.arity);
+      expect(
+        new Set(field.accepts!.map((a) => a.arity)).size,
+        `${path} lists each arity once`,
+      ).toBe(field.accepts!.length);
+      for (const accepted of field.accepts!) {
+        // The arity words are not disjoint — `n-ary` is "two or more", so it
+        // covers `binary` too — which is why the column range is what a
+        // generator matches on. Each label still has to agree with its range.
+        const bounds: Record<string, [number, number | undefined]> = {
+          unary: [1, 1],
+          binary: [2, 2],
+        };
+        const expected = bounds[accepted.arity];
+        if (expected) {
+          expect([accepted.minColumns, accepted.maxColumns], `${path}/${accepted.arity} bounds`).toEqual(expected);
+        } else {
+          expect(accepted.minColumns, `${path}/n-ary starts at two or more`).toBeGreaterThanOrEqual(2);
+        }
+        expect(
+          accepted.maxColumns === undefined || accepted.maxColumns >= accepted.minColumns,
+          `${path}/${accepted.arity} range is not inverted`,
+        ).toBe(true);
+
+        expect(accepted.meaning, `${path}/${accepted.arity} says what it means`).toBeTruthy();
+        if (accepted.requires) {
+          const siblings = manifest.items.flatMap((i) => (i.id === path.split('.')[0] ? i.fields : []));
+          expect(siblings.map((f) => f.name), `${path}/${accepted.arity} requires a real field`).toContain(
+            accepted.requires,
+          );
+        }
+      }
+    }
+  });
+
+  it('no two accepted shapes cover the same column count', () => {
+    // The one property that makes `accepts` usable as a lookup: a generator
+    // holding a k-column expression must find exactly one entry. Arity words
+    // alone cannot give that — `n-ary` subsumes `binary` — so the ranges are
+    // what has to be disjoint.
+    const CHECK_UP_TO = 6;
+    for (const { path, field } of selectorFields) {
+      for (let k = 1; k <= CHECK_UP_TO; k++) {
+        const covering = field.accepts!.filter(
+          (a) => k >= a.minColumns && (a.maxColumns === undefined || k <= a.maxColumns),
+        );
+        expect(covering.length, `${path} at ${k} column(s): ${covering.map((a) => a.arity).join(' + ')}`)
+          .toBeLessThanOrEqual(1);
+      }
+    }
+  });
+
+  it('non-primary arities are only claimed where the engine really takes them', () => {
+    // A generator trusting `accepts` will emit these, so the extras have to be
+    // real. Only `group` and `inferredEdge` branch on arity in the engine
+    // (`acceptSelectorResult(..., 'any', ...)`); everything else is checked
+    // against a single shape, save the longer-tuple form that `selectedTwoples`
+    // makes universal.
+    const branchesOnArity = ['group.selector', 'inferredEdge.selector'];
+    for (const { path, field } of selectorFields) {
+      const extras = field.accepts!.filter((a) => a.arity !== field.arity).map((a) => a.arity);
+      if (branchesOnArity.includes(path)) continue;
+      expect(extras.filter((a) => a !== 'n-ary'), `${path} claims no unchecked extra`).toEqual([]);
+      // Only pair-taking fields read a longer tuple as its two ends.
+      if (extras.includes('n-ary')) {
+        expect(field.arity, `${path} only widens to n-ary from binary`).toBe('binary');
+      }
+    }
+  });
+
+  it('the schema description names the extra shapes, not just the primary one', () => {
+    // Arity is semantic, so the schema cannot validate it — but a reader of the
+    // schema alone must not come away thinking `binary` is the only option.
+    // Each item def wraps its fields under the item's own yamlKey.
+    const defs = (buildJsonSchema(manifest) as { $defs: Record<string, {
+      properties: Record<string, { properties: Record<string, { description: string }> }>;
+    }> }).$defs;
+    const describes = (defId: string, yamlKey: string, fieldName: string) =>
+      defs[defId].properties[yamlKey].properties[fieldName].description;
+
+    // Spelled in column counts, so "binary" and "n-ary" cannot read as two
+    // descriptions of the same two-column result.
+    const inferredEdge = describes('inferredEdge', 'inferredEdge', 'selector');
+    expect(inferredEdge).toMatch(
+      /Selector arity: binary — 2 columns \(also accepted: 3\+ columns; 1 column, with `draw`\)\./,
+    );
+    expect(describes('group', 'group', 'selector')).toMatch(/also accepted: 3\+ columns; 1 column/);
+    expect(describes('hideAtom', 'hideAtom', 'selector'), 'single-arity fields stay terse').toMatch(
+      /Selector arity: unary — 1 column\./,
+    );
   });
 });
 
