@@ -975,7 +975,7 @@ The left end applies to each tuple's first atom, the right end to its last. `dra
 
 Resolution notes:
 
-- The group name must belong to some `group` constraint (checked when the spec is parsed).
+- If no `group` constraint defines the name, the parse raises a warning (`unresolved-reference`) and the edge is skipped at layout time. It is not an error: a spec fragment may name a group that another fragment defines, so whether one item is valid must not depend on which other items happen to be in the document.
 - A name that means both a keyed group and a single group at once (two group constraints sharing the name — one binary, one unary — or two unary ones) is ambiguous and errors at layout time. Rename one of the constraints.
 - Keys may be hidden (`hideAtom`) — group ends attach to the hull and don't need the key node drawn.
 - If an end's atom doesn't key a group of that name **in this instance**, the edge is skipped with a console warning (data-dependent, not a spec error). Same when the constraint built no groups at all (e.g. its relation is empty in this instance).

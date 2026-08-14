@@ -508,17 +508,24 @@ describe('spec JSON Schema', () => {
   });
 
   it('does not claim to catch what needs more than one item', () => {
-    // Cross-item rules are outside what JSON Schema can see. They stay parse
-    // errors, and the module doc says so — this pins that boundary rather than
-    // letting the claim quietly become false.
-    const crossItem = [
-      'directives:\n  - inferredEdge: { name: x, selector: y, draw: "nosuchgroup -> _" }\n',
-      'constraints:\n  - cyclic: { selector: a, direction: clockwise }\n  - cyclic: { selector: a, direction: counterclockwise }\n',
-    ];
-    for (const source of crossItem) {
-      expect(validate(yaml.load(source)), 'schema cannot see this').toBe(true);
-      expect(() => quietly(() => parseLayoutSpec(source)), 'parser catches it').toThrow();
-    }
+    // Cross-item rules are outside what JSON Schema can see. The parser is what
+    // catches them, and the module doc says so — this pins that boundary rather
+    // than letting the claim quietly become false.
+    const throwsOnParse =
+      'constraints:\n  - cyclic: { selector: a, direction: clockwise }\n  - cyclic: { selector: a, direction: counterclockwise }\n';
+    expect(validate(yaml.load(throwsOnParse)), 'schema cannot see this').toBe(true);
+    expect(() => quietly(() => parseLayoutSpec(throwsOnParse)), 'parser catches it').toThrow();
+
+    // An unresolved `draw` group is cross-item too, but deliberately not fatal:
+    // one fragment may name a group another fragment defines. It warns, and the
+    // manifest note says exactly that.
+    const warnsOnParse = 'directives:\n  - inferredEdge: { name: x, selector: y, draw: "nosuchgroup -> _" }\n';
+    expect(validate(yaml.load(warnsOnParse)), 'schema cannot see this').toBe(true);
+    const parsed = quietly(() => parseLayoutSpec(warnsOnParse));
+    expect(parsed.warnings!.map((w) => w.code), 'parser warns instead').toContain('unresolved-reference');
+    expect(
+      manifest.items.find((i) => i.id === 'inferredEdge')!.fields.find((f) => f.name === 'draw')!.note,
+    ).toMatch(/unresolved-reference/);
   });
 });
 

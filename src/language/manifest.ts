@@ -748,7 +748,9 @@ const INFERRED_EDGE: LanguageItem = {
         'The left end applies to the first atom of each tuple, the right end to the last.',
       note:
         'Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse ' +
-        'error, as is a group name that no `group` constraint defines. `draw` never reorders — transpose the ' +
+        'error. A group name that no `group` constraint defines is not — it raises a warning (code ' +
+        '`unresolved-reference`, specType `inferredEdge`) and the edge is skipped at layout time, so a fragment ' +
+        'that names a group defined in another fragment still parses. `draw` never reorders — transpose the ' +
         'selector (`~connected`) to flip an edge.',
     },
     blockField('lineStyle', 'The drawn line.'),
