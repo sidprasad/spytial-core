@@ -4,7 +4,7 @@
   "spytialCoreVersion": "5.1.0",
   "versioning": {
     "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
-    "deprecations": "A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of spytial-core. Each entry in `deprecations` names its replacement and the rewrite to apply."
+    "deprecations": "A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and each entry names its replacement and the rewrite to apply. Removal is signalled by `languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this manifest and becomes a parse error, so check `languageVersion` before assuming a spec you generated earlier still parses."
   },
   "document": {
     "sections": [

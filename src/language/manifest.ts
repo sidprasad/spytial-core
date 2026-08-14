@@ -61,8 +61,11 @@ export const LANGUAGE_VERSIONING = {
     'the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` ' +
     'records which release produced this file.',
   deprecations:
-    'A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of ' +
-    'spytial-core. Each entry in `deprecations` names its replacement and the rewrite to apply.',
+    'A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and ' +
+    'each entry names its replacement and the rewrite to apply. Removal is signalled by ' +
+    '`languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this ' +
+    'manifest and becomes a parse error, so check `languageVersion` before assuming a spec you ' +
+    'generated earlier still parses.',
 } as const;
 
 // ---- shared style blocks -------------------------------------------------

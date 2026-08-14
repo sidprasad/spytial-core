@@ -115,7 +115,7 @@ manifest.spytialCoreVersion;   // e.g. "4.2.0" — the release that produced thi
 manifest.deprecations;         // every deprecated form, with the rewrite that replaces it
 ```
 
-A date, not a semver: the language is a vocabulary, not an API surface with a compatibility contract to encode, and the date answers the one question a code generator has — *is what I generated against still current?* If it hasn't moved since the manifest you built against, nothing you emit needs revisiting. A deprecated form keeps parsing and keeps its meaning; it is removed only in a major release of `spytial-core`.
+A date, not a semver: the language is a vocabulary, not an API surface with a compatibility contract to encode, and the date answers the one question a code generator has — *is what I generated against still current?* If it hasn't moved since the manifest you built against, nothing you emit needs revisiting. A deprecated form keeps parsing and keeps its meaning for as long as the manifest lists it. Removal is signalled by `languageVersion` moving, not by the package major — a removed form leaves the manifest and becomes a parse error, so check `languageVersion` before assuming an older spec still parses.
 
 From TypeScript the same data is available without a fetch:
 

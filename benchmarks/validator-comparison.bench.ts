@@ -21,7 +21,7 @@ import {
     AlignmentConstraint,
     LayoutConstraint,
 } from '../src/layout/interfaces';
-import { RelativeOrientationConstraint, GroupByField } from '../src/layout/layoutspec';
+import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -189,7 +189,7 @@ describe('Validator Comparison Benchmarks', () => {
                 const nodes = Array.from({ length: totalNodes }, (_, i) => makeNode(`N${i}`));
                 const groups: LayoutGroup[] = [];
                 for (let g = 0; g < nGroups; g++) {
-                    const gbf = new GroupByField(`f${g}`, 0, 1);
+                    const gbf = new GroupBySelector(`f${g}`, `f${g}`);
                     const ids = nodes.slice(g * membersPerGroup, (g + 1) * membersPerGroup).map(nd => nd.id);
                     groups.push({
                         name: `G${g}`, nodeIds: ids,
@@ -309,7 +309,7 @@ describe('Validator Comparison Benchmarks', () => {
             const nodes = Array.from({ length: 16 }, (_, i) => makeNode(`N${i}`));
             const groups: LayoutGroup[] = [];
             for (let g = 0; g < 3; g++) {
-                const gbf = new GroupByField(`f${g}`, 0, 1);
+                const gbf = new GroupBySelector(`f${g}`, `f${g}`);
                 const ids = nodes.slice(g * 4, (g + 1) * 4).map(nd => nd.id);
                 groups.push({
                     name: `G${g}`, nodeIds: ids,
@@ -344,7 +344,7 @@ describe('Validator Comparison Benchmarks', () => {
             const nodes = Array.from({ length: 20 }, (_, i) => makeNode(`N${i}`));
             const groups: LayoutGroup[] = [];
             for (let g = 0; g < 5; g++) {
-                const gbf = new GroupByField(`f${g}`, 0, 1);
+                const gbf = new GroupBySelector(`f${g}`, `f${g}`);
                 const ids = nodes.slice(g * 3, (g + 1) * 3).map(nd => nd.id);
                 groups.push({
                     name: `G${g}`, nodeIds: ids,
