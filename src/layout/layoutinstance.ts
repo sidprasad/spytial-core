@@ -1318,9 +1318,19 @@ export class LayoutInstance {
                 const toTagResult = this.evaluator.evaluate(directive.toTag, { instanceIndex: this.instanceNum });
                 const selectedAtoms = toTagResult.selectedAtoms();
                 
-                // Then, evaluate the value selector to get the n-ary result
+                // Then, evaluate the value selector to get the n-ary result.
+                //
+                // `selectedTuplesAll` drops single-atom tuples in the data
+                // evaluators, so a unary value selector used to reach the loop
+                // below with nothing in hand and tag no node at all — even
+                // though that loop has always had a unary branch. Feed those
+                // atoms through as 1-tuples, the same shape and the same
+                // maxArity() test addDrawInferredEdges uses, so a tag means the
+                // same thing whichever evaluator produced the result.
                 const valueResult = this.evaluator.evaluate(directive.value, { instanceIndex: this.instanceNum });
-                const allTuples = valueResult.selectedTuplesAll();
+                const allTuples: string[][] = valueResult.maxArity() > 1
+                    ? valueResult.selectedTuplesAll()
+                    : valueResult.selectedAtoms().map((atom: string) => [atom]);
                 
                 // For each node that should receive this tag
                 for (const atomId of selectedAtoms) {

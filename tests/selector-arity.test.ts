@@ -113,6 +113,37 @@ directives:
     expect(layout.edges.filter((e) => e.id.includes('_inferred_'))).toHaveLength(0);
   });
 
+  it('a unary tag value tags each selected atom with its own label', () => {
+    // The unary branch in `applyTags` was unreachable until the value result
+    // was fed through as 1-tuples: `selectedTuplesAll` drops single-atom tuples
+    // in both data evaluators, so this used to tag nothing at all.
+    expect(accepted('tag', 'value', 'unary')).toBeDefined();
+    const layout = generate(`
+directives:
+  - tag:
+      toTag: Node
+      name: present
+      value: Node
+`);
+    for (const node of layout.nodes) {
+      expect((node as any).attributes.present, `${node.id} is tagged`).toEqual([node.id]);
+    }
+  });
+
+  it('a tag value still keys on the tagged atom, whatever its arity', () => {
+    // Unary must not become "tag everything": only atoms in the value result
+    // are tagged, the same rule the longer shapes follow.
+    const layout = generate(`
+directives:
+  - tag:
+      toTag: Node
+      name: middle
+      value: (Node - a) - z
+`);
+    const tagged = layout.nodes.filter((n: any) => n.attributes?.middle !== undefined);
+    expect(tagged.map((n) => n.id)).toEqual(['m']);
+  });
+
   it('a unary inferredEdge selector feeds both ends when draw is given', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {

@@ -509,6 +509,7 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 - Does **NOT** remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
 - For higher-arity results: displays as `name[key1][key2]: value`
+- For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
 - `textStyle` is the same shared block edges and atoms use. `size` scales the line's font (`large` bigger than the node label, `normal` default, `small` smaller still); `color` sets its text color (unset = inherit the node label color)
 
 ### Examples

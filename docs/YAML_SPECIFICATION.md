@@ -847,6 +847,7 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
 - Does NOT remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
 - For n-ary results: displays as `name[key1][key2]: value`
+- For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
 - `textStyle` is the same shared block edges and atoms use. `size` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still. `color` sets the line's text color (unset = inherit the node's label color).
 
 **Examples:**

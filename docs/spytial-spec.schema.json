@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:spytial:layout-spec-schema:2026-07-29",
+  "$id": "urn:spytial:layout-spec-schema:2026-08-14",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-07-29, from spytial-core 5.0.1. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
-  "x-spytial-language-version": "2026-07-29",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-14, from spytial-core 5.0.1. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
+  "x-spytial-language-version": "2026-08-14",
   "x-spytial-core-version": "5.0.1",
   "type": "object",
   "properties": {
@@ -812,7 +812,7 @@
               "minLength": 1
             },
             "value": {
-              "description": "Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; a longer tuple shows one line per tuple, as `name[k1][k2]: value`. It must return tuples: a unary selector produces no tags at all. Selector arity: n-ary — 2+ columns.",
+              "description": "Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; a longer tuple shows one line per tuple, as `name[k1][k2]: value`. A unary result tags each selected atom with its own label. Selector arity: n-ary — 2+ columns (also accepted: 1 column).",
               "type": "string",
               "minLength": 1
             },

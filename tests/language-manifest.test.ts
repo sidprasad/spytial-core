@@ -393,11 +393,11 @@ describe('language manifest — selector arities', () => {
 
   it('non-primary arities are only claimed where the engine really takes them', () => {
     // A generator trusting `accepts` will emit these, so the extras have to be
-    // real. Only `group` and `inferredEdge` branch on arity in the engine
-    // (`acceptSelectorResult(..., 'any', ...)`); everything else is checked
-    // against a single shape, save the longer-tuple form that `selectedTwoples`
-    // makes universal.
-    const branchesOnArity = ['group.selector', 'inferredEdge.selector'];
+    // real. Only these three branch on the result's arity in the engine — the
+    // first two via `acceptSelectorResult(..., 'any', ...)`, `tag.value` on
+    // `maxArity()` in `applyTags`. Everything else is checked against a single
+    // shape, save the longer-tuple form that `selectedTwoples` makes universal.
+    const branchesOnArity = ['group.selector', 'inferredEdge.selector', 'tag.value'];
     for (const { path, field } of selectorFields) {
       const extras = field.accepts!.filter((a) => a.arity !== field.arity).map((a) => a.arity);
       if (branchesOnArity.includes(path)) continue;
