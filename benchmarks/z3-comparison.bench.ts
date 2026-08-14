@@ -32,7 +32,11 @@ import {
     LayoutConstraint,
 } from '../src/layout/interfaces';
 import { RelativeOrientationConstraint, GroupBySelector } from '../src/layout/layoutspec';
-import { initZ3, shutdownZ3, resetZ3, solveZ3 } from '../tests/helpers/z3-oracle';
+// No per-case reset: the oracle owns its WASM lifecycle. resetZ3() used to
+// rebuild the Z3 context between cases; #514 removed it in favour of
+// runSolve() recycling the whole module whenever Z3's allocator estimate
+// crosses its threshold, which subsumes it. Init once, shut down at the end.
+import { initZ3, shutdownZ3, solveZ3 } from '../tests/helpers/z3-oracle';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -128,7 +132,9 @@ async function bench(
     customTimes.sort((a, b) => a - b);
     const customMs = customTimes[Math.floor(trials / 2)];
 
-    // Time Z3 (median — fresh context already set up by caller)
+    // Time Z3 (median). No fresh context is set up per case any more; a trial
+    // may instead include an oracle-driven module recycle, which is part of
+    // why the median rather than the mean is reported.
     let z3Ms = 0;
     let z3Sat = false;
     let z3Skipped = z3Dead;
@@ -551,7 +557,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Linked lists', () => {
         for (const n of [5, 10, 15, 25]) {
             it(`singly linked, ${n} nodes`, async () => {
-                await resetZ3();
                 const r = await bench(`linked-list-${n}`, linkedList(n));
                 expect(r.agree).toBe(true);
             });
@@ -559,7 +564,6 @@ describe('Custom solver vs Z3 oracle', () => {
 
         for (const n of [5, 10, 15, 25]) {
             it(`doubly linked, ${n} nodes`, async () => {
-                await resetZ3();
                 const r = await bench(`doubly-linked-${n}`, doublyLinkedList(n));
                 expect(r.agree).toBe(true);
             });
@@ -571,7 +575,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Binary trees (BST / RB-tree / heap)', () => {
         for (const n of [7, 15, 25]) {
             it(`complete binary tree, ${n} nodes`, async () => {
-                await resetZ3();
                 const r = await bench(`binary-tree-${n}`, binaryTree(n));
                 expect(r.agree).toBe(true);
             });
@@ -583,7 +586,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('B-trees', () => {
         for (const [bf, d] of [[3, 1], [3, 2], [4, 2]] as const) {
             it(`B-tree bf=${bf} depth=${d}`, async () => {
-                await resetZ3();
                 const layout = bTree(bf, d);
                 const r = await bench(`b-tree-${bf}×${d} (${layout.nodes.length}N)`, layout);
                 expect(r.agree).toBe(true);
@@ -596,7 +598,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Hash tables with chaining', () => {
         for (const [buckets, chain] of [[3, 2], [5, 2], [5, 3], [8, 2]] as const) {
             it(`${buckets} buckets × ${chain} chain`, async () => {
-                await resetZ3();
                 const layout = hashTable(buckets, chain);
                 const r = await bench(`hash-${buckets}b×${chain}c (${layout.nodes.length}N)`, layout);
                 expect(r.agree).toBe(true);
@@ -610,7 +611,6 @@ describe('Custom solver vs Z3 oracle', () => {
         for (const n of [4, 5, 6, 8, 10]) {
             const nDisj = n * (n - 1) / 2;
             it(`${n} nodes (${nDisj} disjunctions)`, async () => {
-                await resetZ3();
                 const r = await bench(`graph-${n} (${nDisj} disj)`, graphLayout(n));
                 expect(r.agree).toBe(true);
             });
@@ -622,7 +622,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Disjoint set forests', () => {
         for (const [nSets, sz] of [[3, 3], [4, 3], [5, 3], [3, 5]] as const) {
             it(`${nSets} sets × ${sz} members`, async () => {
-                await resetZ3();
                 const layout = disjointSets(nSets, sz);
                 const r = await bench(`disjoint-${nSets}×${sz} (${layout.nodes.length}N)`, layout);
                 expect(r.agree).toBe(true);
@@ -634,7 +633,6 @@ describe('Custom solver vs Z3 oracle', () => {
 
     describe('UNSAT (conflict detection)', () => {
         it('ordering cycle (3 nodes)', async () => {
-            await resetZ3();
             const nodes = [makeNode('A'), makeNode('B'), makeNode('C')];
             const layout: InstanceLayout = {
                 nodes, edges: [],
@@ -647,7 +645,6 @@ describe('Custom solver vs Z3 oracle', () => {
         });
 
         it('alignment + ordering contradiction (4 nodes)', async () => {
-            await resetZ3();
             const nodes = Array.from({ length: 4 }, (_, i) => makeNode(`U${i}`));
             const layout: InstanceLayout = {
                 nodes, edges: [],
@@ -660,7 +657,6 @@ describe('Custom solver vs Z3 oracle', () => {
         });
 
         it('search exhaustion (5 nodes, all alts infeasible)', async () => {
-            await resetZ3();
             const nodes = Array.from({ length: 5 }, (_, i) => makeNode(`V${i}`));
             const constraints = nodes.slice(0, -1).map((nd, i) => leftOf(nd, nodes[i + 1]));
             const alts = nodes.slice(0, -1).map(nd => [leftOf(nodes[4], nd)]);
@@ -679,7 +675,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Large-scale: sparse orderings only', () => {
         for (const n of [50, 100]) {
             it(`${n} nodes, ~5% ordering density`, async () => {
-                await resetZ3();
                 const layout = randomLayout(n, { seed: n, orderingDensity: 0.05 });
                 const r = await bench(`random-orderings-${n}`, layout, 3);
                 expect(r.agree).toBe(true);
@@ -690,7 +685,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Large-scale: orderings + alignments', () => {
         for (const n of [50, 100]) {
             it(`${n} nodes, orderings + alignments`, async () => {
-                await resetZ3();
                 const layout = randomLayout(n, {
                     seed: n + 1000,
                     orderingDensity: 0.03,
@@ -706,7 +700,6 @@ describe('Custom solver vs Z3 oracle', () => {
         for (const n of [50, 100]) {
             const nDisj = Math.floor(n * 0.3);
             it(`${n} nodes, ${nDisj} disjunctions`, async () => {
-                await resetZ3();
                 const layout = randomLayout(n, {
                     seed: n + 2000,
                     orderingDensity: 0.03,
@@ -722,7 +715,6 @@ describe('Custom solver vs Z3 oracle', () => {
         // 100-node group layouts exceed 60s even for the custom solver
         for (const [n, nGroups, gSize] of [[50, 3, 4], [50, 5, 5]] as const) {
             it(`${n} nodes, ${nGroups} groups × ${gSize} members`, async () => {
-                await resetZ3();
                 const layout = randomLayout(n, {
                     seed: n + 3000,
                     orderingDensity: 0.02,
@@ -745,7 +737,6 @@ describe('Custom solver vs Z3 oracle', () => {
         // from O(K×M⁴) alternatives in a single Or() call).
         for (const [m, k] of [[3, 3], [5, 3], [6, 3], [8, 5], [10, 5]] as const) {
             it(`negated group M=${m} members, K=${k} non-members`, async () => {
-                await resetZ3();
                 const members: LayoutNode[] = [];
                 const extras: LayoutNode[] = [];
                 const constraints: LayoutConstraint[] = [];
@@ -833,7 +824,6 @@ describe('Custom solver vs Z3 oracle', () => {
     describe('Large-scale: full mix', () => {
         for (const [n, nDisj, nGroups] of [[50, 10, 3], [100, 20, 3]] as const) {
             it(`${n} nodes, all constraint types`, async () => {
-                await resetZ3();
                 const layout = randomLayout(n, {
                     seed: n + 4000,
                     orderingDensity: 0.03,
