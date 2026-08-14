@@ -1,7 +1,12 @@
 /**
- * The Spytial spec-language manifest: a machine-readable description of every
- * constraint and directive the YAML spec language accepts, what each field
- * means, what is deprecated, and what to write instead.
+ * The Spytial spec-language manifest: a machine-readable description of the
+ * constraints and directives to write in a spec, what each field means, what is
+ * deprecated, and what to write instead.
+ *
+ * It describes what to *emit*, which is not quite everything the parser accepts.
+ * The old group-by-field form (`group: { field, groupOn, addToGroup }`) still
+ * parses but is described nowhere here, so the generated schema rejects it; see
+ * the note in `DOCUMENT`. Anything else the parser takes, this file covers.
  *
  * ## Why this file exists
  *
@@ -457,69 +462,6 @@ const GROUP_BY_SELECTOR: LanguageItem = {
     blockField('textStyle', "The group's own label. Only `color` applies today — group labels auto-fit their box, so `size` is reserved."),
   ],
   example: { selector: 'Team.members', name: 'Team' },
-};
-
-const GROUP_BY_FIELD: LanguageItem = {
-  id: 'group.byField',
-  yamlKey: 'group',
-  label: 'Group (by field)',
-  description: 'Group by indexing into the tuples of a relation.',
-  sections: ['constraints'],
-  valueShape: 'mapping',
-  discriminator: { field: 'field', present: true },
-  supportsHold: true,
-  deprecated: {
-    replacedBy: 'group',
-    reason:
-      'A binary selector whose first column is the key and whose second is the members says the same thing ' +
-      'without tuple indices.',
-    mapping: {
-      // `field` + the two indices collapse into one transposed-or-not selector;
-      // there is no key-for-key rewrite, so the mapping names the target shape.
-      field: 'selector',
-      groupOn: 'selector (column order)',
-      addToGroup: 'selector (column order)',
-      selector: 'selector',
-    },
-    warningSpecType: 'group',
-  },
-  fields: [
-    {
-      name: 'field',
-      type: 'relation',
-      required: true,
-      enforcement: 'unchecked',
-      description: 'The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector.',
-      note:
-        'Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a ' +
-        'group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.',
-    },
-    {
-      name: 'groupOn',
-      type: 'integer',
-      required: true,
-      enforcement: 'parse-error',
-      description: '0-based index of the tuple column to use as the group key.',
-    },
-    {
-      name: 'addToGroup',
-      type: 'integer',
-      required: true,
-      enforcement: 'parse-error',
-      description: '0-based index of the tuple column whose atom joins the group.',
-    },
-    {
-      name: 'selector',
-      type: 'selector',
-      arity: 'unary',
-      accepts: onlyUnary('The atoms this grouping is narrowed to.'),
-      description: 'Restrict which atoms this grouping applies to.',
-    },
-  ],
-  example: { field: 'worksIn', groupOn: 1, addToGroup: 0 },
-  note:
-    'To migrate: over `worksIn: Employee -> Department`, `groupOn: 1` / `addToGroup: 0` keys on Department, ' +
-    'so it becomes `selector: ~worksIn` plus the `name` that form requires.',
 };
 
 const SIZE: LanguageItem = {
@@ -1042,7 +984,6 @@ const ITEMS: readonly LanguageItem[] = [
   CYCLIC,
   ALIGN,
   GROUP_BY_SELECTOR,
-  GROUP_BY_FIELD,
   SIZE,
   HIDE_ATOM,
   // directives
@@ -1085,6 +1026,11 @@ const DOCUMENT = {
     'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
     'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
       'a `specType` naming the form, so a consumer can surface them without matching prose.',
+    'One form is deliberately absent: the old group-by-field shape, `group: { field, groupOn, addToGroup }`. ' +
+      'The parser still accepts it and still groups the same way, but it is no longer described here and the ' +
+      'generated JSON Schema rejects it — do not emit it. Write a `group` whose binary `selector` has the key ' +
+      'in its first column and the members in its second; over `worksIn: Employee -> Department`, ' +
+      '`groupOn: 1` / `addToGroup: 0` becomes `selector: ~worksIn` plus a `name`.',
   ],
 };
 

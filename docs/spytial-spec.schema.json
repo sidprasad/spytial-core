@@ -28,9 +28,6 @@
             "$ref": "#/$defs/group"
           },
           {
-            "$ref": "#/$defs/group_byField"
-          },
-          {
             "$ref": "#/$defs/size"
           },
           {
@@ -538,54 +535,6 @@
         "group"
       ],
       "additionalProperties": false
-    },
-    "group_byField": {
-      "title": "Group (by field)",
-      "description": "Group by indexing into the tuples of a relation. DEPRECATED — use `group` instead. A binary selector whose first column is the key and whose second is the members says the same thing without tuple indices.",
-      "type": "object",
-      "properties": {
-        "group": {
-          "type": "object",
-          "properties": {
-            "field": {
-              "description": "The relation whose tuples are grouped. Its presence is what selects this form over group-by-selector. Because this field is the discriminator, omitting it does not raise an error — it re-reads the item as a group-by-selector, which then needs a `selector`. A `group` with neither is silently dropped.",
-              "type": "string",
-              "minLength": 1
-            },
-            "groupOn": {
-              "description": "0-based index of the tuple column to use as the group key.",
-              "type": "integer"
-            },
-            "addToGroup": {
-              "description": "0-based index of the tuple column whose atom joins the group.",
-              "type": "integer"
-            },
-            "selector": {
-              "description": "Restrict which atoms this grouping applies to. Selector arity: unary — 1 column.",
-              "type": "string"
-            },
-            "hold": {
-              "type": "string",
-              "enum": [
-                "always",
-                "never"
-              ],
-              "description": "Negation. `never` asserts the constraint must not hold; `always` (the default) is the positive form."
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "field",
-            "groupOn",
-            "addToGroup"
-          ]
-        }
-      },
-      "required": [
-        "group"
-      ],
-      "additionalProperties": false,
-      "deprecated": true
     },
     "size": {
       "title": "Size",
