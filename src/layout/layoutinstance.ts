@@ -3660,9 +3660,11 @@ export class LayoutInstance {
             const draw = he.draw!;
 
             // Check the named group ends against the groups that were actually
-            // built, once per directive. Parsing already checked the names exist;
-            // what kind of groups a constraint builds (one per key, or a single
-            // unkeyed group) is only knowable per instance.
+            // built, once per directive. Parsing only warns about a name no group
+            // constraint defines, so a name may still be unresolved here — it
+            // lands in the "no groups exist" skip below. What kind of groups a
+            // constraint builds (one per key, or a single unkeyed group) is in
+            // any case only knowable per instance.
             const namedEnds = [...new Set([draw.source, draw.target])]
                 .filter((end): end is string => end !== null);
             const builtFor = (endName: string) => groups.filter(grp =>

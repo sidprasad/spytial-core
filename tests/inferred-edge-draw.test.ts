@@ -56,6 +56,17 @@ function generate(specStr: string, data: IJsonDataInstance = regionsData) {
   return layoutInstance.generateLayout(instance).layout;
 }
 
+/** Silence the warnings the parser writes straight to the console. */
+function quietly<T>(fn: () => T): T {
+  const original = console.warn;
+  console.warn = () => {};
+  try {
+    return fn();
+  } finally {
+    console.warn = original;
+  }
+}
+
 describe('parseInferredEdgeDraw', () => {
   it('parses group -> group', () => {
     expect(parseInferredEdgeDraw('regions -> regions')).toEqual({ source: 'regions', target: 'regions' });
@@ -81,7 +92,10 @@ describe('parseInferredEdgeDraw', () => {
 });
 
 describe('inferredEdge draw — spec validation', () => {
-  it('rejects a draw reference to an unknown group name at parse time', () => {
+  it('warns about a draw reference to an unknown group name, and keeps the spec', () => {
+    // An unresolved name must not be fatal: a fragment can name a group that
+    // another fragment defines, and one bad endpoint must not take the rest of
+    // the document with it. The layout skips the edge (see the runtime tests).
     const spec = `
 constraints:
   - group:
@@ -92,8 +106,65 @@ directives:
       name: connected
       selector: connected
       draw: zones -> regions
+  - inferredEdge:
+      name: sibling
+      selector: sibling
 `;
-    expect(() => parseLayoutSpec(spec)).toThrow(/references group 'zones'/);
+    const parsed = quietly(() => parseLayoutSpec(spec));
+    const warning = parsed.warnings!.find(w => w.code === 'unresolved-reference');
+    expect(warning, 'expected an unresolved-reference warning').toBeDefined();
+    expect(warning!.message).toMatch(/references group 'zones'/);
+    expect(warning!.message).toMatch(/Known group names: regions/);
+    expect(warning!.specType).toBe('inferredEdge');
+    // The offending directive and every other one survive the parse.
+    expect(parsed.directives.inferredEdges.map(ie => ie.name)).toEqual(['connected', 'sibling']);
+    expect(parsed.directives.inferredEdges[0].draw).toEqual({ source: 'zones', target: 'regions' });
+  });
+
+  it('reports one missing name once, however many ends mention it', () => {
+    const spec = `
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> zones
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const parsed = parseLayoutSpec(spec);
+      expect(parsed.warnings!.filter(w => w.code === 'unresolved-reference')).toHaveLength(1);
+      expect(warn.mock.calls.filter(c => String(c[0]).includes("group 'zones'"))).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('reports each distinct missing name when the ends differ', () => {
+    const spec = `
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> regions
+`;
+    const parsed = quietly(() => parseLayoutSpec(spec));
+    const names = parsed.warnings!
+      .filter(w => w.code === 'unresolved-reference')
+      .map(w => w.message.match(/references group '(\w+)'/)![1]);
+    expect(names).toEqual(['zones', 'regions']);
+  });
+
+  it('says so when the spec defines no groups at all', () => {
+    const spec = `
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> _
+`;
+    const parsed = quietly(() => parseLayoutSpec(spec));
+    const warning = parsed.warnings!.find(w => w.code === 'unresolved-reference');
+    expect(warning!.message).toMatch(/No group constraints are defined/);
   });
 
   it('accepts a draw reference to a defined group name', () => {
@@ -368,6 +439,35 @@ directives:
       expect(edges).toHaveLength(0);
       const skips = warn.mock.calls.filter(c => String(c[0]).includes("no 'owners' groups exist"));
       expect(skips).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('skips the edge but still lays out the rest when no constraint defines the name', () => {
+    // The whole point of warning rather than throwing: the unresolved endpoint
+    // costs you that one edge, not the group and not the other directives.
+    const spec = `
+constraints:
+  - group:
+      name: regions
+      selector: contains
+directives:
+  - inferredEdge:
+      name: connected
+      selector: connected
+      draw: zones -> zones
+  - inferredEdge:
+      name: sibling
+      selector: connected
+`;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const layout = generate(spec);
+      expect(layout.edges.filter(e => e.id.includes('_inferred_<:connected'))).toHaveLength(0);
+      // The directive with no `draw` is untouched, and so are the groups.
+      expect(layout.edges.filter(e => e.id.includes('_inferred_<:sibling'))).toHaveLength(1);
+      expect(layout.groups.map(gr => gr.name).sort()).toEqual(['regions[r1]', 'regions[r2]']);
     } finally {
       warn.mockRestore();
     }

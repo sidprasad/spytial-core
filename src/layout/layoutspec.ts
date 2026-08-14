@@ -635,28 +635,46 @@ export function parseLayoutSpec(s: string): LayoutSpec {
         layoutSpec.directives.sizes = sizesFromConstraints;
         layoutSpec.directives.hiddenAtoms = hiddenAtomsFromConstraints;
     }
-    validateInferredEdgeDrawReferences(layoutSpec);
+    warnUnresolvedInferredEdgeDrawReferences(layoutSpec, warnings);
     return layoutSpec;
 }
 
 /**
- * Statically validate inferredEdge `draw` references: every group name an
- * endpoint mentions must belong to some group (by-selector) constraint.
- * Which group of that constraint an endpoint attaches to is data-dependent
- * (keyed by the endpoint's atom), so only the name is checkable here.
+ * Report inferredEdge `draw` endpoints that name a group no group (by-selector)
+ * constraint defines. Which group of that constraint an endpoint attaches to is
+ * data-dependent (keyed by the endpoint's atom), so only the name is checkable
+ * here.
+ *
+ * A warning, not an error, and the directive is left in the spec. An unresolved
+ * name is a fact about the document as a whole, so rejecting it would make one
+ * item's validity depend on which other items are present — a spec fragment
+ * that is fine once composed with the fragment carrying its `group` would throw
+ * on its own, and every other constraint and directive in the document would go
+ * down with it. The layout already handles this exact case: a `draw` end whose
+ * name builds no groups skips that one directive and leaves the rest of the
+ * spec running (see `addDrawInferredEdges`). Warning here just says it earlier.
  */
-function validateInferredEdgeDrawReferences(spec: LayoutSpec): void {
+function warnUnresolvedInferredEdgeDrawReferences(spec: LayoutSpec, warnings: ParseWarning[]): void {
     const groupNames = new Set(spec.constraints.grouping.byselector.map(gc => gc.name));
     for (const ie of spec.directives.inferredEdges) {
         if (!ie.draw) continue;
-        for (const end of [ie.draw.source, ie.draw.target]) {
-            if (end !== null && !groupNames.has(end)) {
+        // Deduped, so `draw: zones -> zones` reports the one missing name once
+        // rather than twice. Same shape `addDrawInferredEdges` uses on the same
+        // pair of ends.
+        const namedEnds = [...new Set([ie.draw.source, ie.draw.target])]
+            .filter((end): end is string => end !== null);
+        for (const end of namedEnds) {
+            if (!groupNames.has(end)) {
                 const known = groupNames.size > 0
                     ? ` Known group names: ${[...groupNames].join(', ')}.`
                     : ` No group constraints are defined.`;
-                throw new Error(
-                    `inferredEdge '${ie.name}': draw references group '${end}', but no group constraint with that name exists.${known}`
-                );
+                const message =
+                    `inferredEdge '${ie.name}': draw references group '${end}', but no group constraint with `
+                    + `that name exists.${known} This edge will be skipped unless a group '${end}' is defined.`;
+                // Same dual emission as the deprecation warnings: console for
+                // back-compat, and the accumulator that rides out on the spec.
+                console.warn(message);
+                warnings.push({ code: 'unresolved-reference', message, specType: 'inferredEdge' });
             }
         }
     }

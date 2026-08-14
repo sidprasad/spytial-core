@@ -840,7 +840,7 @@
           "enforcement": "parse-error",
           "pattern": "^\\s*[^\\s](?:(?!->)[\\s\\S])*->(?:(?!->)[\\s\\S])*[^\\s]\\s*$",
           "description": "Reinterpret what each end attaches to, as `<end> -> <end>`. Each end is `_` (the atom itself, the default) or the name of a `group` constraint, in which case the end attaches to that group's hull. The left end applies to the first atom of each tuple, the right end to the last.",
-          "note": "Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse error, as is a group name that no `group` constraint defines. `draw` never reorders — transpose the selector (`~connected`) to flip an edge."
+          "note": "Parsed strictly: a value that is not a string, or that does not contain exactly one `->`, is a parse error. A group name that no `group` constraint defines is not — it raises a warning (code `unresolved-reference`, specType `inferredEdge`) and the edge is skipped at layout time, so a fragment that names a group defined in another fragment still parses. `draw` never reorders — transpose the selector (`~connected`) to flip an edge."
         },
         {
           "name": "lineStyle",
