@@ -1,8 +1,9 @@
 name: Test
 
+# pull_request has no branches filter on purpose: a stacked PR (based on
+# another PR's branch) deserves the same gates as one based on main.
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
