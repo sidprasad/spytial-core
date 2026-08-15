@@ -22,6 +22,3 @@ export type { SpytialValidationResult } from './shims';
 // Structured-data types (unchanged).
 export type { ConstraintData, DirectiveData } from './interfaces';
 export type { ConstraintType, DirectiveType } from './types';
-
-// Legacy description/constants used by integrators.
-export * from './constants';

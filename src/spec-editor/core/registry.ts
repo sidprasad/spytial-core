@@ -35,10 +35,8 @@
 
 import type { Diagnostic, FieldSpec, ItemDefinition, ItemKind } from './types';
 
-// Defaults mirrored from src/components/NoCodeView/constants.ts so the new
-// editor produces the same starting values as the editor it replaces. We keep
-// local copies (rather than importing the React-adjacent module) to keep this
-// package free of any coupling to the old NoCodeView internals.
+// Default starting values carried over from the retired NoCodeView editor
+// (its constants module is gone; these are now the canonical copies).
 export const DEFAULT_NODE_WIDTH = 100;
 export const DEFAULT_NODE_HEIGHT = 60;
 const DEFAULT_COLOR = '#000000';
