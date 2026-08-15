@@ -1,13 +1,11 @@
 {
-  // Best-effort declaration emit for the npm entries (dist/types).
+  // Declaration emit for the npm entries (dist/types).
   //
-  // Why not tsup dts? tsup's dts build hard-fails on the ~70 pre-existing
-  // baseline type errors (see `npm run typecheck`), which is exactly why the
-  // old tsup.config.ts dts build was abandoned. tsc, by contrast, still EMITS
-  // declarations in the presence of those errors, so `build:types` runs tsc
-  // and then verifies dist/types/index.d.ts actually landed rather than
-  // trusting the exit code. When the baseline reaches zero, fold this back
-  // into a strict dts build.
+  // tsc is the single declaration emitter; the tsup configs keep dts off so
+  // two emitters never need reconciling. The type baseline is zero, so the
+  // `&&` in build:types fails the build on any tsc error; the accessSync tail
+  // in that script additionally guards the emitted layout (dist/types/**)
+  // that package.json's exports map points at — tsup's dts would flatten it.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,

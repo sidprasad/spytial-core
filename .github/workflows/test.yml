@@ -14,11 +14,64 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
 
-      - run: npm install
+      - run: npm ci
 
-      - run: npm test -- --run --exclude tests/z3-equivalence.test.ts --exclude tests/language-manifest.test.ts
+      # The conformance CLI suite gates itself on dist/cli/spytial-check.js
+      # existing (describe.skipIf). Without this build it silently skips on
+      # every CI run and is green by vacuity.
+      - run: npm run build:conformance
+
+      # Both Z3 suites (equivalence + modal-equivalence) run in the
+      # solver-oracle job below; the modal suite boots Z3 WASM with 120s
+      # timeouts and has no business in the main gate's critical path.
+      - run: npm run test:run -- --exclude tests/z3-equivalence.test.ts --exclude tests/z3-modal-equivalence.test.ts --exclude tests/language-manifest.test.ts
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+  # Before this job existed, `npm run build:all` first ran at tag time in
+  # publish.yml — the worst possible moment to learn the build is broken.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build:all
 
   # The spec language is a published contract (docs/spytial-language.json +
   # docs/spytial-spec.schema.json), so it gets its own job rather than riding
@@ -32,9 +85,10 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
 
-      - run: npm install
+      - run: npm ci
 
       # Regenerate first: this fails loudly when the checked-in artifacts are
       # stale, instead of leaving consumers pinned to a manifest that no longer
@@ -53,12 +107,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      # The path filter names the layout core files (interfaces, layoutspec,
+      # layoutinstance) explicitly: they define the constraint types and build
+      # the constraints the validator solves, so a change there can shift
+      # validator behavior without touching a *constraint* filename.
       - name: Check for relevant changes
         id: changes
         run: |
           BASE=${{ github.event.pull_request.base.sha || 'HEAD~1' }}
           if git diff --name-only "$BASE"...HEAD | grep -qE \
-            'src/layout/.*constraint|tests/.*z3|tests/helpers/.*oracle|tests/helpers/.*constraint'; then
+            'src/layout/.*constraint|src/layout/(interfaces|layoutspec|layoutinstance)\.ts|tests/.*z3|tests/helpers/.*oracle|tests/helpers/.*constraint'; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
@@ -67,14 +125,16 @@ jobs:
       - uses: actions/setup-node@v5
         if: steps.changes.outputs.run == 'true'
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: 'npm'
 
-      - run: npm install
+      - run: npm ci
         if: steps.changes.outputs.run == 'true'
 
       # --bail=1: one confirmed validator/oracle discrepancy is enough signal;
       # everything after it (especially after a Z3 WASM abort) is noise.
-      - run: npx vitest run --bail=1 tests/z3-equivalence.test.ts
+      # The modal suite self-skips (describe.runIf) when Z3 WASM cannot load.
+      - run: npx vitest run --bail=1 tests/z3-equivalence.test.ts tests/z3-modal-equivalence.test.ts
         if: steps.changes.outputs.run == 'true'
 
       - name: Skip (no relevant changes)
