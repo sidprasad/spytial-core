@@ -181,7 +181,7 @@ export class RacketGDataInstance implements IDataInstance {
      * SidP: TODO: I'm not sure if this is the right interpretation of projections.
      * I don't think its the same as Alloy projections.
      */
-    applyProjections(atomIds: string[]): IDataInstance {
+    applyProjections(_atomIds: string[]): IDataInstance {
 
         // TODO: NO PROJECTION FOR NOW.
 

@@ -2,8 +2,7 @@ import { Solver, Variable, Expression, Strength, Operator, Constraint as KiwiCon
 import { IDataInstance } from '../data-instance/interfaces';
 import {
     LayoutConstraint, InstanceLayout, LayoutNode,
-    LeftConstraint, TopConstraint, AlignmentConstraint,
-    DisjunctiveConstraint,
+    LeftConstraint, TopConstraint,
     isLeftConstraint, isTopConstraint, isAlignmentConstraint,
 } from './interfaces';
 import {
@@ -297,15 +296,6 @@ function checkImplication(
     return { implied: true };
 }
 
-/** Backwards-compatible wrapper used internally. */
-function isImpliedByBaseSet(
-    nodes: LayoutNode[],
-    baseConstraints: LayoutConstraint[],
-    extra: LayoutConstraint,
-): boolean {
-    return checkImplication(nodes, baseConstraints, extra).implied;
-}
-
 /**
  * Produce one or more *alternative* constraint sets whose conjunction
  * represents the negation of the given constraint.
@@ -437,8 +427,8 @@ function tagIISConstraints(
     error: PositionalConstraintError,
     allConstraints: LayoutConstraint[],
     boundaryIndex: number,
-    setA: Map<string, { abstract: AbstractConstraint; concrete: LayoutConstraint }>,
-    setB: Map<string, { abstract: AbstractConstraint; concrete: LayoutConstraint }>,
+    _setA: Map<string, { abstract: AbstractConstraint; concrete: LayoutConstraint }>,
+    _setB: Map<string, { abstract: AbstractConstraint; concrete: LayoutConstraint }>,
 ): ConflictDetail {
     const tagOne = (c: LayoutConstraint, idx: number): TaggedConstraint => {
         const ac = toAbstract(c);
@@ -586,7 +576,6 @@ export function checkLayoutEquivalence(
         realizationSatisfies = 'second';
     }
 
-    let relationship: EquivalenceResult & { equivalent: false };
     if (hasConflicts) {
         return {
             equivalent: false,

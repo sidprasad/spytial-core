@@ -320,7 +320,6 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   private bindControlEvents(): void {
     if (!this.controlsContainer) return;
 
-    const toolbar = this.controlsContainer.closest('#graph-toolbar') || this.controlsContainer;
     const buttons = this.controlsContainer.querySelectorAll('.si-tb-btn');
 
     buttons.forEach(btn => {

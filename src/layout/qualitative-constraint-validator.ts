@@ -49,14 +49,10 @@ import {
 
 import {
     RelativeOrientationConstraint,
-    CyclicOrientationConstraint,
-    AlignConstraint,
-    GroupBySelector,
 } from './layoutspec';
 
 import {
     type ConstraintError,
-    type ErrorMessages,
     type SourceConstraint,
     type IConstraintValidator,
     orientationConstraintToString,
@@ -2204,7 +2200,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             changed = false;
             for (const clause of this.learnedClauses) {
                 let numSat = 0;
-                let numUnsat = 0;
                 let lastUnresolved: Literal | null = null;
                 let unresolvedCount = 0;
 
@@ -2217,8 +2212,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                         numSat++;
                     } else if (!lit.sign && curAssign !== lit.alternativeIndex) {
                         numSat++;
-                    } else {
-                        numUnsat++;
                     }
                 }
 
@@ -2652,7 +2645,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     // ─── Conflict analysis ───────────────────────────────────────────────────
 
-    private analyzeConflict(assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
+    private analyzeConflict(_assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
         const clause: LearnedClause = [];
         let maxLevel = 0, secondMaxLevel = 0;
 
@@ -2672,7 +2665,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * negating ALL trail assignments (maximally blunt), trace which graph
      * edges blocked the assignment and map them to specific trail entries.
      */
-    private analyzeConflictForDecision(dIdx: number, aIdx: number, assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
+    private analyzeConflictForDecision(dIdx: number, aIdx: number, _assigned: Int32Array): { learnedClause: LearnedClause | null; backtrackLevel: number } {
         const alternative = this.allDisjunctions[dIdx].alternatives[aIdx];
         const involvedTrailIndices = new Set<number>();
 
@@ -3384,7 +3377,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // Error building
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private buildUnsatResult(assigned: Int32Array): { satisfiable: boolean; error: PositionalConstraintError } {
+    private buildUnsatResult(_assigned: Int32Array): { satisfiable: boolean; error: PositionalConstraintError } {
         const { feasibleConstraints, infeasibleDisjunctions, hGraph: _h, vGraph: _v } = this.computeMaximalFeasibleSubset();
 
         const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();

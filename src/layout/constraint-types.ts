@@ -1,4 +1,4 @@
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, GroupBoundaryConstraint, ImplicitConstraint } from './interfaces';
+import { LayoutNode, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, GroupBoundaryConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from './layoutspec';
 
 

@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { IDataInstance, IType, IRelation } from './interfaces';
+import type { IDataInstance, IRelation } from './interfaces';
 
 /**
  * Options for schema generation

@@ -2,11 +2,10 @@ import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance
 import { settleTupleTypes } from './tuple-types';
 import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
 import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
-import { 
+import {
   getInstanceAtoms,
   getInstanceTypes,
   getInstanceRelations,
-  getInstanceAtom,
   getSkolemNamesForAtom
 } from './alloy/alloy-instance';
 import { getAtomType } from './alloy/alloy-instance/src/atom';

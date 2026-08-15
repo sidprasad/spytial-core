@@ -1,6 +1,6 @@
 import { Solver, Variable, Expression, Strength, Operator, Constraint } from 'kiwi.js';
 import { DisjunctiveConstraint, InstanceLayout, LayoutNode, LayoutEdge, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, ImplicitConstraint, GroupBoundaryConstraint, isGroupBoundaryConstraint } from './interfaces';
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from './layoutspec';
+import { RelativeOrientationConstraint } from './layoutspec';
 
 // Re-export all shared types from constraint-types.ts for backward compatibility
 export {
@@ -99,7 +99,7 @@ class ConstraintValidator implements IConstraintValidator {
         const constraintsBeforeDisjunctions = this.added_constraints.length;
 
         // Deduplicate groups before validation to reduce constraint solving space
-        const { dedupedGroups, groupMap } = this.deduplicateGroups(this.groups);
+        const { dedupedGroups } = this.deduplicateGroups(this.groups);
         const originalGroups = this.groups;
         this.groups = dedupedGroups; // Use deduplicated for solving
 
@@ -1143,7 +1143,7 @@ class ConstraintValidator implements IConstraintValidator {
     private getMinimalDisjunctiveConflict(
         existingConstraints: LayoutConstraint[], 
         disjunctiveAlternative: LayoutConstraint[],
-        disjunctiveSource: SourceConstraint
+        _disjunctiveSource: SourceConstraint
     ): {
         existingConstraints: LayoutConstraint[];
         disjunctiveConstraints: LayoutConstraint[];
@@ -1617,7 +1617,7 @@ class ConstraintValidator implements IConstraintValidator {
         const result: LayoutConstraint[] = [...nonAlignments];
         
         // For each axis, remove transitive alignments
-        for (const [axis, axisAlignments] of byAxis.entries()) {
+        for (const axisAlignments of byAxis.values()) {
             if (axisAlignments.length <= 2) {
                 // Keep all if 2 or fewer
                 result.push(...axisAlignments);
@@ -1789,8 +1789,8 @@ class ConstraintValidator implements IConstraintValidator {
             const nodeIndex = this.getNodeIndex(bc.node.id);
             const nodeX = this.variables[nodeIndex].x;
             const nodeY = this.variables[nodeIndex].y;
-            const nodeWidth = bc.node.width || bc.minDistance;
-            const nodeHeight = bc.node.height || bc.minDistance
+            const _nodeWidth = bc.node.width || bc.minDistance;
+            const _nodeHeight = bc.node.height || bc.minDistance
 
             // TODO: Plumb these in.
 

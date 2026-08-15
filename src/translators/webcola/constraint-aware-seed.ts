@@ -340,8 +340,6 @@ export function computeConstraintAwareSeed(
   if (nodes.length === 0) {
     return null;
   }
-  const nodeById = new Map(nodes.map(n => [n.id, n]));
-
   // ── 1. Solve each axis's constraint system exactly ──────────────────
   const xSeparations: SeparationPair[] = [];
   const ySeparations: SeparationPair[] = [];
