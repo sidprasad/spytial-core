@@ -34,21 +34,26 @@ export default [
       '@typescript-eslint': tseslint,
     },
     rules: {
+      // TypeScript itself flags undefined identifiers; the core rule only
+      // produces false positives on TS sources.
+      'no-undef': 'off',
+      // Core rule stays off so the TS-aware rule is the only reporter.
       'no-unused-vars': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          args: 'after-used',
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrors: 'none',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'warn',
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-inferrable-types': 'off',
       'prefer-const': 'off',
       'no-var': 'off',
-    },
-  },
-  {
-    // Disable no-explicit-any for vendor files
-    files: ['src/vendor/**/*.{ts,js}'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
@@ -64,6 +69,16 @@ export default [
     },
   },
   {
-    ignores: ['dist/', 'node_modules/', '*.config.js', '*.config.ts'],
+    ignores: [
+      'dist/',
+      'node_modules/',
+      '*.config.js',
+      '*.config.ts',
+      // Vendored third-party bundles — not ours to lint.
+      'src/vendor/',
+      // Peggy-generated parser (has its own eslint-disable, but skip parsing
+      // its 3.4k lines entirely).
+      'src/evaluators/layout/layout-query-parser.ts',
+    ],
   },
 ]
