@@ -77,13 +77,13 @@ for (const json of sequenceOfFrames) {
   const instance  = new JSONDataInstance(json);
   const evaluator = new SGraphQueryEvaluator();
   evaluator.initialize({ sourceData: instance });
-  const layout = new LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
+  const generatedLayout = new LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
 
   const options = prevInstance
     ? { policy, prevInstance, currInstance: instance }
     : {};
 
-  await graphEl.renderLayout(layout, options);
+  await graphEl.renderLayout(generatedLayout.layout, options);
   prevInstance = instance;
 }
 ```

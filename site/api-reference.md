@@ -47,10 +47,15 @@ Result methods: `selectedAtoms()`, `selectedTwoples()`, `selectedTuplesAll()`, `
 
 ```typescript
 new LayoutInstance(spec: LayoutSpec, evaluator: IEvaluator)
-layoutInstance.generateLayout(instance: IDataInstance): InstanceLayout
+layoutInstance.generateLayout(instance: IDataInstance): {
+  layout: InstanceLayout;
+  error: ConstraintError | null;
+  selectorErrors: SelectorErrorDetail[];
+  warnings: LayoutWarning[];
+}
 ```
 
-The orchestrator. `generateLayout` returns an `InstanceLayout` object that any translator can render.
+The orchestrator. `generateLayout` returns a result object, not the layout itself. The `layout` field holds the `InstanceLayout` that any translator can render — pass **that** to `renderLayout`, not the whole result. `error` is non-null when constraints are unsatisfiable (the layout is then a counterfactual diagram with the conflict highlighted), and `selectorErrors` / `warnings` report selectors that failed or quietly matched nothing.
 
 ### `setupLayout(spec, instance, evaluator)`
 

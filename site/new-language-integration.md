@@ -69,8 +69,8 @@ Most integrations load the browser bundle from a CDN:
   const evaluator = new SGraphQueryEvaluator();
   evaluator.initialize({ sourceData: instance });
 
-  const layout = new LayoutInstance(spec, evaluator).generateLayout(instance);
-  document.querySelector('webcola-cnd-graph').renderLayout(layout);
+  const generatedLayout = new LayoutInstance(spec, evaluator).generateLayout(instance);
+  document.querySelector('webcola-cnd-graph').renderLayout(generatedLayout.layout);
 </script>
 ```
 
