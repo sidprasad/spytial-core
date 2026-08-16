@@ -1,5 +1,5 @@
 import { Graph, Edge } from 'graphlib';
-import { IAtom, IDataInstance } from '../data-instance/interfaces';
+import { IDataInstance } from '../data-instance/interfaces';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import type { SelectorErrorDetail, LayoutWarning } from './error-state';
@@ -17,8 +17,7 @@ import {
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     RelativeDirection,
     GroupBySelector, AlignConstraint,
-    EdgeColorDirective, InferredEdgeDirective, TagDirective,
-    AtomHidingDirective
+    EdgeColorDirective, InferredEdgeDirective
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
@@ -31,7 +30,7 @@ import IEvaluator from '../evaluators/interfaces';
 import { SelectorArityError } from '../evaluators/interfaces';
 import type { IEvaluatorResult } from '../evaluators/interfaces';
 import { ColorPicker } from './colorpicker';
-import { type ConstraintError, type ErrorMessages, ConstraintValidator, orientationConstraintToString } from './constraint-validator';
+import { type ConstraintError, type ErrorMessages, ConstraintValidator } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
 import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
 
@@ -902,7 +901,7 @@ export class LayoutInstance {
         return `${rawLabel}:${nodeId}`;
     }
 
-    private generateGroups(g: Graph, a: IDataInstance): LayoutGroup[] {
+    private generateGroups(g: Graph, _a: IDataInstance): LayoutGroup[] {
 
         //let groupingConstraints : GroupingConstraint[] = this._layoutSpec.constraints.grouping;
 
@@ -3143,7 +3142,7 @@ export class LayoutInstance {
      * one matching rule appear in the map. Legacy `atomColor` desugars into these
      * rules upstream (border-preserving: value→borderStyle.color).
      */
-    private getAtomStyleMap(g: Graph, a: IDataInstance): Record<string, AtomStyleSpec> {
+    private getAtomStyleMap(g: Graph, _a: IDataInstance): Record<string, AtomStyleSpec> {
         const rules = this._layoutSpec.directives.atomStyles;
         const styleMap: Record<string, AtomStyleSpec> = {};
         if (rules.length === 0) return styleMap;
@@ -3290,7 +3289,7 @@ export class LayoutInstance {
      * @returns true if the label should be shown, false if hidden, undefined to use default.
      *          Note: Inferred edges always show labels, so this only applies to regular edges.
      */
-    private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): boolean | undefined {
+    private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, _edgeId?: string): boolean | undefined {
         // Inferred edges always show labels - no showLabel check needed
         const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
         return directive?.showLabel;
@@ -3448,7 +3447,6 @@ export class LayoutInstance {
     private getFieldTuples(a: IDataInstance, fieldName: string): string[][] {
 
         let relations = a.getRelations();
-        let vals = Object.values(relations);
         let field = Object.values(relations).find((rel) => rel.name === fieldName);
 
 

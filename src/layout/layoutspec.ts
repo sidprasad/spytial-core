@@ -719,17 +719,10 @@ function removeDuplicateGroupBySelectorConstraints(constraints: GroupBySelector[
  * @returns List of CnD constraints
  * @throws Error if there are inconsistencies in the constraints.
  */
-function parseConstraints(constraints: unknown[], warnings: ParseWarning[] = []):   ConstraintsBlock
+function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []): ConstraintsBlock
 {
     // Type assertion since we expect specific structure from YAML
     const rawConstraints = constraints as Record<string, any>[];
-
-    // Same dual emission as parseDirectives: console for back-compat, and the
-    // consumable accumulator that rides out on the spec.
-    const deprecate = (specType: string, message: string): void => {
-        console.warn(message);
-        warnings.push({ code: 'deprecated', message, specType });
-    };
 
     // Pre-process: determine negation from "hold: never" field
     const typedConstraints = rawConstraints.map((c): Record<string, any> & { _negated: boolean } => {

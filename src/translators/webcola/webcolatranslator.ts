@@ -1,9 +1,8 @@
-import { Node, Group, Link, Rectangle } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, LeftConstraint, TopConstraint, AlignmentConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
+import { Node, Link, Rectangle } from 'webcola';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import type { TextStyle } from '../../layout/style/text-style';
 import type { IconPlacement } from '../../layout/style/atom-style-spec';
-import { LayoutInstance } from '../../layout/layoutinstance';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
 import { computeConstraintAwareSeed, hasSeedableConstraints, SeedPosition } from './constraint-aware-seed';
@@ -1174,16 +1173,12 @@ export class WebColaLayout {
     }
     
     const collapsed: LayoutGroup[] = [];
-    let deduplicationCount = 0;
-    
-    for (const [nodeKey, duplicateGroups] of groupsByNodes) {
+
+    for (const duplicateGroups of groupsByNodes.values()) {
       if (duplicateGroups.length === 1) {
         // No duplicates, keep as-is
         collapsed.push(duplicateGroups[0]);
       } else {
-        // Found duplicates - merge them
-        deduplicationCount += duplicateGroups.length - 1;
-        
         // Merge groups: preserve first group's structure but combine labels
         const mergedGroup: LayoutGroup = {
           ...duplicateGroups[0],
@@ -1297,7 +1292,7 @@ export class WebColaLayout {
       return { leaves, padding: defaultPadding, name };
     });
 
-    const colaGroups = Object.entries(colaGroupsBeforeSubgrouping).map(([key, value]) => {
+    const colaGroups = Object.entries(colaGroupsBeforeSubgrouping).map(([_key, value]) => {
 
       let leaves = value.leaves;
       let padding = value.padding;

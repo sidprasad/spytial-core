@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, NodePositionHint, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
-import { InstanceLayout, isAlignmentConstraint, isInstanceLayout, isLeftConstraint, isTopConstraint, LayoutNode, ColorSource } from '../../layout/interfaces';
+import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
+import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
-import type { GridRouter, Group, Layout, Node, Link, ID3StyleLayoutAdaptor } from 'webcola';
+import type { GridRouter, Layout, ID3StyleLayoutAdaptor } from 'webcola';
 
 /**
  * What `cola.d3adaptor()` actually hands back: a Layout plus the D3 shims.
@@ -10,7 +10,7 @@ import type { GridRouter, Group, Layout, Node, Link, ID3StyleLayoutAdaptor } fro
  * as `Layout` hides the instance `drag()` this file calls.
  */
 type D3Layout = Layout & ID3StyleLayoutAdaptor;
-import { IInputDataInstance, ITuple, IAtom } from '../../data-instance/interfaces';
+import { ITuple } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
@@ -79,11 +79,6 @@ function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
            bbox2.y > bbox1.y + bbox1.height ||
            bbox2.y + bbox2.height < bbox1.y);
 }
-
-function hasInnerBounds(target: any): target is { innerBounds: any } {
-  return target && typeof target === 'object' && 'innerBounds' in target;
-}
-
 
 const DEFAULT_SCALE_FACTOR = 5;
 
@@ -3031,9 +3026,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     // Fade in entering groups
     if (this.svgGroups && this.svgGroupLabels) {
-      const newGroupIds = new Set(
-        (this.currentLayout?.groups || []).map((g: any) => g.id).filter(Boolean)
-      );
       // Groups whose ID was not in the old layout (approximation: if morphEnteringNodeIds
       // contains ANY leaf of the group, the group is visually new).
       // For simplicity we let groups appear instantly — they're background rects
@@ -3379,8 +3371,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * ```
    */
   private setupLinks(
-    links: Array<EdgeWithMetadata>, 
-    layout: D3Layout
+    links: Array<EdgeWithMetadata>,
+    _layout: D3Layout
   ) {
     // Create link groups for each edge
     const linkGroups = this.container
@@ -7555,8 +7547,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     bounds: any,
     portIndex: number | undefined,
     portCount: number | undefined,
-    nodeCenter: { x: number; y: number },
-    remoteCenter: { x: number; y: number }
+    _nodeCenter: { x: number; y: number },
+    _remoteCenter: { x: number; y: number }
   ): { x: number; y: number } {
     if (portIndex === undefined || portCount === undefined || portCount <= 1) {
       return anchor;

@@ -88,8 +88,7 @@ function projectRelations(
         ? projectTuples(relation.tuples, projectedIndices, projectedAtoms)
         : relation.tuples
     };
-    if (isProjected) {
-    } else {
+    if (!isProjected) {
       relations[relationId] = relation;
     }
   }

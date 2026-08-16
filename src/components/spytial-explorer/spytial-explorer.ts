@@ -410,7 +410,6 @@ export class SpytialExplorer extends WebColaCnDGraph {
         // cardinal direction. This works regardless of what constraints
         // exist — navigation follows the visual layout.
         const positions = this.getNodePositions();
-        const posMap = new Map(positions.map(p => [p.id, p]));
         const spatialNeighbors = this.computePositionBasedNeighbors(positions);
 
         // ─── Build DN structure ───────────────────────────────────────

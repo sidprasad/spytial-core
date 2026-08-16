@@ -13,7 +13,7 @@
  * @module projection-transform
  */
 
-import { IDataInstance, IType } from './interfaces';
+import { IDataInstance } from './interfaces';
 
 /**
  * A projection specifying which type (sig) to project over,

@@ -1,5 +1,4 @@
-import { Group } from "webcola";
-import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector, RelativeDirection } from "./layoutspec";
+import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from "./layoutspec";
 import { EdgeStyle } from "./edge-style";
 import type { TextStyle } from "./style/text-style";
 import type { IconPlacement } from "./style/atom-style-spec";

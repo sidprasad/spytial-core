@@ -25,7 +25,6 @@ import {
 import {
   parseYamlToState,
   serializeStateToYaml,
-  SpecParseError,
 } from './yaml-codec';
 import { validateState } from './diagnostics';
 import { newId } from './id';

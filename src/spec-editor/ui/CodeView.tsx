@@ -199,7 +199,6 @@ export const CodeView: React.FC<CodeViewProps> = ({
     };
     // Mount once. `value`/`diagnostics`/`disabled` are synced by the effects
     // below; the other inputs are construction-time options.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Push external value changes into the editor (guarding the typing feedback
