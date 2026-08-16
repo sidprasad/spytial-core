@@ -8,7 +8,7 @@ import {
   CndLayoutStateManager,
   InstanceStateManager,
   DataAPI,
-} from '../webcola-demo/react-component-integration'
+} from '../src/react-component-integration'
 import userEvent, { UserEvent } from '@testing-library/user-event'
 import { createRoot, Root } from 'react-dom/client'
 import { buildSampleBstInstance } from './helpers/bst-instance-fixture'
@@ -207,7 +207,7 @@ directives:
     it('pushing an instance via DataAPI.updateInstance gives the editor domain-aware options', async () => {
       // Push a BST instance into the shared state, the way the alloy/json/dot/gw
       // demo pages do via window.updateInstanceFromReact after parsing data.
-      const m = await import('../webcola-demo/react-component-integration')
+      const m = await import('../src/react-component-integration')
       act(() => {
         m.DataAPI.updateInstance(buildSampleBstInstance())
       })
@@ -244,7 +244,7 @@ directives:
       // Type the test YAML into the Code View.
       await typeYaml(testYaml)
 
-      const m = await import('../webcola-demo/react-component-integration')
+      const m = await import('../src/react-component-integration')
 
       // In Code View, getCurrentCndSpec returns the typed YAML (trimmed).
       let currentSpec = m.DataAPI.getCurrentCndSpec()
@@ -352,7 +352,7 @@ directives:
       })
 
       // The retrieved spec no longer equals the original (one constraint gone).
-      const m = await import('../webcola-demo/react-component-integration')
+      const m = await import('../src/react-component-integration')
       const currentSpec = m.DataAPI.getCurrentCndSpec()
       expect(currentSpec).not.toBe(testYaml)
       expect(currentSpec).toContain('orientation')

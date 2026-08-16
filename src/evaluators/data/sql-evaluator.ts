@@ -1,199 +1,33 @@
 import alasql from 'alasql';
-import IEvaluator, { 
-  EvaluationContext, 
-  EvaluatorConfig, 
-  IEvaluatorResult, 
+import IEvaluator, {
+  EvaluationContext,
+  EvaluatorConfig,
+  IEvaluatorResult,
   EvaluatorResult,
-  SingleValue,
   Tuple
 } from '../../evaluator-contracts';
-import { IDataInstance, IAtom, IRelation } from '../../data-instance/interfaces';
+import { IDataInstance, IAtom, IRelation, isDataInstance } from '../../data-instance/interfaces';
+import { BaseEvaluatorResult } from './base-evaluator-result';
 
-/**
- * Type guard to check if a value is an IDataInstance
- */
-function isDataInstance(value: unknown): value is IDataInstance {
-  return (value as IDataInstance).getAtoms !== undefined &&
-         (value as IDataInstance).getRelations !== undefined &&
-         (value as IDataInstance).getTypes !== undefined &&
-         (value as IDataInstance).applyProjections !== undefined &&
-         (value as IDataInstance).generateGraph !== undefined;
-}
-
-/**
- * Type guard to check if a value is a SingleValue
- */
-function isSingleValue(value: unknown): value is SingleValue {
-  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
-}
-
-/**
- * Convert a SingleValue to string representation
- */
-function singleValueToString(value: SingleValue): string {
-  if (typeof value === 'string') {
-    return value;
-  } else if (typeof value === 'number') {
-    return value.toString();
-  } else if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-  throw new Error('Invalid SingleValue type');
+function isSQLErrorResult(result: EvaluatorResult): boolean {
+  return typeof result === 'object' &&
+         result !== null &&
+         'error' in result &&
+         typeof (result as { error: unknown }).error === 'object';
 }
 
 /**
  * Result wrapper for SQL evaluator results that implements IEvaluatorResult
  */
-export class SQLEvaluatorResult implements IEvaluatorResult {
-  private result: EvaluatorResult;
-  private isErrorResult: boolean = false;
-  private isSingletonResult: boolean = false;
-  private expr: string;
-
+export class SQLEvaluatorResult extends BaseEvaluatorResult {
   constructor(result: EvaluatorResult, expr: string) {
-    this.result = result;
-    this.expr = expr;
-    this.isErrorResult = this.checkIsError(result);
-    this.isSingletonResult = isSingleValue(result);
+    super(result, expr, isSQLErrorResult(result));
   }
 
-  private checkIsError(result: EvaluatorResult): boolean {
-    return typeof result === 'object' && 
-           result !== null && 
-           'error' in result &&
-           typeof (result as { error: unknown }).error === 'object';
-  }
-
-  isError(): boolean {
-    return this.isErrorResult;
-  }
-
-  isSingleton(): boolean {
-    return this.isSingletonResult;
-  }
-
-  getExpression(): string {
-    return this.expr;
-  }
-
-  noResult(): boolean {
-    return !this.isErrorResult && (Array.isArray(this.result) && this.result.length === 0);
-  }
-
+  // The SQL result is already in the neutral EvaluatorResult shape, so no
+  // error normalization is needed — return it untouched.
   getRawResult(): EvaluatorResult {
     return this.result;
-  }
-
-  prettyPrint(): string {
-    if (typeof this.result === 'string') {
-      return this.result;
-    } 
-    else if (typeof this.result === 'number') {
-      return this.result.toString();
-    }
-    else if (typeof this.result === 'boolean') {
-      return this.result ? 'true' : 'false';
-    }
-    else if (this.isErrorResult) {
-      const errorResult = this.result as { error: { message: string } };
-      return `Error: ${errorResult.error.message}`;
-    }
-    else {
-      const tupleStringArray: string[] = [];
-      const asTuple = this.result as Tuple[];
-
-      for (let i = 0; i < asTuple.length; i++) {
-        const tuple = asTuple[i];
-        const tupleString = tuple.join('->');
-        tupleStringArray.push(tupleString);
-      }
-      const resultString = tupleStringArray.join(' , ');
-      return resultString;
-    }
-  }
-
-  singleResult(): SingleValue {
-    if (!this.isSingletonResult) {
-      const pp = this.prettyPrint();
-      throw new Error(`Expected selector ${this.expr} to evaluate to a single value. Instead: ${pp}`);
-    }
-    return this.result as SingleValue;
-  }
-
-  selectedAtoms(): string[] {
-    if (this.isSingletonResult || this.isErrorResult) {
-      const pp = this.prettyPrint();
-      throw new Error(`Expected selector ${this.expr} to evaluate to values of arity 1. Instead: ${pp}`);   
-    }
-
-    const asTuple = this.result as Tuple[];
-
-    let selectedElements = asTuple.filter((element) => element.length > 0);
-    if (selectedElements.length === 0) {
-      return [];
-    }
-
-    // Filter to only elements of arity 1
-    selectedElements = selectedElements.filter((element) => element.length === 1);
-
-    // Flatten the selected elements
-    const flattened = selectedElements.flat().map((element) => singleValueToString(element));
-
-    // Dedupe the elements
-    const uniqueElements = Array.from(new Set(flattened));
-    return uniqueElements;
-  }
-
-  selectedTwoples(): string[][] {
-    if (this.isSingletonResult || this.isErrorResult) {
-      const pp = this.prettyPrint();
-      throw new Error(`Expected selector ${this.expr} to evaluate to values of arity 2. Instead: ${pp}`);   
-    }
-
-    const asTuple = this.result as Tuple[];
-
-    const selectedElements = asTuple.filter((element) => element.length > 1);
-    if (selectedElements.length === 0) {
-      return [];
-    }
-
-    // Get the FIRST AND LAST elements of the selected elements
-    const selectedTuples = selectedElements.map((element) => {
-      return [element[0], element[element.length - 1]];
-    }).map((element) => {
-      return element.map((e) => singleValueToString(e));
-    });
-    return selectedTuples;
-  }
-
-  maxArity(): number {
-    if (this.isSingletonResult || this.isErrorResult) {
-      return 0;
-    }
-    const asTuple = this.result as Tuple[];
-    if (asTuple.length === 0) {
-      return 0;
-    }
-    return Math.max(...asTuple.map((t) => t.length));
-  }
-
-  selectedTuplesAll(): string[][] {
-    if (this.isSingletonResult || this.isErrorResult) {
-      const pp = this.prettyPrint();
-      throw new Error(`Expected selector ${this.expr} to evaluate to values of arity 2+. Instead: ${pp}`);   
-    }
-
-    const asTuple = this.result as Tuple[];
-
-    const selectedElements = asTuple.filter((element) => element.length > 1);
-    if (selectedElements.length === 0) {
-      return [];
-    }
-
-    const selectedTuples = selectedElements.map((element) => {
-      return element.map((e) => singleValueToString(e));
-    });
-    return selectedTuples;
   }
 }
 

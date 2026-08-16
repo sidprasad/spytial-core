@@ -19,16 +19,16 @@
 
 import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { SpecEditor, registerSpecEditorThemes } from '../src/spec-editor';
+import { SpecEditor, registerSpecEditorThemes } from './spec-editor';
 import type {
   Diagnostic,
   SelectorAssistant,
   SelectorAssistContext,
   SpecEditorTheme,
-} from '../src/spec-editor';
-import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
-import { parseAlloyXML } from '../src/data-instance/alloy/alloy-instance/src/xml';
-import type { IInputDataInstance } from '../src/data-instance/interfaces';
+} from './spec-editor';
+import { AlloyDataInstance } from './data-instance/alloy-data-instance';
+import { parseAlloyXML } from './data-instance/alloy/alloy-instance/src/xml';
+import type { IInputDataInstance } from './data-instance/interfaces';
 
 // ── Sample domain (binary-search-tree instance) ──────────────────────────────
 // Inlined so the demo is self-contained (no fetch). Mirrors sample/forge/datum.xml.

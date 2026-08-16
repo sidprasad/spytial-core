@@ -349,7 +349,7 @@ Members:
 
 ### Worked example: a mock assistant
 
-Adapted from `webcola-demo/spec-editor-demo-components.tsx`. It synthesizes a
+Adapted from `src/spec-editor-demo-components.tsx`. It synthesizes a
 selector from a request (keyword-matched against the domain) and lints any
 selector still containing `TODO`:
 
@@ -735,7 +735,7 @@ What it demonstrates:
 - **Live diagnostics + YAML** — an expandable panel shows the current
   `onDiagnostics` output and the live YAML value.
 
-The demo source is `webcola-demo/spec-editor-demo-components.tsx` (mounted by
+The demo source is `src/spec-editor-demo-components.tsx` (mounted by
 `webcola-demo/spec-editor-demo.html`); it is a good reference for a minimal
 end-to-end integration.
 ```
