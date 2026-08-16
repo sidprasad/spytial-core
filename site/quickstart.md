@@ -55,7 +55,8 @@ Save the following as `demo.html`, then open it in a browser:
     const evaluator = new SGraphQueryEvaluator();
     evaluator.initialize({ sourceData: instance });
 
-    const layout = new LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
+    const generatedLayout = new LayoutInstance(layoutSpec, evaluator).generateLayout(instance);
+    const layout = generatedLayout.layout;
 
     // 4. Render
     document.getElementById('g').renderLayout(layout);
@@ -105,10 +106,10 @@ The three lines that build the evaluator + layout instance are common enough to 
 ```javascript
 const { setupLayout } = spytialcore;
 
-const layout = setupLayout(spec, instance, evaluator);
+const layout = setupLayout(spec, instance, evaluator).layout;
 ```
 
-`setupLayout` parses the spec if you pass a string and returns the same `InstanceLayout` you'd get from `LayoutInstance.generateLayout`.
+`setupLayout` parses the spec if you pass a string and returns the same result object you'd get from `LayoutInstance.generateLayout` — the diagram itself is its `.layout` field.
 
 ---
 

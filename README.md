@@ -67,8 +67,8 @@ const spec      = parseLayoutSpec(yamlSpec);
 const evaluator = new SGraphQueryEvaluator();
 evaluator.initialize({ sourceData: instance });
 
-const layout = new LayoutInstance(spec, evaluator).generateLayout(instance);
-document.querySelector('webcola-cnd-graph').renderLayout(layout);
+const generatedLayout = new LayoutInstance(spec, evaluator).generateLayout(instance);
+document.querySelector('webcola-cnd-graph').renderLayout(generatedLayout.layout);
 ```
 
 That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is the host integrator's job — see the [Quick Start](./site/quickstart.md) for a self-contained HTML example, and [New Language Integration](./site/new-language-integration.md) for the principled framing.
