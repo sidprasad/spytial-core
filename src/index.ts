@@ -51,7 +51,7 @@ export { parseLayoutSpec } from './layout/layoutspec';
 // re-export was dangling and shipped a broken line into dist/types.
 export type { LayoutSpec } from './layout/layoutspec';
 export { setupLayout } from './layout';
-export { type default as IEvaluator, SelectorArityError } from './evaluators/interfaces';
+export { type default as IEvaluator, SelectorArityError } from './evaluator-contracts';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-evaluator';
 // SQLEvaluator moved out of the default entry in 4.0.0 — it drags the alasql
 // SQL engine (~500 KB min) into every bundle. Import it from

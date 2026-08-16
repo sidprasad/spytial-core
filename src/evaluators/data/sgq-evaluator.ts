@@ -1,4 +1,4 @@
-import IEvaluator, {EvaluatorResult} from "../interfaces";
+import IEvaluator, {EvaluatorResult} from "../../evaluator-contracts";
 // simple-graph-query ships a CJS bundle with an __esModule marker, which puts
 // its API in a different place depending on who loads it: plain Node exposes
 // module.exports as the namespace's `.default` (its lexer can't see the
@@ -38,9 +38,9 @@ export const {
     synthesizeSelectorWithWhy: typeof sgqNamespace.synthesizeSelectorWithWhy;
 };
 
-import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../interfaces";
+import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../../evaluator-contracts";
 import { IDataInstance } from "../../data-instance/interfaces";
-import {SingleValue, Tuple} from "../interfaces";
+import {SingleValue, Tuple} from "../../evaluator-contracts";
 
 
 function isDataInstance(value: unknown): value is IDataInstance {

@@ -18,7 +18,7 @@ import IEvaluator, {
   EvaluatorConfig,
   IEvaluatorResult,
   EvaluatorResult as IEvaluatorResultType
-} from '../interfaces';
+} from '../../evaluator-contracts';
 
 
 

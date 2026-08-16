@@ -38,7 +38,7 @@ const {
   synthesizeBinaryRelationWithWhy: typeof sgqNamespace.synthesizeBinaryRelationWithWhy;
 };
 import type { IAtom, IDataInstance } from '../data-instance/interfaces';
-import type IEvaluator from '../evaluators/interfaces';
+import type IEvaluator from '../evaluator-contracts';
 import { SGraphQueryEvaluator } from '../evaluators/data/sgq-evaluator';
 
 /**

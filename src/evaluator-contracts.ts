@@ -1,4 +1,14 @@
-import { IDataInstance } from "../data-instance/interfaces";
+import { IDataInstance } from "./data-instance/interfaces";
+
+/*
+ * The evaluator contracts (IEvaluator, IEvaluatorResult, and their result
+ * types) live here — outside src/evaluators/ — on purpose. The layout engine
+ * consumes evaluators through these interfaces, while the layout *evaluator*
+ * in src/evaluators/layout/ imports the layout engine back. Keeping the
+ * contracts in a module that imports neither side is what keeps that from
+ * being an import cycle. Nothing in this file may import from src/layout/ or
+ * src/evaluators/.
+ */
 
 /**
  * Error thrown when a selector's arity doesn't match what a constraint expects.

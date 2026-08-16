@@ -6,7 +6,7 @@ import IEvaluator, {
   EvaluatorResult,
   SingleValue,
   Tuple
-} from '../interfaces';
+} from '../../evaluator-contracts';
 import { IDataInstance, IAtom, IRelation } from '../../data-instance/interfaces';
 
 /**
