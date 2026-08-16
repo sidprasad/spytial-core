@@ -75,6 +75,24 @@ export interface IDataInstance {
 
 }
 
+/**
+ * Duck-type guard for IDataInstance. Checks for the methods the interface
+ * requires rather than using instanceof, since instances arrive from
+ * different adapters (and sometimes across bundle boundaries).
+ */
+export function isDataInstance(value: unknown): value is IDataInstance {
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+    const candidate = value as IDataInstance;
+    return typeof candidate.getAtomType === 'function' &&
+           typeof candidate.getAtoms === 'function' &&
+           typeof candidate.getRelations === 'function' &&
+           typeof candidate.getTypes === 'function' &&
+           typeof candidate.applyProjections === 'function' &&
+           typeof candidate.generateGraph === 'function';
+}
+
 
 export interface IInputDataInstance  extends IDataInstance {
   // Add atoms, relations, and types
