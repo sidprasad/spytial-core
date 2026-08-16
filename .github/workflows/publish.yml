@@ -25,7 +25,7 @@ jobs:
         with:
           # Same Node the test workflow gates on — the artifact that ships
           # should be built on the runtime the suite actually ran against.
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
 
