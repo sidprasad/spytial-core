@@ -1,4 +1,5 @@
-import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent } from './interfaces';
+import type { IDataInstance, IAtom, IType, IRelation, ITuple, IInputDataInstance } from './interfaces';
+import { DataInstanceEventEmitter } from './data-instance-event-emitter';
 import { settleTupleTypes } from './tuple-types';
 import type { AlloyType, AlloyAtom, AlloyRelation, AlloyTuple } from './alloy/alloy-instance';
 import { addInstanceAtom, addInstanceRelationTuple, removeInstanceRelationTuple, AlloyInstance, removeInstanceAtom } from './alloy/alloy-instance';
@@ -18,10 +19,7 @@ import { Graph } from 'graphlib';
  * Implementation of IDataInstance for Alloy instances
  * Wraps the existing AlloyInstance to provide the IDataInstance interface
  */
-export class AlloyDataInstance implements IInputDataInstance {
-  /** Event listeners for data instance changes */
-  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
-
+export class AlloyDataInstance extends DataInstanceEventEmitter implements IInputDataInstance {
   private alloyInstance: AlloyInstance;
   /**
    * Sig ids / relation names present in the ORIGINAL parsed instance, snapshotted
@@ -36,6 +34,7 @@ export class AlloyDataInstance implements IInputDataInstance {
   private readonly declaredRelationNames: Set<string>;
 
   constructor(alloyInstance: AlloyInstance) {
+    super();
     this.alloyInstance = alloyInstance;
     this.declaredTypeIds = new Set(Object.keys(alloyInstance.types));
     this.declaredRelationNames = new Set(Object.values(alloyInstance.relations).map((relation) => relation.name));
@@ -61,42 +60,6 @@ export class AlloyDataInstance implements IInputDataInstance {
     }
     usedIdentifiers.add(candidate);
     return candidate;
-  }
-
-  /**
-   * Add an event listener for data instance changes
-   */
-  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, new Set());
-    }
-    this.eventListeners.get(type)!.add(listener);
-  }
-
-  /**
-   * Remove an event listener for data instance changes
-   */
-  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
-    const listeners = this.eventListeners.get(type);
-    if (listeners) {
-      listeners.delete(listener);
-    }
-  }
-
-  /**
-   * Emit an event to all registered listeners
-   */
-  private emitEvent(event: DataInstanceEvent): void {
-    const listeners = this.eventListeners.get(event.type);
-    if (listeners) {
-      listeners.forEach(listener => {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error('Error in data instance event listener:', error);
-        }
-      });
-    }
   }
 
   /**

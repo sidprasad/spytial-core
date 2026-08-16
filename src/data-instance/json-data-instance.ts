@@ -1,4 +1,5 @@
-import { IAtom, IRelation, IType, IInputDataInstance, ITuple, DataInstanceEventType, DataInstanceEventListener, DataInstanceEvent, IDataInstance } from './interfaces';
+import { IAtom, IRelation, IType, IInputDataInstance, ITuple, IDataInstance } from './interfaces';
+import { DataInstanceEventEmitter } from './data-instance-event-emitter';
 import { settleTupleTypes } from './tuple-types';
 import { Graph } from 'graphlib';
 /**
@@ -102,14 +103,11 @@ export interface IJsonImportOptions {
  * });
  * ```
  */
-export class JSONDataInstance implements IInputDataInstance {
+export class JSONDataInstance extends DataInstanceEventEmitter implements IInputDataInstance {
   private atoms: IAtom[] = [];
   private relations: IRelation[] = [];
   private types: IType[] = [];
   private errors: string[] = [];
-  
-  /** Event listeners for data instance changes */
-  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
 
   /**
    * Create a new JSONDataInstance from JSON data.
@@ -120,9 +118,10 @@ export class JSONDataInstance implements IInputDataInstance {
    * @throws {Error} If the data structure is invalid
    */
   constructor(
-    jsonData: string | IJsonDataInstance, 
+    jsonData: string | IJsonDataInstance,
     options: IJsonImportOptions = {}
   ) {
+    super();
     try {
       // Parse JSON string if needed
       const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -150,42 +149,6 @@ export class JSONDataInstance implements IInputDataInstance {
     } catch (error) {
       // Re-throw with more context
       throw new Error(`Failed to create JSONDataInstance: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  /**
-   * Add an event listener for data instance changes
-   */
-  addEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, new Set());
-    }
-    this.eventListeners.get(type)!.add(listener);
-  }
-
-  /**
-   * Remove an event listener for data instance changes
-   */
-  removeEventListener(type: DataInstanceEventType, listener: DataInstanceEventListener): void {
-    const listeners = this.eventListeners.get(type);
-    if (listeners) {
-      listeners.delete(listener);
-    }
-  }
-
-  /**
-   * Emit an event to all registered listeners
-   */
-  private emitEvent(event: DataInstanceEvent): void {
-    const listeners = this.eventListeners.get(event.type);
-    if (listeners) {
-      listeners.forEach(listener => {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error('Error in data instance event listener:', error);
-        }
-      });
     }
   }
 
