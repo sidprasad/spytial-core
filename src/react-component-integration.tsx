@@ -7,19 +7,18 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
-import { CndLayoutInterface } from '../src/components/CndLayoutInterface';
-import { ConstraintData, DirectiveData } from '../src/components/NoCodeView/interfaces';
-import { generateLayoutSpecYaml, parseLayoutSpecToData } from '../src/components/NoCodeView';
-import { createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
-import { IInputDataInstance } from '../src/data-instance/interfaces';
-import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from '../src/components/ErrorMessageModal/index'
-import { ErrorMessages } from '../src/layout/constraint-validator';
-import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
-import { EvaluatorRepl } from '../src/components/EvaluatorRepl/EvaluatorRepl';
-import { IEvaluator } from '../src/evaluators';
-import { RelationHighlighter } from '../src/components/RelationHighlighter/RelationHighlighter';
-import { IDataInstance } from '../src/data-instance/interfaces';
-import { exposeComponentBundleGlobals } from '../src/cdn-globals';
+import { CndLayoutInterface } from './components/CndLayoutInterface';
+import { ConstraintData, DirectiveData } from './components/NoCodeView/interfaces';
+import { generateLayoutSpecYaml, parseLayoutSpecToData } from './components/NoCodeView';
+import { createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
+import { IInputDataInstance } from './data-instance/interfaces';
+import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from './components/ErrorMessageModal/index'
+import { ErrorMessages } from './layout/constraint-validator';
+import { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
+import { EvaluatorRepl } from './components/EvaluatorRepl/EvaluatorRepl';
+import { IEvaluator } from './evaluators';
+import { RelationHighlighter } from './components/RelationHighlighter/RelationHighlighter';
+import { exposeComponentBundleGlobals } from './cdn-globals';
 
 /**
  * Configuration options for mounting CndLayoutInterface
@@ -527,7 +526,7 @@ export function mountCndLayoutInterface(
   }
 
   // TODO: Write an actual YAML validator
-  function validateYamlValue(yaml: string): boolean {
+  function validateYamlValue(_yaml: string): boolean {
     return true;
   }
 
