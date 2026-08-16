@@ -26,9 +26,9 @@ import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
 import type { TextStyle } from './style/text-style';
 
 
-import IEvaluator from '../evaluators/interfaces';
-import { SelectorArityError } from '../evaluators/interfaces';
-import type { IEvaluatorResult } from '../evaluators/interfaces';
+import IEvaluator from '../evaluator-contracts';
+import { SelectorArityError } from '../evaluator-contracts';
+import type { IEvaluatorResult } from '../evaluator-contracts';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages, ConstraintValidator } from './constraint-validator';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';

@@ -22,7 +22,7 @@ import {
 import { InstanceLayout } from './interfaces';
 import { LayoutInstance } from './layoutinstance';
 import { isPositionalConstraintError } from './constraint-validator';
-import IEvaluator from '../evaluators/interfaces';
+import IEvaluator from '../evaluator-contracts';
 import { IDataInstance } from '../data-instance/interfaces';
 
 // ---------------------------------------------------------------------------

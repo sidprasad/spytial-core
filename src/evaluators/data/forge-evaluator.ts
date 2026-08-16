@@ -16,7 +16,7 @@ import IEvaluator, {
   EvaluationContext,
   EvaluatorConfig,
   IEvaluatorResult
-} from '../interfaces';
+} from '../../evaluator-contracts';
 import { BaseEvaluatorResult } from './base-evaluator-result';
 
 

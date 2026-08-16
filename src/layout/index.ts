@@ -17,7 +17,7 @@ export * from './denotation-diff';
 // Utility functions
 import { LayoutInstance } from './layoutinstance';
 import { LayoutSpec, parseLayoutSpec } from './layoutspec';
-import IEvaluator from '../evaluators/interfaces';
+import IEvaluator from '../evaluator-contracts';
 import { IDataInstance } from '../data-instance/interfaces';
 
 /**

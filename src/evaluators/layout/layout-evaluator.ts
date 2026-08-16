@@ -12,7 +12,7 @@ import { QualitativeConstraintValidator } from '../../layout/qualitative-constra
 import { InstanceLayout, LayoutEdge, LayoutGroup, LayoutNode } from '../../layout/interfaces';
 import {
     IEvaluatorResult, EvaluatorResult, SingleValue, Tuple
-} from '../interfaces';
+} from '../../evaluator-contracts';
 import { parse as parseQueryExpr } from './layout-query-parser';
 
 // ─── Types ───────────────────────────────────────────────────────────

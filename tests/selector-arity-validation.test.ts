@@ -3,7 +3,7 @@ import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-d
 import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
-import { SelectorArityError } from '../src/evaluators/interfaces';
+import { SelectorArityError } from '../src/evaluator-contracts';
 
 /**
  * Tests that selector arity mismatches are caught and reported as selectorErrors

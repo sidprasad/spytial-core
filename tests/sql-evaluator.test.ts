@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SQLEvaluator, SQLEvaluatorResult } from '../src/evaluators/data/sql-evaluator';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
-import { EvaluationContext } from '../src/evaluators/interfaces';
+import { EvaluationContext } from '../src/evaluator-contracts';
 
 /**
  * Test suite for SQLEvaluator

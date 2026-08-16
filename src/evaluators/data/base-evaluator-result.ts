@@ -1,4 +1,4 @@
-import { IEvaluatorResult, EvaluatorResult, SingleValue, Tuple } from '../interfaces';
+import { IEvaluatorResult, EvaluatorResult, SingleValue, Tuple } from '../../evaluator-contracts';
 
 /**
  * Type guard to check if a value is a SingleValue
