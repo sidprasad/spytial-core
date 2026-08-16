@@ -6,11 +6,9 @@ import type {
   IRelation,
   IInputDataInstance,
   ITuple,
-  DataInstanceEventType,
-  DataInstanceEventListener,
-  DataInstanceEvent,
   IDataInstance,
 } from '../interfaces';
+import { DataInstanceEventEmitter } from '../data-instance-event-emitter';
 
 // ─── Type Configuration ────────────────────────────────────────────────────────
 
@@ -264,7 +262,7 @@ function escapeLabel(s: string): string {
  * // Int type: isBuiltin = true
  * ```
  */
-export class DotDataInstance implements IInputDataInstance {
+export class DotDataInstance extends DataInstanceEventEmitter implements IInputDataInstance {
   // ── Internal state ──────────────────────────────────────────────────────
 
   /** The source-of-truth graph, mutated only by add/remove operations. */
@@ -291,12 +289,10 @@ export class DotDataInstance implements IInputDataInstance {
   /** Maps nodeId → subgraph-inferred type (populated during construction). */
   private subgraphTypeMap = new Map<string, string>();
 
-  /** Event listeners for data instance changes. */
-  private eventListeners = new Map<DataInstanceEventType, Set<DataInstanceEventListener>>();
-
   // ── Constructor ─────────────────────────────────────────────────────────
 
   constructor(dotSpec: string, options?: DotDataInstanceOptions) {
+    super();
     // Resolve options with defaults.
     this.opts = {
       typeConfig: options?.typeConfig ?? {},
@@ -724,36 +720,6 @@ export class DotDataInstance implements IInputDataInstance {
       type: 'relationTupleRemoved',
       data: { relationId, tuple: t },
     });
-  }
-
-  addEventListener(
-    type: DataInstanceEventType,
-    listener: DataInstanceEventListener,
-  ): void {
-    if (!this.eventListeners.has(type)) {
-      this.eventListeners.set(type, new Set());
-    }
-    this.eventListeners.get(type)!.add(listener);
-  }
-
-  removeEventListener(
-    type: DataInstanceEventType,
-    listener: DataInstanceEventListener,
-  ): void {
-    this.eventListeners.get(type)?.delete(listener);
-  }
-
-  private emitEvent(event: DataInstanceEvent): void {
-    const listeners = this.eventListeners.get(event.type);
-    if (listeners) {
-      for (const listener of listeners) {
-        try {
-          listener(event);
-        } catch (error) {
-          console.error('Error in data instance event listener:', error);
-        }
-      }
-    }
   }
 
   /**
