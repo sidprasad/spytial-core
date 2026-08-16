@@ -81,11 +81,16 @@ export interface IDataInstance {
  * different adapters (and sometimes across bundle boundaries).
  */
 export function isDataInstance(value: unknown): value is IDataInstance {
-    return (value as IDataInstance).getAtoms !== undefined &&
-           (value as IDataInstance).getRelations !== undefined &&
-           (value as IDataInstance).getTypes !== undefined &&
-           (value as IDataInstance).applyProjections !== undefined &&
-           (value as IDataInstance).generateGraph !== undefined;
+    if (typeof value !== 'object' || value === null) {
+        return false;
+    }
+    const candidate = value as IDataInstance;
+    return typeof candidate.getAtomType === 'function' &&
+           typeof candidate.getAtoms === 'function' &&
+           typeof candidate.getRelations === 'function' &&
+           typeof candidate.getTypes === 'function' &&
+           typeof candidate.applyProjections === 'function' &&
+           typeof candidate.generateGraph === 'function';
 }
 
 
