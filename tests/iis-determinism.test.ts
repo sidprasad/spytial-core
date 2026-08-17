@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { QualitativeConstraintValidator, isPositionalConstraintError, type PositionalConstraintError } from '../src/layout/qualitative-constraint-validator';
-import { ConstraintValidator } from '../src/layout/constraint-validator';
 import {
     InstanceLayout,
     LayoutNode,
@@ -254,7 +253,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, ConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);

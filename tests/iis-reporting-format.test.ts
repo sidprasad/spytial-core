@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ConstraintValidator, orientationConstraintToString, PositionalConstraintError } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
+import { orientationConstraintToString, PositionalConstraintError } from '../src/layout/constraint-types';
 import { 
     InstanceLayout, 
     LayoutNode, 
@@ -180,7 +181,7 @@ describe('IIS Reporting Format', () => {
             groups: [],
         };
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
 
         // Should fail due to cycle

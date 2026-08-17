@@ -204,8 +204,9 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
 
 /**
  * Common interface for all constraint validators.
- * Both the deprecated Kiwi-based ConstraintValidator and the standard
- * QualitativeConstraintValidator implement this interface.
+ * QualitativeConstraintValidator implements it. The interface stays even
+ * with one implementation: it is what lets a validator be swapped in
+ * without the layout engine knowing which one it has.
  */
 export interface IConstraintValidator {
     horizontallyAligned: LayoutNode[][];

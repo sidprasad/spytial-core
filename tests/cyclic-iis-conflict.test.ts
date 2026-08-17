@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ConstraintValidator, PositionalConstraintError } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
+import { PositionalConstraintError } from '../src/layout/constraint-types';
 import { 
     DisjunctiveConstraint, 
     InstanceLayout, 
@@ -80,7 +81,7 @@ describe('Cyclic IIS Conflict', () => {
             disjunctiveConstraints: [disjunction1, disjunction2],
         };
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
 
         // Should fail because the two cyclic constraints conflict
@@ -130,7 +131,7 @@ describe('Cyclic IIS Conflict', () => {
             disjunctiveConstraints: [disjunction1, disjunction2],
         };
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
 
         expect(error).not.toBeNull();
