@@ -29,9 +29,6 @@ describe('registry — definitions and defaults', () => {
       'flag',
       'attribute',
       'hideField',
-      'icon',
-      'atomColor',
-      'edgeColor',
       'inferredEdge',
       'tag',
     ];
@@ -70,9 +67,6 @@ describe('registry — summaries (orientation target-relative-to-source semantic
     expect(
       getDefinition('groupselector')!.summary({ selector: 'sameTeam', name: 'team' }),
     ).toBe('group "team" · sameTeam');
-    expect(getDefinition('atomColor')!.summary({ value: '#ff0000', selector: 'Root' })).toBe(
-      '#ff0000 · Root',
-    );
     expect(getDefinition('tag')!.summary({ toTag: 'Person', name: 'status' })).toBe(
       'status · Person',
     );
@@ -148,13 +142,17 @@ describe('diagnostics — structural validation', () => {
 
 describe('diagnostics — unknown keys (typo detection)', () => {
   it('warns on an unknown top-level key with a did-you-mean', () => {
-    // `showLabel` is a near-miss for the icon field `showLabels`.
-    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
-    const warn = diags.find((d) => d.message.includes('showLabel'));
+    // `showLabels` is a near-miss for the atomStyle field `showLabel` — the
+    // plural is the spelling the removed `icon` form used, so an author
+    // migrating off it is exactly who trips this.
+    const diags = validateItem(
+      item('atomStyle', { selector: 'Node', showLabels: true }, 'directive'),
+    );
+    const warn = diags.find((d) => d.message.includes('showLabels'));
     expect(warn).toBeDefined();
     expect(warn!.severity).toBe('warning');
     expect(warn!.source).toBe('structure');
-    expect(warn!.message).toContain('Did you mean "showLabels"');
+    expect(warn!.message).toContain('Did you mean "showLabel"');
   });
 
   it('warns on an unknown key inside a nested style block', () => {
@@ -218,10 +216,10 @@ describe('diagnostics — unknown keys (typo detection)', () => {
     expect(diags).toHaveLength(0);
   });
 
-  it('calls inferredEdge inline line keys deprecated, not unknown', () => {
-    // color/style/weight/highlight are still parsed, so they are not "unknown" —
-    // but they are on their way out, so they get a `deprecated` diagnostic
-    // naming the block that replaces each.
+  it('calls inferredEdge inline line keys removed, not unknown', () => {
+    // color/style/weight/highlight were removed in 6.0.0. They are not
+    // "unknown" — the editor knows exactly what they were — so they get a
+    // `removed` error naming the block that replaces each.
     const diags = validateItem(
       item(
         'inferredEdge',
@@ -230,7 +228,7 @@ describe('diagnostics — unknown keys (typo detection)', () => {
       ),
     );
     expect(diags.filter((d) => /Unknown field/.test(d.message))).toHaveLength(0);
-    expect(diags.filter((d) => d.code === 'deprecated')).toHaveLength(3);
+    expect(diags.filter((d) => d.code === 'removed')).toHaveLength(3);
     expect(diags.find((d) => d.message.includes('"style"'))!.message).toMatch(
       /lineStyle\.pattern/,
     );
@@ -261,21 +259,23 @@ describe('diagnostics — unknown keys (typo detection)', () => {
 
 describe('diagnostics — warning taxonomy (code discriminator)', () => {
   it('tags unknown-key warnings with code "unknown-key"', () => {
-    const diags = validateItem(item('icon', { path: 'a.svg', showLabel: true }, 'directive'));
-    const warn = diags.find((d) => d.message.includes('showLabel'));
+    const diags = validateItem(
+      item('atomStyle', { selector: 'Node', showLabels: true }, 'directive'),
+    );
+    const warn = diags.find((d) => d.message.includes('showLabels'));
     expect(warn!.code).toBe('unknown-key');
   });
 
-  it('emits a distinct "deprecated" diagnostic naming the replacement', () => {
+  it('emits a distinct "removed" diagnostic naming the replacement', () => {
     const diags = validateItem(
-      item('atomColor', { value: '#f00', selector: 'Node' }, 'directive'),
+      item('inferredEdge', { name: 'e', selector: 'r', color: '#f00' }, 'directive'),
     );
-    const dep = diags.find((d) => d.code === 'deprecated');
-    expect(dep).toBeDefined();
-    expect(dep!.severity).toBe('warning');
-    expect(dep!.message).toContain('atomStyle');
-    // the deprecation notice is separate from any typo/unknown-key warning
-    expect(dep!.code).not.toBe('unknown-key');
+    const removed = diags.find((d) => d.code === 'removed');
+    expect(removed).toBeDefined();
+    expect(removed!.severity).toBe('error');
+    expect(removed!.message).toContain('lineStyle.color');
+    // the removal notice is separate from any typo/unknown-key warning
+    expect(removed!.code).not.toBe('unknown-key');
   });
 
   it('does not deprecation-warn a current (non-deprecated) type', () => {

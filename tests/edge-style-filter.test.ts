@@ -51,10 +51,11 @@ describe('Edge Style Filter for Hidden Edges', () => {
   it('should hide all edges of a field when hidden=true and no filter', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#000000'
       hidden: true
+      lineStyle:
+        color: '#000000'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -77,11 +78,12 @@ directives:
     // Filter to only hide the left edge from Node3 to Node1
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#000000'
       filter: 'Node3 -> Node1'
       hidden: true
+      lineStyle:
+        color: '#000000'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -108,11 +110,12 @@ directives:
     // Use intersection to filter: left & (Node3 -> univ) means left edges starting from Node3
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#000000'
       filter: 'left & (Node3 -> univ)'
       hidden: true
+      lineStyle:
+        color: '#000000'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -134,10 +137,11 @@ directives:
   it('should apply color to filtered edges without hiding', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#FF0000'
       filter: 'Node3 -> Node1'
+      lineStyle:
+        color: '#FF0000'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -171,11 +175,12 @@ directives:
     // Selector filters source nodes, filter filters specific tuples
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#00FF00'
       selector: 'Node3'
       filter: 'left & (Node3 -> univ)'
+      lineStyle:
+        color: '#00FF00'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -204,11 +209,12 @@ directives:
     // Filter that matches nothing
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'left'
-      value: '#000000'
       filter: 'Node0 -> Node0'
       hidden: true
+      lineStyle:
+        color: '#000000'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);

@@ -5,18 +5,20 @@ describe('Field-based directives with selectors', () => {
   it('should parse field directives with selectors', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'red'
       selector: 'Person'
-      style: 'dashed'
-      weight: 2
+      lineStyle:
+        color: 'red'
+        pattern: 'dashed'
+        weight: 2
   - inferredEdge:
       name: 'transitive'
       selector: 'Person->Person'
-      color: 'gray'
-      style: 'dotted'
-      weight: 1.5
+      lineStyle:
+        color: 'gray'
+        pattern: 'dotted'
+        weight: 1.5
   - attribute:
       field: 'age'
       selector: 'Person'
@@ -31,8 +33,6 @@ constraints:
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     
-    // edgeColor desugars into an edgeStyle rule (edgeColors is left empty)
-    expect(layoutSpec.directives.edgeColors).toEqual([]);
     expect(layoutSpec.directives.edgeStyles).toHaveLength(1);
     expect(layoutSpec.directives.edgeStyles[0].field).toBe('name');
     expect(layoutSpec.directives.edgeStyles[0].selector).toBe('Person');
@@ -65,9 +65,10 @@ constraints:
   it('should parse field directives without selectors (legacy)', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'blue'
+      lineStyle:
+        color: 'blue'
   - attribute:
       field: 'age'
 `;
@@ -75,7 +76,6 @@ directives:
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
     
     // Legacy edgeColor still works — it desugars into an edgeStyle rule
-    expect(layoutSpec.directives.edgeColors).toEqual([]);
     expect(layoutSpec.directives.edgeStyles).toHaveLength(1);
     expect(layoutSpec.directives.edgeStyles[0].field).toBe('name');
     expect(layoutSpec.directives.edgeStyles[0].selector).toBeUndefined();

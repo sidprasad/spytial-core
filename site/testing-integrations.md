@@ -216,7 +216,7 @@ Warnings are reported but do not fail a case:
 | `datum/empty-relation` | selectors over it will match nothing |
 | `datum/ragged-relation` | one relation mixes tuple arities |
 | `datum/tuple-type-arity-mismatch` | a tuple's `types` and `atoms` are different lengths |
-| `layout/warning` | the engine's own advisories — an unresolved name, a deprecated form |
+| `layout/warning` | the engine's own advisories — an unresolved name, say |
 
 That last one deserves attention. A selector naming something absent evaluates to the empty relation rather than raising, so a spec with a typo lays out fine and constrains nothing. The warning is often the only sign.
 

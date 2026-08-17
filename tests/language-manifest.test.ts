@@ -86,11 +86,6 @@ const landsIn: Record<string, (spec: LayoutSpec) => number> = {
   tag: (s) => s.directives.tags.length,
   hideField: (s) => s.directives.hiddenFields.length,
   inferredEdge: (s) => s.directives.inferredEdges.length,
-  // The deprecated trio desugar onto their modern counterparts rather than
-  // landing in their own (now vestigial) buckets.
-  icon: (s) => s.directives.atomStyles.length,
-  atomColor: (s) => s.directives.atomStyles.length,
-  edgeColor: (s) => s.directives.edgeStyles.length,
 };
 
 describe('language manifest — conformance with the parser', () => {
@@ -130,13 +125,15 @@ describe('language manifest — conformance with the parser', () => {
     ).toBe(true);
   });
 
-  it('size and hideAtom are constraints', () => {
+  it('size and hideAtom are constraints, and only constraints', () => {
     // Called out explicitly: they were historically documented as directives,
-    // and the classification is the thing this pair of tests protects.
+    // and the classification is the thing this pair of tests protects. 6.0.0
+    // removed the tolerated directives placement, so there is no longer a
+    // deprecated section to declare.
     for (const id of ['size', 'hideAtom']) {
       const item = manifest.items.find((i) => i.id === id)!;
       expect(item.sections).toEqual(['constraints']);
-      expect(item.deprecatedSections).toEqual(['directives']);
+      expect(item.deprecatedSections ?? []).toEqual([]);
     }
   });
 });
@@ -243,13 +240,12 @@ describe('language manifest — deprecations', () => {
     },
   );
 
-  it('a deprecated field raises a warning even on a supported item', () => {
-    // inferredEdge is current; its inline color/style/weight/highlight are not.
-    const spec = quietly(() =>
-      parseLayoutSpec('directives:\n  - inferredEdge: { name: r, selector: "^parent", color: gray }\n'),
-    );
-    const warnings = spec.warnings ?? [];
-    expect(warnings.some((w) => w.code === 'deprecated' && w.specType === 'inferredEdge')).toBe(true);
+  it('declares nothing deprecated, because nothing deprecated is still accepted', () => {
+    // 6.0.0 turned every deprecated form into a parse error. The manifest is
+    // the contract generators read, so it must not still advertise a form as
+    // "accepted, but deprecated" — see tests/removed-directive-forms.test.ts
+    // for the errors themselves.
+    expect(manifest.deprecations).toEqual([]);
   });
 
   it('a current form raises no warnings', () => {
@@ -550,7 +546,7 @@ describe('spec JSON Schema', () => {
         },
       ],
       ['legacy addEdge boolean', { constraints: [{ group: { selector: 'a.b', name: 'g', addEdge: true } }] }],
-      ['size in either section', { constraints: [{ size: { selector: 'a', width: 1, height: 1 } }], directives: [{ size: { width: 2, height: 2 } }] }],
+      ['size in the constraints section', { constraints: [{ size: { selector: 'a', width: 1, height: 1 } }] }],
       ['inferredEdge with group endpoints', { constraints: [{ group: { selector: 'R.m', name: 'regions' } }], directives: [{ inferredEdge: { name: 'c', selector: 'connected', draw: 'regions -> regions' } }] }],
     ];
     for (const [label, doc] of goodDocuments) {

@@ -211,9 +211,10 @@ directives:
   it('should maintain backward compatibility with directives without selectors', () => {
     const layoutSpecStr = `
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'green'
+      lineStyle:
+        color: 'green'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);

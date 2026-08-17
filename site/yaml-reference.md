@@ -51,9 +51,9 @@ Each section must be a **list** of single-key entries. The parser ignores anythi
 | [`inferredEdge`](directives.md#inferred-edges) | Create edges from computed selectors | `name`, `selector` |
 | [`flag`](directives.md#flags) | Global display flags | flag value |
 
-`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Writing them here still parses, identically, but is deprecated and warns.
+`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Writing them here was tolerated through 5.x; since 6.0.0 it is an error.
 
-Deprecated, still parsed: [`icon`](directives.md#icons) → `atomStyle.iconStyle`, `atomColor` → `atomStyle.borderStyle`, `edgeColor` → `edgeStyle.lineStyle`. Each raises a deprecation warning on the parsed spec.
+Removed in 6.0.0 (these now fail to parse): [`icon`](directives.md#icons) → `atomStyle.iconStyle`, `atomColor` → `atomStyle.borderStyle`, `edgeColor` → `edgeStyle.lineStyle`. The parse error names the rewrite.
 
 Removed: `group`'s `field`/`groupOn`/`addToGroup`. Write a binary `selector` instead — its first column is the group key, its second the members. This one is a parse error, not a warning.
 

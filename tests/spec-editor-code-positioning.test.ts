@@ -14,12 +14,12 @@ function span(yaml: string, d: { from?: number; to?: number }): string {
 
 describe('code-positioning — resolve diagnostic ranges from YAML', () => {
   it('anchors an unknown field key to that exact token', () => {
-    const yaml = 'directives:\n  - icon:\n      path: a.svg\n      showLabel: true\n';
+    const yaml = 'directives:\n  - atomStyle:\n      selector: Node\n      showLabels: true\n';
     const state = parseYamlToState(yaml);
     const positioned = positionDiagnostics(yaml, state, validateState(state));
     const unknown = positioned.find((d) => d.code === 'unknown-key');
     expect(unknown).toBeDefined();
-    expect(span(yaml, unknown!)).toBe('showLabel');
+    expect(span(yaml, unknown!)).toBe('showLabels');
   });
 
   it('anchors a nested-block typo to the nested key', () => {
@@ -32,13 +32,15 @@ describe('code-positioning — resolve diagnostic ranges from YAML', () => {
     expect(span(yaml, unknown!)).toBe('colour');
   });
 
-  it('anchors a deprecation (no fieldKey) to the item type key', () => {
-    const yaml = "directives:\n  - atomColor:\n      selector: Node\n      value: '#f00'\n";
+  it('anchors an item-level diagnostic (no fieldKey) to the item type key', () => {
+    // `size` is a constraint; writing it under directives is an error since
+    // 6.0.0. The diagnostic names no field, so it must land on the type key.
+    const yaml = 'directives:\n  - size:\n      selector: Node\n      width: 10\n      height: 10\n';
     const state = parseYamlToState(yaml);
     const positioned = positionDiagnostics(yaml, state, validateState(state));
-    const dep = positioned.find((d) => d.code === 'deprecated');
-    expect(dep).toBeDefined();
-    expect(span(yaml, dep!)).toBe('atomColor');
+    const wrongSection = positioned.find((d) => d.code === 'wrong-section');
+    expect(wrongSection).toBeDefined();
+    expect(span(yaml, wrongSection!)).toBe('size');
   });
 
   it('falls back to the item type key when the required field is absent', () => {
@@ -54,26 +56,26 @@ describe('code-positioning — resolve diagnostic ranges from YAML', () => {
 
   it('resolves the second item independently of the first (index-correct)', () => {
     const yaml =
-      'directives:\n  - icon:\n      path: a.svg\n  - icon:\n      path: b.svg\n      showLabel: true\n';
+      'directives:\n  - atomStyle:\n      selector: A\n  - atomStyle:\n      selector: B\n      showLabels: true\n';
     const state = parseYamlToState(yaml);
     const positioned = positionDiagnostics(yaml, state, validateState(state));
     const unknown = positioned.find((d) => d.code === 'unknown-key');
     expect(unknown).toBeDefined();
-    // There is exactly one `showLabel`, on the second icon — the range must land there.
-    expect(span(yaml, unknown!)).toBe('showLabel');
-    expect(unknown!.from).toBe(yaml.indexOf('showLabel'));
+    // There is exactly one `showLabels`, on the second atomStyle — the range must land there.
+    expect(span(yaml, unknown!)).toBe('showLabels');
+    expect(unknown!.from).toBe(yaml.indexOf('showLabels'));
   });
 
   it('lintYaml self-contains parse+validate+position (ranges always resolve)', () => {
     const yaml =
-      '{directives: [{atomColor: {selector: Node, value: "#ff0000"}}, {icon: {path: a.svg, showLabel: true}}]}';
+      '{directives: [{size: {selector: Node, width: 1, height: 1}}, {atomStyle: {selector: A, showLabels: true}}]}';
     const linted = lintYaml(yaml);
-    const dep = linted.find((d) => d.code === 'deprecated');
+    const wrongSection = linted.find((d) => d.code === 'wrong-section');
     const unknown = linted.find((d) => d.code === 'unknown-key');
     // Both resolve to exact tokens — no drift, because state + diagnostics come
     // from the same parse of `yaml`.
-    expect(span(yaml, dep!)).toBe('atomColor');
-    expect(span(yaml, unknown!)).toBe('showLabel');
+    expect(span(yaml, wrongSection!)).toBe('size');
+    expect(span(yaml, unknown!)).toBe('showLabels');
   });
 
   it('lintYaml reports a syntax error with a location', () => {
@@ -89,7 +91,7 @@ describe('code-positioning — resolve diagnostic ranges from YAML', () => {
   });
 
   it('every positioned range is within bounds and matches its diagnostic', () => {
-    const yaml = 'directives:\n  - icon:\n      path: a.svg\n      wibble: 1\n';
+    const yaml = 'directives:\n  - atomStyle:\n      selector: Node\n      wibble: 1\n';
     const state = parseYamlToState(yaml);
     const positioned = positionDiagnostics(yaml, state, validateState(state));
     for (const d of positioned) {

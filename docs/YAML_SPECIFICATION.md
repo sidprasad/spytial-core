@@ -6,7 +6,7 @@ This document describes the YAML structure for defining layout constraints and d
 >
 > | Artifact | What it is |
 > |---|---|
-> | [`docs/spytial-language.json`](./spytial-language.json) | Every constraint and directive, its fields, requiredness, legal values, engine defaults, and what is deprecated (with the rewrite to apply). |
+> | [`docs/spytial-language.json`](./spytial-language.json) | Every constraint and directive, its fields, requiredness, legal values, and engine defaults. Its `deprecations` list is empty as of 6.0.0. |
 > | [`docs/spytial-spec.schema.json`](./spytial-spec.schema.json) | A JSON Schema (draft 2020-12) for validating a spec document. |
 >
 > Both are pinnable per tag over jsDelivr, attached to each GitHub release, and included in the npm package:
@@ -47,9 +47,9 @@ Each section must be a **list** of single-key entries. Anything the engine does 
 
 A typo therefore costs you the directive, quietly. Validate against `spytial-spec.schema.json`, which is deliberately stricter than the parser, if you want those to be errors.
 
-`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Both are still accepted among the `directives:` for backwards compatibility, with identical meaning, but that placement is deprecated and raises a warning. Write them under `constraints:`.
+`size` and `hideAtom` are **constraints** — they change what the layout has to place, not how a solved layout looks. Writing them among the `directives:` was tolerated through 5.x behind a deprecation warning; since 6.0.0 it is an error. Write them under `constraints:`.
 
-Parsing also returns advisory `warnings` on the spec, each with a machine-readable `code` (currently `deprecated`) and the `specType` it concerns — that is how you detect a deprecated form without matching prose.
+Parsing also returns advisory `warnings` on the spec, each with a machine-readable `code` and the `specType` it concerns — that is how you detect an advisory without matching prose. Nothing is deprecated as of 6.0.0: every form that used to warn is now either current or an error.
 
 ---
 
@@ -464,7 +464,7 @@ A `full` icon leaves the node's box transparent (so a group hull shows through) 
     borderStyle: { color: '#0369a1', width: 4 }
     textStyle: { color: '#b91c1c' }
 
-# Just recolor the outline of error atoms (border-preserving, like atomColor)
+# Just recolor the outline of error atoms (border-preserving)
 - atomStyle:
     selector: Error
     borderStyle: { color: red }
@@ -489,14 +489,14 @@ A `full` icon leaves the node's box transparent (so a group hull shows through) 
     iconStyle: { opacity: 0.35 }   # inherits `path` from the Person rule
 ```
 
-**Migrating from `atomColor`:** `atomColor` (below) is the legacy flat form and still works; its `value` maps onto `borderStyle.color` (so existing diagrams keep their outlines exactly), and you can add a `fillStyle` for a real interior fill:
+**Migrating from `atomColor`:** `atomColor` was removed in 6.0.0 and now fails to parse. Its `value` maps onto `borderStyle.color` (so a rewritten diagram keeps its outlines exactly), and you can add a `fillStyle` for a real interior fill:
 
 | `atomColor` | `atomStyle` |
 |---|---|
 | `value` | `borderStyle.color` |
 | `selector` | `selector` |
 
-**Migrating from `icon`:** the legacy `icon` directive's single `showLabels` boolean drove label visibility *and* icon geometry at once. It splits into the two independent knobs:
+**Migrating from `icon`:** the `icon` directive was removed in 6.0.0. Its single `showLabels` boolean drove label visibility *and* icon geometry at once; it splits into the two independent knobs:
 
 | `icon` | `atomStyle` |
 |---|---|
@@ -504,39 +504,6 @@ A `full` icon leaves the node's box transparent (so a group hull shows through) 
 | `selector` | `selector` |
 | `showLabels: false` (default) | `showLabel: false` + `iconStyle.placement: full` |
 | `showLabels: true` | `showLabel: true` + `iconStyle.placement: badge` |
-
----
-
-### Atom Color Directive (atomColor) — *legacy*
-
-> **Deprecated:** prefer [`atomStyle`](#atom-style-directive-atomstyle) above. `atomColor` still works and will desugar onto `atomStyle` (`value` → `borderStyle.color`) with a deprecation warning.
-
-Sets the color of atoms matching a selector.
-
-```yaml
-- atomColor:
-    selector: <unary-selector>   # Required: Selector for atoms to color
-    value: <color>               # Required: Color value
-```
-
-**Fields:**
-
-| Field | Required | Type | Description |
-|-------|----------|------|-------------|
-| `selector` | ✅ Yes | string | Unary selector for target atoms |
-| `value` | ✅ Yes | string | CSS color value (hex, named, rgb, etc.) |
-
-**Examples:**
-
-```yaml
-- atomColor:
-    selector: Person
-    value: "#ff5733"
-
-- atomColor:
-    selector: Error
-    value: red
-```
 
 ---
 
@@ -600,7 +567,7 @@ Styles the edges of a field/relation. An edge is a composite of a drawn **line**
     lineStyle: { color: black, highlight: "#ffeb3b" }
 ```
 
-**Migrating from `edgeColor`:** `edgeColor` (below) is the legacy flat form and still works; it maps onto `edgeStyle` field-for-field:
+**Migrating from `edgeColor`:** `edgeColor` was removed in 6.0.0 and now fails to parse. It maps onto `edgeStyle` field-for-field:
 
 | `edgeColor` | `edgeStyle` |
 |---|---|
@@ -609,130 +576,6 @@ Styles the edges of a field/relation. An edge is a composite of a drawn **line**
 | `weight` | `lineStyle.weight` |
 | `highlight` | `lineStyle.highlight` |
 | `showLabel` / `hidden` | `showLabel` / `hidden` |
-
----
-
-### Edge Color Directive (edgeColor) — *legacy*
-
-> **Deprecated:** prefer [`edgeStyle`](#edge-style-directive-edgestyle) above. `edgeColor` still works and will desugar onto `edgeStyle` with a deprecation warning.
-
-Customizes the appearance of edges for a specific field/relation.
-
-```yaml
-- edgeColor:
-    field: <field-name>          # Required: Relation/field name
-    value: <color>               # Required: Edge color
-    selector: <unary-selector>   # Optional: Filter by source atom
-    filter: <n-ary-selector>     # Optional: Filter which tuples apply
-    style: <line-style>          # Optional: Line style
-    weight: <number>             # Optional: Line thickness
-    highlight: <color>           # Optional: Highlight color (underlay)
-    showLabel: <boolean>         # Optional: Show edge label
-    hidden: <boolean>            # Optional: Hide the edge entirely
-```
-
-**Fields:**
-
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `field` | ✅ Yes | string | - | Name of the relation |
-| `value` | ✅ Yes | string | - | CSS color value |
-| `selector` | ❌ No | string | - | Unary selector to filter source atoms |
-| `filter` | ❌ No | string | - | N-ary selector to filter specific tuples |
-| `style` | ❌ No | string | `solid` | `solid`, `dashed`, or `dotted` |
-| `weight` | ❌ No | number | - | Line thickness in pixels |
-| `highlight` | ❌ No | string | - | CSS color drawn as a wider, translucent underlay beneath the edge. Orthogonal to `style`/`value` — combine with any line style or color. Omit for no highlight. |
-| `showLabel` | ❌ No | boolean | `true` | Whether to display the edge label |
-| `hidden` | ❌ No | boolean | `false` | Hide the edge from display |
-
-**Examples:**
-
-```yaml
-# Color all 'parent' edges blue
-- edgeColor:
-    field: parent
-    value: blue
-
-# Dashed red edges for specific source type
-- edgeColor:
-    field: references
-    value: red
-    selector: Document
-    style: dashed
-    weight: 2
-
-# Hide edges but keep the relationship
-- edgeColor:
-    field: internal
-    value: gray
-    hidden: true
-
-# Yellow highlight glow under black edges
-- edgeColor:
-    field: critical_path
-    value: black
-    highlight: "#ffeb3b"
-```
-
----
-
-### Icon Directive — *legacy*
-
-> **Deprecated:** prefer [`atomStyle`](#atom-style-directive-atomstyle) with an `iconStyle` block. `icon` still works and desugars onto `atomStyle` with a deprecation warning. See [Migrating from `icon`](#atom-style-directive-atomstyle) for the exact mapping — the one `showLabels` boolean becomes `showLabel` plus `iconStyle.placement`, which is what lets you fade an icon, or hide a label with no icon at all.
-
-Assigns an icon to atoms matching a selector.
-
-```yaml
-- icon:
-    selector: <unary-selector>   # Required: Selector for atoms to style
-    path: <icon-path>            # Required: Path or name of the icon
-    showLabels: <boolean>        # Optional: Show text labels alongside icon
-```
-
-**Fields:**
-
-| Field | Required | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `selector` | ✅ Yes | string | - | Unary selector for target atoms |
-| `path` | ✅ Yes | string | - | Icon path, URL, or registered icon name |
-| `showLabels` | ❌ No | boolean | `false` | Display text labels with the icon |
-
-A directive missing either required field draws nothing, and is dropped rather than desugared.
-
-**Examples:**
-
-```yaml
-- icon:
-    selector: Person
-    path: "user"
-    showLabels: true
-
-- icon:
-    selector: File
-    path: "/icons/file.svg"
-```
-
----
-
-### Size Directive — *legacy placement*
-
-> **Deprecated:** `size` is a [constraint](#size-constraint). It fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. Writing it in the `directives:` section still parses, with identical fields and meaning, but raises a deprecation warning. Move it to `constraints:`; nothing else changes.
-
-```yaml
-# Deprecated
-directives:
-  - size: { selector: LargeNode, width: 200, height: 100 }
-
-# Supported
-constraints:
-  - size: { selector: LargeNode, width: 200, height: 100 }
-```
-
----
-
-> **Note:** Projection is no longer a layout directive. Projections are applied as a pre-layout
-> data transformation using `applyProjectionTransform()`. See the [DEV_GUIDE](./DEV_GUIDE.md) 
-> for details on the projection transform API.
 
 ---
 
@@ -881,22 +724,6 @@ Hides edges for a specific field/relation.
 
 ---
 
-### Hide Atom Directive — *legacy placement*
-
-> **Deprecated:** `hideAtom` is a [constraint](#hide-atom-constraint). Removing an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints. Writing it in the `directives:` section still parses, with identical fields and meaning, but raises a deprecation warning. Move it to `constraints:`; nothing else changes.
-
-```yaml
-# Deprecated
-directives:
-  - hideAtom: { selector: HelperNode }
-
-# Supported
-constraints:
-  - hideAtom: { selector: HelperNode }
-```
-
----
-
 ### Inferred Edge Directive
 
 Creates visual edges based on a selector expression (edges that don't exist in the data). The structural `name` + `selector` say *which* edge to draw; its appearance uses the shared `lineStyle` / `textStyle` blocks (the same vocabulary as `edgeStyle`).
@@ -930,7 +757,7 @@ Creates visual edges based on a selector expression (edges that don't exist in t
 | `textStyle.size` | ❌ No | enum | `small`, `normal`, or `large` |
 | `textStyle.color` | ❌ No | string | Edge-label color |
 
-> **Legacy:** the flat inline `color` / `style` / `weight` / `highlight` keys still parse (`style`→`pattern`) but are deprecated — use the `lineStyle` block. Mixing forms emits a warning.
+> **Removed in 6.0.0:** the flat inline `color` / `style` / `weight` / `highlight` keys now fail to parse. Use the `lineStyle` block, where `style` is spelled `pattern`.
 
 #### Group endpoints (`draw`)
 

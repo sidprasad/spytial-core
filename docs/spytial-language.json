@@ -1,6 +1,6 @@
 {
   "language": "spytial-layout-spec",
-  "languageVersion": "2026-08-14",
+  "languageVersion": "2026-08-17",
   "spytialCoreVersion": "5.2.0",
   "versioning": {
     "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
@@ -458,13 +458,6 @@
       "sections": [
         "constraints"
       ],
-      "deprecatedSections": [
-        "directives"
-      ],
-      "sectionDeprecation": {
-        "reason": "Size fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It is a constraint. The directives section still accepts it, identically, behind a deprecation warning.",
-        "warningSpecType": "size"
-      },
       "valueShape": "mapping",
       "supportsHold": false,
       "fields": [
@@ -514,13 +507,6 @@
       "sections": [
         "constraints"
       ],
-      "deprecatedSections": [
-        "directives"
-      ],
-      "sectionDeprecation": {
-        "reason": "Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — it is a constraint, not presentation. The directives section still accepts it, identically, behind a deprecation warning.",
-        "warningSpecType": "hideAtom"
-      },
       "valueShape": "mapping",
       "supportsHold": false,
       "fields": [
@@ -963,10 +949,7 @@
         {
           "name": "color",
           "type": "color",
-          "description": "Legacy inline line color.",
-          "deprecated": {
-            "replacedBy": "lineStyle.color"
-          }
+          "description": "Legacy inline line color."
         },
         {
           "name": "style",
@@ -976,27 +959,18 @@
             "dashed",
             "dotted"
           ],
-          "description": "Legacy inline dash pattern.",
-          "deprecated": {
-            "replacedBy": "lineStyle.pattern"
-          }
+          "description": "Legacy inline dash pattern."
         },
         {
           "name": "weight",
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Legacy inline line thickness.",
-          "deprecated": {
-            "replacedBy": "lineStyle.weight"
-          }
+          "description": "Legacy inline line thickness."
         },
         {
           "name": "highlight",
           "type": "color",
-          "description": "Legacy inline highlight underlay.",
-          "deprecated": {
-            "replacedBy": "lineStyle.highlight"
-          }
+          "description": "Legacy inline highlight underlay."
         }
       ],
       "example": {
@@ -1008,337 +982,9 @@
         }
       },
       "note": "Using any of the legacy inline `color`/`style`/`weight`/`highlight` keys raises a deprecation warning with specType `inferredEdge`. The block form wins when both are given. If an end's atom keys no group of that name in a given instance, that one edge is skipped with a console warning — data-dependent, not a spec error."
-    },
-    {
-      "id": "icon",
-      "yamlKey": "icon",
-      "label": "Icon",
-      "description": "Assign an icon to matching atoms.",
-      "sections": [
-        "directives"
-      ],
-      "valueShape": "mapping",
-      "supportsHold": false,
-      "deprecated": {
-        "replacedBy": "atomStyle",
-        "reason": "The single `showLabels` boolean drove label visibility and icon geometry at once. atomStyle splits those into two independent knobs, which is what makes a faded watermark, or a hidden label with no icon, expressible.",
-        "mapping": {
-          "path": "iconStyle.path",
-          "selector": "selector",
-          "showLabels: false": "showLabel: false + iconStyle.placement: full",
-          "showLabels: true": "showLabel: true + iconStyle.placement: badge"
-        },
-        "warningSpecType": "icon"
-      },
-      "fields": [
-        {
-          "name": "selector",
-          "type": "selector",
-          "arity": "unary",
-          "accepts": [
-            {
-              "arity": "unary",
-              "minColumns": 1,
-              "maxColumns": 1,
-              "meaning": "The atoms that get the icon."
-            }
-          ],
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\"."
-        },
-        {
-          "name": "path",
-          "type": "icon-path",
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "Bundled name, icon-pack reference, URL, or path. Omitting it drops the directive."
-        },
-        {
-          "name": "showLabels",
-          "type": "boolean",
-          "default": false,
-          "description": "Whether the atom's label is drawn alongside the icon."
-        }
-      ],
-      "example": {
-        "selector": "Person",
-        "path": "person",
-        "showLabels": true
-      }
-    },
-    {
-      "id": "atomColor",
-      "yamlKey": "atomColor",
-      "label": "Atom color",
-      "description": "Set the color of matching atoms.",
-      "sections": [
-        "directives"
-      ],
-      "valueShape": "mapping",
-      "supportsHold": false,
-      "deprecated": {
-        "replacedBy": "atomStyle",
-        "reason": "atomStyle expresses the same recolor and also reaches the fill, the icon, and the label. The rewrite is border-preserving, so an existing diagram is unchanged.",
-        "mapping": {
-          "value": "borderStyle.color",
-          "selector": "selector"
-        },
-        "warningSpecType": "atomColor"
-      },
-      "fields": [
-        {
-          "name": "value",
-          "type": "color",
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "Any CSS color. Applies to the node's outline, not its fill."
-        },
-        {
-          "name": "selector",
-          "type": "selector",
-          "arity": "unary",
-          "accepts": [
-            {
-              "arity": "unary",
-              "minColumns": 1,
-              "maxColumns": 1,
-              "meaning": "The atoms to recolor."
-            }
-          ],
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\"."
-        }
-      ],
-      "example": {
-        "selector": "Person",
-        "value": "#ff5733"
-      }
-    },
-    {
-      "id": "edgeColor",
-      "yamlKey": "edgeColor",
-      "label": "Edge color",
-      "description": "Style a relation's edges with flat, inline keys.",
-      "sections": [
-        "directives"
-      ],
-      "valueShape": "mapping",
-      "supportsHold": false,
-      "deprecated": {
-        "replacedBy": "edgeStyle",
-        "reason": "edgeStyle groups the same knobs into the shared lineStyle/textStyle blocks that every other form uses.",
-        "mapping": {
-          "value": "lineStyle.color",
-          "style": "lineStyle.pattern",
-          "weight": "lineStyle.weight",
-          "highlight": "lineStyle.highlight",
-          "field": "field",
-          "selector": "selector",
-          "filter": "filter",
-          "showLabel": "showLabel",
-          "hidden": "hidden"
-        },
-        "warningSpecType": "edgeColor"
-      },
-      "fields": [
-        {
-          "name": "field",
-          "type": "relation",
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "The relation whose edges this styles."
-        },
-        {
-          "name": "value",
-          "type": "color",
-          "required": true,
-          "enforcement": "unchecked",
-          "description": "Line color."
-        },
-        {
-          "name": "selector",
-          "type": "selector",
-          "arity": "unary",
-          "accepts": [
-            {
-              "arity": "unary",
-              "minColumns": 1,
-              "maxColumns": 1,
-              "meaning": "The set of source atoms the directive is narrowed to."
-            }
-          ],
-          "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom."
-        },
-        {
-          "name": "filter",
-          "type": "selector",
-          "arity": "n-ary",
-          "accepts": [
-            {
-              "arity": "n-ary",
-              "minColumns": 2,
-              "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
-            }
-          ],
-          "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True."
-        },
-        {
-          "name": "style",
-          "type": "enum",
-          "values": [
-            "solid",
-            "dashed",
-            "dotted"
-          ],
-          "enforcement": "value-ignored",
-          "description": "Dash pattern. Trimmed and lowercased before matching, unlike `lineStyle.pattern`."
-        },
-        {
-          "name": "weight",
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "enforcement": "value-ignored",
-          "description": "Line thickness in pixels."
-        },
-        {
-          "name": "highlight",
-          "type": "color",
-          "description": "A wider, translucent underlay beneath the line."
-        },
-        {
-          "name": "showLabel",
-          "type": "boolean",
-          "default": true,
-          "description": "Whether the edge label is drawn."
-        },
-        {
-          "name": "hidden",
-          "type": "boolean",
-          "default": false,
-          "description": "Hide the edge entirely."
-        }
-      ],
-      "example": {
-        "field": "parent",
-        "value": "blue"
-      }
     }
   ],
-  "deprecations": [
-    {
-      "id": "icon",
-      "kind": "item",
-      "path": "icon",
-      "replacedBy": "atomStyle",
-      "reason": "The single `showLabels` boolean drove label visibility and icon geometry at once. atomStyle splits those into two independent knobs, which is what makes a faded watermark, or a hidden label with no icon, expressible.",
-      "mapping": {
-        "path": "iconStyle.path",
-        "selector": "selector",
-        "showLabels: false": "showLabel: false + iconStyle.placement: full",
-        "showLabels: true": "showLabel: true + iconStyle.placement: badge"
-      },
-      "warningSpecType": "icon"
-    },
-    {
-      "id": "atomColor",
-      "kind": "item",
-      "path": "atomColor",
-      "replacedBy": "atomStyle",
-      "reason": "atomStyle expresses the same recolor and also reaches the fill, the icon, and the label. The rewrite is border-preserving, so an existing diagram is unchanged.",
-      "mapping": {
-        "value": "borderStyle.color",
-        "selector": "selector"
-      },
-      "warningSpecType": "atomColor"
-    },
-    {
-      "id": "edgeColor",
-      "kind": "item",
-      "path": "edgeColor",
-      "replacedBy": "edgeStyle",
-      "reason": "edgeStyle groups the same knobs into the shared lineStyle/textStyle blocks that every other form uses.",
-      "mapping": {
-        "value": "lineStyle.color",
-        "style": "lineStyle.pattern",
-        "weight": "lineStyle.weight",
-        "highlight": "lineStyle.highlight",
-        "field": "field",
-        "selector": "selector",
-        "filter": "filter",
-        "showLabel": "showLabel",
-        "hidden": "hidden"
-      },
-      "warningSpecType": "edgeColor"
-    },
-    {
-      "id": "size@directives",
-      "kind": "placement",
-      "path": "directives[].size",
-      "replacedBy": "constraints[].size",
-      "reason": "Size fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It is a constraint. The directives section still accepts it, identically, behind a deprecation warning.",
-      "mapping": {
-        "directives[].size": "constraints[].size"
-      },
-      "warningSpecType": "size"
-    },
-    {
-      "id": "hideAtom@directives",
-      "kind": "placement",
-      "path": "directives[].hideAtom",
-      "replacedBy": "constraints[].hideAtom",
-      "reason": "Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — it is a constraint, not presentation. The directives section still accepts it, identically, behind a deprecation warning.",
-      "mapping": {
-        "directives[].hideAtom": "constraints[].hideAtom"
-      },
-      "warningSpecType": "hideAtom"
-    },
-    {
-      "id": "inferredEdge.color",
-      "kind": "field",
-      "path": "inferredEdge.color",
-      "replacedBy": "inferredEdge.lineStyle.color",
-      "reason": "Superseded by lineStyle.color.",
-      "mapping": {
-        "color": "lineStyle.color"
-      },
-      "warningSpecType": "inferredEdge"
-    },
-    {
-      "id": "inferredEdge.style",
-      "kind": "field",
-      "path": "inferredEdge.style",
-      "replacedBy": "inferredEdge.lineStyle.pattern",
-      "reason": "Superseded by lineStyle.pattern.",
-      "mapping": {
-        "style": "lineStyle.pattern"
-      },
-      "warningSpecType": "inferredEdge"
-    },
-    {
-      "id": "inferredEdge.weight",
-      "kind": "field",
-      "path": "inferredEdge.weight",
-      "replacedBy": "inferredEdge.lineStyle.weight",
-      "reason": "Superseded by lineStyle.weight.",
-      "mapping": {
-        "weight": "lineStyle.weight"
-      },
-      "warningSpecType": "inferredEdge"
-    },
-    {
-      "id": "inferredEdge.highlight",
-      "kind": "field",
-      "path": "inferredEdge.highlight",
-      "replacedBy": "inferredEdge.lineStyle.highlight",
-      "reason": "Superseded by lineStyle.highlight.",
-      "mapping": {
-        "highlight": "lineStyle.highlight"
-      },
-      "warningSpecType": "inferredEdge"
-    }
-  ],
+  "deprecations": [],
   "documentation": {
     "reference": "https://github.com/sidprasad/spytial-core/blob/main/docs/YAML_SPECIFICATION.md",
     "constraints": "https://sidprasad.github.io/spytial-core/#/constraints",

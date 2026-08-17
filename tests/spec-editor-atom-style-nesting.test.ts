@@ -13,24 +13,6 @@ import {
     defaultParamsFor,
 } from '../src/spec-editor';
 
-describe('registry — atomStyle registration + atomColor deprecation', () => {
-    it('offers atomStyle in the directive add-menu and hides deprecated atomColor', () => {
-        const menu = getDefinitions('directive').map((d) => d.type);
-        expect(menu).toContain('atomStyle');
-        expect(menu).not.toContain('atomColor');
-    });
-
-    it('still resolves atomColor when deprecated entries are requested', () => {
-        const all = getDefinitions('directive', { includeDeprecated: true }).map((d) => d.type);
-        expect(all).toContain('atomColor');
-        expect(all).toContain('atomStyle');
-    });
-
-    it('seeds no defaults for atomStyle — style blocks stay sparse', () => {
-        expect(defaultParamsFor('atomStyle')).toEqual({});
-    });
-});
-
 describe('codec — nested atomStyle blocks', () => {
     const NESTED = [
         'directives:',

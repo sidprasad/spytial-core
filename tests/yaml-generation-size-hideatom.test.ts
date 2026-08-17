@@ -95,52 +95,6 @@ describe('YAML Generation for Size and HideAtom', () => {
     expect(parsed.directives.hiddenAtoms).toHaveLength(1);
   });
 
-  it('should generate YAML with size in directives block (backward compatibility)', () => {
-    const constraints: ConstraintData[] = [];
-    const directives: DirectiveData[] = [
-      {
-        id: '1',
-        type: 'size',
-        params: {
-          selector: 'Type1',
-          height: 150,
-          width: 250
-        }
-      }
-    ];
-
-    const yaml = generateLayoutSpecYaml(constraints, directives);
-    
-    expect(yaml).toContain('directives:');
-    expect(yaml).toContain('size:');
-    
-    // Verify it can be parsed back
-    const parsed = parseLayoutSpec(yaml);
-    expect(parsed.directives.sizes).toHaveLength(1);
-  });
-
-  it('should generate YAML with hideAtom in directives block (backward compatibility)', () => {
-    const constraints: ConstraintData[] = [];
-    const directives: DirectiveData[] = [
-      {
-        id: '1',
-        type: 'hideAtom',
-        params: {
-          selector: 'Type2'
-        }
-      }
-    ];
-
-    const yaml = generateLayoutSpecYaml(constraints, directives);
-    
-    expect(yaml).toContain('directives:');
-    expect(yaml).toContain('hideAtom:');
-    
-    // Verify it can be parsed back
-    const parsed = parseLayoutSpec(yaml);
-    expect(parsed.directives.hiddenAtoms).toHaveLength(1);
-  });
-
   it('should generate YAML with mixed constraints and directives', () => {
     const constraints: ConstraintData[] = [
       {
@@ -170,16 +124,12 @@ describe('YAML Generation for Size and HideAtom', () => {
           fillStyle: { color: '#FF0000' }
         }
       },
-      {
-        id: '2',
-        type: 'hideAtom',
-        params: {
-          selector: 'Type2'
-        }
-      }
     ];
 
-    const yaml = generateLayoutSpecYaml(constraints, directives);
+    const yaml = generateLayoutSpecYaml(
+      [...constraints, { id: '3', type: 'hideAtom', params: { selector: 'Type2' } }],
+      directives,
+    );
     
     expect(yaml).toContain('constraints:');
     expect(yaml).toContain('orientation:');
@@ -193,7 +143,6 @@ describe('YAML Generation for Size and HideAtom', () => {
     expect(parsed.constraints.orientation.relative).toHaveLength(1);
     expect(parsed.directives.sizes).toHaveLength(1);
     // atomStyle sets the fill color directly (no legacy atomColor desugar).
-    expect(parsed.directives.atomColors).toHaveLength(0);
     expect(parsed.directives.atomStyles).toHaveLength(1);
     expect(parsed.directives.atomStyles[0].style.fillStyle?.color).toBe('#FF0000');
     expect(parsed.directives.hiddenAtoms).toHaveLength(1);

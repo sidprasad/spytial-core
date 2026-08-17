@@ -17,11 +17,11 @@ import {
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     RelativeDirection,
     GroupBySelector, AlignConstraint,
-    EdgeColorDirective, InferredEdgeDirective
+    InferredEdgeDirective
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
-import { resolveAtomStyle, iconToAtomStyleRule } from './style/atom-style-spec';
+import { resolveAtomStyle } from './style/atom-style-spec';
 import type { AtomStyleRule, AtomStyleSpec } from './style/atom-style-spec';
 import type { TextStyle } from './style/text-style';
 
@@ -289,57 +289,6 @@ class LayoutNodePath {
     }
 }
 
-
-/**
- * Desugar any legacy directives still sitting on a {@link LayoutSpec} into the
- * `atomStyle` rules the layout actually reads.
- *
- * `parseLayoutSpec` already does this for YAML, leaving `icons`/`atomColors`
- * empty — but a `LayoutSpec` can also arrive as an object, via the
- * `setupLayout(spec: LayoutSpec, ...)` overload or `new LayoutInstance(spec)`
- * directly. Those paths never touch the parser, so a programmatically-built
- * spec would populate `directives.icons` and have it silently ignored: nothing
- * reads those arrays any more.
- *
- * `atomColors` carries the same latent hole — nothing has read it since the
- * legacy color desugar landed — so it is normalized here too. Note these arrays
- * hold *parsed* directives, not raw YAML: an {@link AtomColorDirective} spells
- * its color `color`, where the YAML form (which `atomColorToAtomStyleRule`
- * consumes) spells it `value`. Hence the mapping below rather than a reuse of
- * that parser-side helper. {@link AtomIconDirective} happens to match the YAML
- * shape exactly, so it can go through {@link iconToAtomStyleRule} directly.
- *
- * Idempotent by construction — a parsed spec has empty legacy arrays, so this
- * is a no-op and returns the spec untouched. Only a spec that actually carries
- * legacy directives is copied (shallowly, so the caller's object isn't
- * mutated). Selectorless/pathless entries drop, matching the parser exactly.
- */
-export function normalizeLegacyDirectives(spec: LayoutSpec): LayoutSpec {
-    const legacyIcons = spec.directives?.icons ?? [];
-    const legacyAtomColors = spec.directives?.atomColors ?? [];
-    if (legacyIcons.length === 0 && legacyAtomColors.length === 0) return spec;
-
-    const fromAtomColors: (AtomStyleRule | null)[] = legacyAtomColors.map((d) => {
-        if (!d.selector || d.selector.trim().length === 0) return null;
-        if (typeof d.color !== 'string' || d.color.length === 0) return null;
-        return { selector: d.selector, style: { borderStyle: { color: d.color } } };
-    });
-
-    const desugared: AtomStyleRule[] = [
-        ...fromAtomColors,
-        ...legacyIcons.map(iconToAtomStyleRule),
-    ].filter((rule): rule is AtomStyleRule => rule !== null);
-
-    return {
-        ...spec,
-        directives: {
-            ...spec.directives,
-            atomStyles: [...spec.directives.atomStyles, ...desugared],
-            icons: [],
-            atomColors: [],
-        },
-    };
-}
 
 
 export class LayoutInstance {
@@ -721,7 +670,7 @@ export class LayoutInstance {
     ) {
         this.instanceNum = instNum;
         this.evaluator = evaluator;
-        this._layoutSpec = normalizeLegacyDirectives(layoutSpec);
+        this._layoutSpec = layoutSpec;
 
         // Handle backward compatibility: if alignmentEdgeStrategy is provided, use it
         // Otherwise, convert boolean addAlignmentEdges to strategy
@@ -2908,7 +2857,7 @@ export class LayoutInstance {
             let color = connLine?.color ?? styled.lineStyle?.color ?? this.getEdgeColor(relName, dirSource, dirTarget, edgeId);
             let style = connLine?.pattern ?? styled.lineStyle?.pattern ?? this.getEdgeStyle(relName, dirSource, dirTarget, edgeId);
             let weight = connLine?.weight ?? styled.lineStyle?.weight ?? this.getEdgeWeight(relName, dirSource, dirTarget, edgeId);
-            let showLabel = styled.showLabel ?? this.getEdgeShowLabel(relName, dirSource, dirTarget, edgeId);
+            let showLabel = styled.showLabel;
             let highlight = connLine?.highlight ?? styled.lineStyle?.highlight ?? this.getEdgeHighlight(relName, dirSource, dirTarget, edgeId);
             // Edge-label styling: a group connector's own textStyle wins, then an
             // inferred edge's, then the resolved edgeStyle (edgeColor has none).
@@ -3240,11 +3189,6 @@ export class LayoutInstance {
             return inferredDirective.color;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
-        if (directive?.color) {
-            return directive.color;
-        }
-
         return "black"; // Default color
     }
 
@@ -3255,8 +3199,7 @@ export class LayoutInstance {
             return inferredStyle;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
-        return normalizeEdgeStyle(directive?.style);
+        return undefined;
     }
 
     private getEdgeHighlight(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): string | undefined {
@@ -3265,8 +3208,7 @@ export class LayoutInstance {
             return inferredDirective.highlight;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
-        return directive?.highlight;
+        return undefined;
     }
 
     private getEdgeWeight(relName: string, sourceAtom: string, targetAtom: string, edgeId?: string): number | undefined {
@@ -3276,23 +3218,7 @@ export class LayoutInstance {
             return inferredWeight;
         }
 
-        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
-        return this.normalizeEdgeWeight(directive?.weight, "edge");
-    }
-
-    /**
-     * Gets whether the label should be shown for a specific edge based on directives.
-     * @param relName - The relation name of the edge.
-     * @param sourceAtom - The source atom ID.
-     * @param targetAtom - The target atom ID.
-     * @param edgeId - The edge ID (optional, used to identify inferred edges).
-     * @returns true if the label should be shown, false if hidden, undefined to use default.
-     *          Note: Inferred edges always show labels, so this only applies to regular edges.
-     */
-    private getEdgeShowLabel(relName: string, sourceAtom: string, targetAtom: string, _edgeId?: string): boolean | undefined {
-        // Inferred edges always show labels - no showLabel check needed
-        const directive = this.findEdgeDirective(relName, sourceAtom, targetAtom);
-        return directive?.showLabel;
+        return undefined;
     }
 
     private getInferredEdgeDirective(edgeId?: string): InferredEdgeDirective | undefined {
@@ -3306,12 +3232,12 @@ export class LayoutInstance {
     }
 
     /**
-     * Whether an edge directive (edgeColor or edgeStyle — anything keyed by
-     * field + optional selector/filter) applies to the edge (relName, source→target).
-     * Selector matches on the source atom; filter matches on the (source, target) tuple.
+     * Whether an edgeStyle directive (keyed by field + optional selector/filter)
+     * applies to the edge (relName, source→target). Selector matches on the source
+     * atom; filter matches on the (source, target) tuple.
      *
-     * `findEdgeDirective` below still inlines this same logic for edgeColor; that
-     * duplication goes away when edgeColor is shimmed onto edgeStyle.
+     * This used to be written twice — `findEdgeDirective` inlined the same logic
+     * for the legacy edgeColor form. That form is gone, and with it the copy.
      */
     private edgeDirectiveMatches(
         directive: { field: string; selector?: string; filter?: string },
@@ -3364,55 +3290,6 @@ export class LayoutInstance {
             return {};
         }
         return resolveEdgeStyle(rules, `edge ${relName} (${sourceAtom} → ${targetAtom})`);
-    }
-
-    private findEdgeDirective(relName: string, sourceAtom: string, targetAtom?: string): EdgeColorDirective | undefined {
-        const colorDirectives = this._layoutSpec.directives.edgeColors;
-        
-        for (const directive of colorDirectives) {
-            if (directive.field !== relName) {
-                continue;
-            }
-            
-            // Check if selector matches (or no selector means match all sources)
-            let selectorMatches = true;
-            if (directive.selector) {
-                try {
-                    const selectorResult = this.evaluator.evaluate(directive.selector, { instanceIndex: this.instanceNum });
-                    const selectedAtoms = selectorResult.selectedAtoms();
-                    selectorMatches = selectedAtoms.includes(sourceAtom);
-                } catch (error) {
-                    this.recordSelectorError(directive.selector, 'edge selector', error);
-                    selectorMatches = false;
-                }
-            }
-            
-            if (!selectorMatches) {
-                continue;
-            }
-            
-            // Check if filter matches (or no filter means match all tuples)
-            let filterMatches = true;
-            if (directive.filter && targetAtom) {
-                try {
-                    const filterResult = this.evaluator.evaluate(directive.filter, { instanceIndex: this.instanceNum });
-                    const selectedTuples = filterResult.selectedTwoples();
-                    // Check if the (source, target) pair is in the filtered set
-                    filterMatches = selectedTuples.some(
-                        tuple => tuple[0] === sourceAtom && tuple[1] === targetAtom
-                    );
-                } catch (error) {
-                    this.recordSelectorError(directive.filter, 'edge filter', error);
-                    filterMatches = false;
-                }
-            }
-            
-            if (selectorMatches && filterMatches) {
-                return directive;
-            }
-        }
-
-        return undefined;
     }
 
     private normalizeEdgeWeight(weight: unknown, context: string): number | undefined {

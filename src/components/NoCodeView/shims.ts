@@ -164,11 +164,12 @@ export interface SpytialValidationResult {
 /** Keys valid in the `constraints:` section. */
 const CONSTRAINT_SECTION_KEYS = getKnownYamlKeys('constraint');
 /**
- * Keys valid in the `directives:` section. `size`/`hideAtom` are registered as
- * constraints but the engine also reads them among directives, so they are
- * valid in both sections.
+ * Keys valid in the `directives:` section. `size`/`hideAtom` used to be listed
+ * here too — the engine read them from either section. Since 6.0.0 it rejects
+ * them among directives, so listing them here would report a spec as valid that
+ * `parseLayoutSpec` then throws on.
  */
-const DIRECTIVE_SECTION_KEYS = [...getKnownYamlKeys('directive'), 'size', 'hideAtom'];
+const DIRECTIVE_SECTION_KEYS = getKnownYamlKeys('directive');
 
 /** Known top-level keys in a Spytial spec. */
 const KNOWN_TOP_LEVEL_KEYS = ['constraints', 'directives'];

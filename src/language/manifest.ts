@@ -52,7 +52,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-08-14';
+export const LANGUAGE_VERSION = '2026-08-17';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -473,14 +473,6 @@ const SIZE: LanguageItem = {
   label: 'Size',
   description: 'Set the width and height of matching nodes, in pixels.',
   sections: ['constraints'],
-  deprecatedSections: ['directives'],
-  sectionDeprecation: {
-    reason:
-      "Size fixes a node's geometry, which is what the layout solves over — not presentation layered " +
-      'on a solved layout. It is a constraint. The directives section still accepts it, identically, ' +
-      'behind a deprecation warning.',
-    warningSpecType: 'size',
-  },
   valueShape: 'mapping',
   supportsHold: false,
   fields: [
@@ -518,14 +510,6 @@ const HIDE_ATOM: LanguageItem = {
   label: 'Hide atom',
   description: 'Remove matching atoms from the diagram.',
   sections: ['constraints'],
-  deprecatedSections: ['directives'],
-  sectionDeprecation: {
-    reason:
-      'Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against ' +
-      'the other constraints — it is a constraint, not presentation. The directives section still ' +
-      'accepts it, identically, behind a deprecation warning.',
-    warningSpecType: 'hideAtom',
-  },
   valueShape: 'mapping',
   supportsHold: false,
   fields: [
@@ -818,27 +802,23 @@ const INFERRED_EDGE: LanguageItem = {
       name: 'color',
       type: 'color',
       description: 'Legacy inline line color.',
-      deprecated: { replacedBy: 'lineStyle.color' },
     },
     {
       name: 'style',
       type: 'enum',
       values: ['solid', 'dashed', 'dotted'],
       description: 'Legacy inline dash pattern.',
-      deprecated: { replacedBy: 'lineStyle.pattern' },
     },
     {
       name: 'weight',
       type: 'number',
       exclusiveMinimum: 0,
       description: 'Legacy inline line thickness.',
-      deprecated: { replacedBy: 'lineStyle.weight' },
     },
     {
       name: 'highlight',
       type: 'color',
       description: 'Legacy inline highlight underlay.',
-      deprecated: { replacedBy: 'lineStyle.highlight' },
     },
   ],
   example: { name: 'reachable', selector: '^parent', lineStyle: { color: 'gray', pattern: 'dotted' } },
@@ -849,135 +829,6 @@ const INFERRED_EDGE: LanguageItem = {
 };
 
 // ---- deprecated directives ----------------------------------------------
-
-const ICON: LanguageItem = {
-  id: 'icon',
-  yamlKey: 'icon',
-  label: 'Icon',
-  description: 'Assign an icon to matching atoms.',
-  sections: ['directives'],
-  valueShape: 'mapping',
-  supportsHold: false,
-  deprecated: {
-    replacedBy: 'atomStyle',
-    reason:
-      "The single `showLabels` boolean drove label visibility and icon geometry at once. atomStyle splits those " +
-      'into two independent knobs, which is what makes a faded watermark, or a hidden label with no icon, expressible.',
-    mapping: {
-      path: 'iconStyle.path',
-      selector: 'selector',
-      'showLabels: false': 'showLabel: false + iconStyle.placement: full',
-      'showLabels: true': 'showLabel: true + iconStyle.placement: badge',
-    },
-    warningSpecType: 'icon',
-  },
-  fields: [
-    {
-      name: 'selector',
-      type: 'selector',
-      arity: 'unary',
-      accepts: onlyUnary('The atoms that get the icon.'),
-      required: true,
-      enforcement: 'unchecked',
-      description: 'Which atoms get the icon. Omitting it drops the directive entirely — it never means "every atom".',
-    },
-    {
-      name: 'path',
-      type: 'icon-path',
-      required: true,
-      enforcement: 'unchecked',
-      description: 'Bundled name, icon-pack reference, URL, or path. Omitting it drops the directive.',
-    },
-    {
-      name: 'showLabels',
-      type: 'boolean',
-      default: false,
-      description: "Whether the atom's label is drawn alongside the icon.",
-    },
-  ],
-  example: { selector: 'Person', path: 'person', showLabels: true },
-};
-
-const ATOM_COLOR: LanguageItem = {
-  id: 'atomColor',
-  yamlKey: 'atomColor',
-  label: 'Atom color',
-  description: 'Set the color of matching atoms.',
-  sections: ['directives'],
-  valueShape: 'mapping',
-  supportsHold: false,
-  deprecated: {
-    replacedBy: 'atomStyle',
-    reason:
-      'atomStyle expresses the same recolor and also reaches the fill, the icon, and the label. The rewrite is ' +
-      'border-preserving, so an existing diagram is unchanged.',
-    mapping: { value: 'borderStyle.color', selector: 'selector' },
-    warningSpecType: 'atomColor',
-  },
-  fields: [
-    {
-      name: 'value',
-      type: 'color',
-      required: true,
-      enforcement: 'unchecked',
-      description: "Any CSS color. Applies to the node's outline, not its fill.",
-    },
-    {
-      name: 'selector',
-      type: 'selector',
-      arity: 'unary',
-      accepts: onlyUnary('The atoms to recolor.'),
-      required: true,
-      enforcement: 'unchecked',
-      description: 'Which atoms to recolor. Omitting it drops the directive — it never means "every atom".',
-    },
-  ],
-  example: { selector: 'Person', value: '#ff5733' },
-};
-
-const EDGE_COLOR: LanguageItem = {
-  id: 'edgeColor',
-  yamlKey: 'edgeColor',
-  label: 'Edge color',
-  description: "Style a relation's edges with flat, inline keys.",
-  sections: ['directives'],
-  valueShape: 'mapping',
-  supportsHold: false,
-  deprecated: {
-    replacedBy: 'edgeStyle',
-    reason: 'edgeStyle groups the same knobs into the shared lineStyle/textStyle blocks that every other form uses.',
-    mapping: {
-      value: 'lineStyle.color',
-      style: 'lineStyle.pattern',
-      weight: 'lineStyle.weight',
-      highlight: 'lineStyle.highlight',
-      field: 'field',
-      selector: 'selector',
-      filter: 'filter',
-      showLabel: 'showLabel',
-      hidden: 'hidden',
-    },
-    warningSpecType: 'edgeColor',
-  },
-  fields: [
-    { name: 'field', type: 'relation', required: true, enforcement: 'unchecked', description: 'The relation whose edges this styles.' },
-    { name: 'value', type: 'color', required: true, enforcement: 'unchecked', description: 'Line color.' },
-    SOURCE_SELECTOR,
-    TUPLE_FILTER,
-    {
-      name: 'style',
-      type: 'enum',
-      values: ['solid', 'dashed', 'dotted'],
-      enforcement: 'value-ignored',
-      description: 'Dash pattern. Trimmed and lowercased before matching, unlike `lineStyle.pattern`.',
-    },
-    { name: 'weight', type: 'number', exclusiveMinimum: 0, enforcement: 'value-ignored', description: 'Line thickness in pixels.' },
-    { name: 'highlight', type: 'color', description: 'A wider, translucent underlay beneath the line.' },
-    { name: 'showLabel', type: 'boolean', default: true, description: 'Whether the edge label is drawn.' },
-    { name: 'hidden', type: 'boolean', default: false, description: 'Hide the edge entirely.' },
-  ],
-  example: { field: 'parent', value: 'blue' },
-};
 
 // ---- assembly ------------------------------------------------------------
 
@@ -997,9 +848,6 @@ const ITEMS: readonly LanguageItem[] = [
   TAG,
   HIDE_FIELD,
   INFERRED_EDGE,
-  ICON,
-  ATOM_COLOR,
-  EDGE_COLOR,
 ];
 
 const HOLD: HoldRules = {

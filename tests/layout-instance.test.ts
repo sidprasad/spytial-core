@@ -324,7 +324,8 @@ directives:
   - inferredEdge:
       name: reachable
       selector: next.next
-      color: '#ff0000'
+      lineStyle:
+        color: '#ff0000'
 `;
 
     const instance = new JSONDataInstance(dataWithTransitiveRelation);
@@ -693,13 +694,11 @@ directives:
       const instance = new JSONDataInstance(makeData(['OverviewMetricsDashboard']));
       const evaluator = createEvaluator(instance);
       const spec = parseLayoutSpec(`
-constraints: []
-directives:
+constraints:
   - size:
       selector: T
       width: 80
-      height: 50
-`);
+      height: 50`);
       const li = new LayoutInstance(spec, evaluator, 0, true);
       const { layout } = li.generateLayout(instance);
 

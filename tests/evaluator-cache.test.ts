@@ -38,16 +38,15 @@ constraints:
       selector: A->B
       directions:
         - right
-directives:
-  - atomStyle:
-      selector: A->B
-      fillStyle:
-        color: "#FF0000"
   - size:
       selector: A->B
       height: 100
       width: 200
-`;
+directives:
+  - atomStyle:
+      selector: A->B
+      fillStyle:
+        color: "#FF0000"`;
 
     const instance = new JSONDataInstance(jsonData);
     const evaluator = createEvaluator(instance);
@@ -119,19 +118,22 @@ constraints:
 
   it('caches results for multiple directives using the same selector', () => {
     const layoutSpecWithMultipleDirectives = `
+constraints:
+  - size:
+      selector: Type1
+      height: 100
+      width: 200
 directives:
   - atomStyle:
       selector: Type1
       fillStyle:
         color: "#FF0000"
-  - size:
+  - atomStyle:
       selector: Type1
-      height: 100
-      width: 200
-  - icon:
-      selector: Type1
-      path: "/icon.svg"
-      showLabels: true
+      iconStyle:
+        path: "/icon.svg"
+        placement: badge
+      showLabel: true
 `;
 
     const instance = new JSONDataInstance(jsonData);

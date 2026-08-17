@@ -45,9 +45,9 @@ When several `atomStyle` rules match one atom their set properties **compose**; 
 
 A `full` icon leaves the box transparent (a group hull shows through it) unless you ask for a `fillStyle.color`, which wins.
 
-> **`atomColor` is the legacy form** and still works: `value`→`borderStyle.color`, so a node keeps its outline exactly as before. It desugars to `atomStyle` with a deprecation warning. Add a `fillStyle` to give a node a real interior fill.
+> **`atomColor` was removed in 6.0.0** and now fails to parse. Rewrite it as `atomStyle` with `value`→`borderStyle.color`, which keeps a node outlined exactly as before. Add a `fillStyle` to give it a real interior fill.
 >
-> **`icon` is likewise legacy.** Its one `showLabels` boolean drove both label visibility and icon geometry: `showLabels: false` → `showLabel: false` + `placement: full`; `showLabels: true` → `showLabel: true` + `placement: badge`. It desugars with a deprecation warning.
+> **`icon` was removed in 6.0.0** as well. Its one `showLabels` boolean drove both label visibility and icon geometry, so it splits in two: `showLabels: false` becomes `showLabel: false` + `placement: full`; `showLabels: true` becomes `showLabel: true` + `placement: badge`.
 
 ### Examples
 
@@ -59,7 +59,7 @@ A `full` icon leaves the box transparent (a group hull shows through it) unless 
     borderStyle: { color: "#0369a1", width: 4 }
     textStyle:   { color: "#b91c1c" }
 
-# Recolor just the outline (border-preserving, like atomColor)
+# Recolor just the outline (border-preserving)
 - atomStyle:
     selector: Error
     borderStyle: { color: red }
@@ -132,7 +132,7 @@ Customizes the appearance of edges for a specific field (relation). Use `edgeSty
 
 When several `edgeStyle` rules match one edge their set properties **compose**; setting the *same* property two different ways is an error — no silent override.
 
-> **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning.
+> **`edgeColor` was removed in 6.0.0** and now fails to parse. Rewrite it as `edgeStyle`: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`.
 
 ### Scoping with `selector` and `filter`
 
@@ -234,7 +234,7 @@ Icons are part of [atom styling](#atom-styling) — set them with an `iconStyle`
     showLabel: <boolean>           # Optional (default: true)
 ```
 
-> The standalone `- icon:` directive is deprecated but still works. See the [atom styling](#atom-styling) section for how its `showLabels` flag maps onto `showLabel` + `placement`.
+> The standalone `- icon:` directive was removed in 6.0.0. See the [atom styling](#atom-styling) section for how its `showLabels` flag maps onto `showLabel` + `placement`.
 
 ### Icon Sources
 
@@ -350,7 +350,7 @@ directives:
 
 `size` fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It belongs in `constraints:`. See [Size](constraints.md#size).
 
-The `directives:` section still accepts it, with identical fields and meaning, but that placement is **deprecated** and raises a warning. Move it; nothing else changes.
+Writing it under `directives:` was tolerated through 5.x; since 6.0.0 it is an **error**. Move it; nothing else changes.
 
 ```yaml
 # Deprecated
@@ -617,7 +617,7 @@ directives:
 
 `hideAtom` changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — hiding an atom that a layout constraint references (or that a group contains) is a conflict, and the diagram draws the atom anyway with a dashed outline alongside the error. It belongs in `constraints:`. See [Hiding Atoms](constraints.md#hiding-atoms).
 
-The `directives:` section still accepts it, with identical fields and meaning, but that placement is **deprecated** and raises a warning. Move it; nothing else changes.
+Writing it under `directives:` was tolerated through 5.x; since 6.0.0 it is an **error**. Move it; nothing else changes.
 
 ```yaml
 # Deprecated
@@ -678,7 +678,7 @@ Creates edges that don't exist in your data but are **computed from a selector e
       color: <color>
 ```
 
-> **The flat inline `color` / `style` / `weight` / `highlight` are the legacy form** and still parse (`style`→`pattern`), with a deprecation warning. Use the `lineStyle` block — the same one `edgeStyle` and group connectors take.
+> **The flat inline `color` / `style` / `weight` / `highlight` were removed in 6.0.0** and now fail to parse. Use the `lineStyle` block — the same one `edgeStyle` and group connectors take. Note `style` is spelled `pattern` there.
 
 | Field | Required | Type | Default | Description |
 |-------|----------|------|---------|-------------|

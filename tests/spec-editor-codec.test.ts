@@ -56,18 +56,20 @@ directives:
   - flag: hideDisconnectedBuiltIns`;
 
 const FIELD_SELECTORS_SPEC = `directives:
-  - edgeColor:
+  - edgeStyle:
       field: 'name'
-      value: 'red'
       selector: 'Person'
-      style: 'dashed'
-      weight: 2
+      lineStyle:
+        color: 'red'
+        pattern: 'dashed'
+        weight: 2
   - inferredEdge:
       name: 'transitive'
       selector: 'Person->Person'
-      color: 'gray'
-      style: 'dotted'
-      weight: 1.5
+      lineStyle:
+        color: 'gray'
+        pattern: 'dotted'
+        weight: 1.5
   - attribute:
       field: 'age'
       selector: 'Person'
@@ -109,7 +111,6 @@ describe('yaml-codec — real-world round trips', () => {
     const out = assertRoundTrips(FIELD_SELECTORS_SPEC);
     const spec = parseLayoutSpec(out);
     // edgeColor round-trips through the codec, then desugars to edgeStyle on parse.
-    expect(spec.directives.edgeColors).toEqual([]);
     expect(spec.directives.edgeStyles).toHaveLength(1);
     expect(spec.directives.edgeStyles[0].style.lineStyle?.color).toBe('red');
     expect(spec.directives.inferredEdges).toHaveLength(1);

@@ -29,11 +29,9 @@ describe('Hide Atom Directive', () => {
 
   it('should hide atoms matching selector', () => {
     const layoutSpecYaml = `
-constraints: []
-directives:
+constraints:
   - hideAtom:
-      selector: Type2
-`;
+      selector: Type2`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);
@@ -53,11 +51,9 @@ directives:
 
   it('should hide atoms matching complex selector', () => {
     const layoutSpecYaml = `
-constraints: []
-directives:
+constraints:
   - hideAtom:
-      selector: A + B
-`;
+      selector: A + B`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);
@@ -77,11 +73,9 @@ directives:
 
   it('should work alongside legacy hideDisconnected flags', () => {
     const layoutSpecYaml = `
-constraints: []
-directives:
+constraints:
   - hideAtom:
-      selector: A
-`;
+      selector: A`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);
@@ -103,13 +97,11 @@ directives:
 
   it('should handle multiple hideAtom directives', () => {
     const layoutSpecYaml = `
-constraints: []
-directives:
+constraints:
   - hideAtom:
       selector: A
   - hideAtom:
-      selector: C
-`;
+      selector: C`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);
@@ -130,11 +122,9 @@ directives:
 
   it('should handle empty selector gracefully', () => {
     const layoutSpecYaml = `
-constraints: []
-directives:
+constraints:
   - hideAtom:
-      selector: nonexistent
-`;
+      selector: nonexistent`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);
@@ -155,10 +145,8 @@ constraints:
   - orientation:
       selector: r
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`;
+      selector: B`;
 
     const layoutSpec = parseLayoutSpec(layoutSpecYaml);
     const dataInstance = new JSONDataInstance(testData);

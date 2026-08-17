@@ -24,9 +24,7 @@
  *     - hideField:    { field, selector?, filter? }
  *     - icon:         { path, selector?, showLabels? }  (deprecated → atomStyle)
  *     - atomStyle:    { selector?, fillStyle?:{color}, borderStyle?:{color,width}, iconStyle?:{path,placement,opacity}, textStyle?:{size,color}, showLabel? }
- *     - atomColor:    { value, selector? }  (deprecated → atomStyle)
  *     - edgeStyle:    { field, selector?, filter?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color}, showLabel?, hidden? }
- *     - edgeColor:    { value, field, selector?, filter?, style?, weight?, showLabel?, hidden?, highlight? }  (deprecated → edgeStyle)
  *     - inferredEdge: { name, selector?, draw?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
  *     - tag:          { toTag, name, value, textStyle?:{size,color} }
  *
@@ -39,7 +37,6 @@ import type { Diagnostic, FieldSpec, ItemDefinition, ItemKind } from './types';
 // (its constants module is gone; these are now the canonical copies).
 export const DEFAULT_NODE_WIDTH = 100;
 export const DEFAULT_NODE_HEIGHT = 60;
-const DEFAULT_COLOR = '#000000';
 
 // ---- small param helpers -------------------------------------------------
 
@@ -359,9 +356,6 @@ const size: ItemDefinition = {
   type: 'size',
   label: 'Size',
   description: 'Set the width and height of elements matching the selector.',
-  // Historically also read from the directives block. Still is, identically,
-  // behind a deprecation warning — see `alsoAcceptedIn`.
-  alsoAcceptedIn: ['directive'],
   fields: [
     {
       key: 'selector',
@@ -407,8 +401,6 @@ const hideAtom: ItemDefinition = {
   type: 'hideAtom',
   label: 'Hide atom',
   description: 'Hide elements matching the selector from the visualization.',
-  // As with `size`: still read from the directives block, behind a warning.
-  alsoAcceptedIn: ['directive'],
   fields: [
     {
       key: 'selector',
@@ -542,72 +534,6 @@ const hideField: ItemDefinition = {
   },
 };
 
-const icon: ItemDefinition = {
-  kind: 'directive',
-  type: 'icon',
-  label: 'Icon',
-  description: "Deprecated — use Atom style (atomStyle) with an 'iconStyle' block. Still parsed/rendered for back-compat (showLabels splits into showLabel + iconStyle.placement).",
-  deprecated: true,
-  deprecatedInFavorOf: 'atomStyle',
-  fields: [
-    {
-      key: 'path',
-      kind: 'text',
-      label: 'Path / URL',
-      required: true,
-      placeholder: 'e.g. https://… or assets/foo.svg',
-    },
-    {
-      key: 'showLabels',
-      kind: 'boolean',
-      label: 'Show labels',
-      default: false,
-    },
-    {
-      key: 'selector',
-      kind: 'selector',
-      label: 'Selector',
-      selectorArity: 'unary',
-    },
-  ],
-  summary(params) {
-    const path = asString(params.path);
-    const selector = asString(params.selector);
-    const base = path || '(no path)';
-    return selector ? `${base} · ${selector}` : base;
-  },
-};
-
-const atomColor: ItemDefinition = {
-  kind: 'directive',
-  type: 'atomColor',
-  label: 'Atom color',
-  description: 'Deprecated — use Atom style (atomStyle). Still parsed/rendered for back-compat (value → border color).',
-  deprecated: true,
-  deprecatedInFavorOf: 'atomStyle',
-  fields: [
-    {
-      key: 'value',
-      kind: 'color',
-      label: 'Color',
-      required: true,
-      default: DEFAULT_COLOR,
-    },
-    {
-      key: 'selector',
-      kind: 'selector',
-      label: 'Selector',
-      selectorArity: 'unary',
-    },
-  ],
-  summary(params) {
-    const color = asString(params.value);
-    const selector = asString(params.selector);
-    const base = color || '(no color)';
-    return selector ? `${base} · ${selector}` : base;
-  },
-};
-
 /**
  * Shared `lineStyle` block children — reused by edgeStyle, inferredEdge, and a
  * group's connector. No `default`s: style blocks must stay sparse (a seeded
@@ -687,54 +613,6 @@ const atomStyle: ItemDefinition = {
     const color = asString(fill.color) || asString(border.color);
     const selector = asString(params.selector);
     const base = color || 'atom';
-    return selector ? `${base} · ${selector}` : base;
-  },
-};
-
-const edgeColor: ItemDefinition = {
-  kind: 'directive',
-  type: 'edgeColor',
-  label: 'Edge color',
-  description: 'Deprecated — use Edge style (edgeStyle). Still parsed/rendered for back-compat.',
-  deprecated: true,
-  deprecatedInFavorOf: 'edgeStyle',
-  fields: [
-    {
-      key: 'field',
-      kind: 'relationName',
-      label: 'Field',
-      required: true,
-    },
-    {
-      key: 'value',
-      kind: 'color',
-      label: 'Color',
-      required: true,
-      default: DEFAULT_COLOR,
-    },
-    {
-      key: 'selector',
-      kind: 'selector',
-      label: 'Selector',
-      selectorArity: 'unary',
-    },
-    {
-      key: 'style',
-      kind: 'enum',
-      label: 'Style',
-      options: EDGE_STYLES,
-    },
-    {
-      key: 'weight',
-      kind: 'number',
-      label: 'Weight',
-    },
-  ],
-  summary(params) {
-    const field = asString(params.field);
-    const color = asString(params.value);
-    const base = field ? `${field}: ${color || 'edge'}` : color || 'edge';
-    const selector = asString(params.selector);
     return selector ? `${base} · ${selector}` : base;
   },
 };
@@ -832,11 +710,8 @@ const DEFINITIONS: readonly ItemDefinition[] = [
   flag,
   attribute,
   hideField,
-  icon,
   atomStyle,
-  atomColor,
   edgeStyle,
-  edgeColor,
   inferredEdge,
   tag,
 ];

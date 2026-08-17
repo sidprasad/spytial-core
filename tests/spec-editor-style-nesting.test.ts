@@ -12,24 +12,6 @@ import {
     defaultParamsFor,
 } from '../src/spec-editor';
 
-describe('registry — edgeStyle registration + edgeColor deprecation', () => {
-    it('offers edgeStyle in the directive add-menu and hides deprecated edgeColor', () => {
-        const menu = getDefinitions('directive').map((d) => d.type);
-        expect(menu).toContain('edgeStyle');
-        expect(menu).not.toContain('edgeColor');
-    });
-
-    it('still resolves edgeColor when deprecated entries are requested', () => {
-        const all = getDefinitions('directive', { includeDeprecated: true }).map((d) => d.type);
-        expect(all).toContain('edgeColor');
-        expect(all).toContain('edgeStyle');
-    });
-
-    it('seeds no defaults for edgeStyle — style blocks stay sparse', () => {
-        expect(defaultParamsFor('edgeStyle')).toEqual({});
-    });
-});
-
 describe('codec — nested edgeStyle blocks', () => {
     const NESTED = [
         'directives:',

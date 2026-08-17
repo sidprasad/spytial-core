@@ -14,7 +14,6 @@
  * onto `edgeStyle` behind a deprecation warning.
  */
 import type { EdgeStyle } from '../edge-style';
-import { normalizeEdgeStyle } from '../edge-style';
 import { isTextSize } from './text-style';
 import type { TextStyle } from './text-style';
 import { resolveStyle } from './style-resolver';
@@ -100,39 +99,6 @@ export function parseEdgeStyleSpec(raw: unknown): EdgeStyleSpec {
     if (typeof r.hidden === 'boolean') spec.hidden = r.hidden;
 
     return spec;
-}
-
-/**
- * Desugar a legacy flat `edgeColor` directive into an {@link EdgeStyleRule}, so
- * both forms resolve through one path. `value`→`lineStyle.color`,
- * `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`,
- * `highlight`→`lineStyle.highlight`; `showLabel`/`hidden`/`field`/`selector`/
- * `filter` carry over unchanged. (Legacy `edgeColor` had no label styling.)
- */
-export function edgeColorToEdgeStyleRule(raw: unknown): EdgeStyleRule {
-    const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-
-    const lineStyle: LineStyle = {};
-    if (typeof r.value === 'string') lineStyle.color = r.value;
-    // Legacy `edgeColor.style` went through normalizeEdgeStyle (trim + lowercase),
-    // so `style: Dashed` / ` dashed ` rendered dashed. Normalize here too rather
-    // than strict-matching, or those specs would silently fall back to solid.
-    const pattern = normalizeEdgeStyle(r.style);
-    if (pattern) lineStyle.pattern = pattern;
-    if (typeof r.weight === 'number' && Number.isFinite(r.weight) && r.weight > 0) lineStyle.weight = r.weight;
-    if (typeof r.highlight === 'string') lineStyle.highlight = r.highlight;
-
-    const style: EdgeStyleSpec = {};
-    if (Object.keys(lineStyle).length > 0) style.lineStyle = lineStyle;
-    if (typeof r.showLabel === 'boolean') style.showLabel = r.showLabel;
-    if (typeof r.hidden === 'boolean') style.hidden = r.hidden;
-
-    return {
-        field: typeof r.field === 'string' ? r.field : '',
-        selector: typeof r.selector === 'string' ? r.selector : undefined,
-        filter: typeof r.filter === 'string' ? r.filter : undefined,
-        style,
-    };
 }
 
 function edgeRuleSource(rule: EdgeStyleRule): string {

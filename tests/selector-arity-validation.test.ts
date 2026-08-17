@@ -147,10 +147,9 @@ constraints:
     describe('binary selector in unary position', () => {
         it('hideAtom directive reports error for binary selector', () => {
             const spec = parseLayoutSpec(`
-directives:
+constraints:
   - hideAtom:
-      selector: next
-`);
+      selector: next`);
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
@@ -164,12 +163,11 @@ directives:
 
         it('size directive reports error for binary selector', () => {
             const spec = parseLayoutSpec(`
-directives:
+constraints:
   - size:
       selector: next
       width: 100
-      height: 60
-`);
+      height: 60`);
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);
@@ -238,10 +236,9 @@ constraints:
 
         it('unary selector in hideAtom works fine', () => {
             const spec = parseLayoutSpec(`
-directives:
+constraints:
   - hideAtom:
-      selector: selected
-`);
+      selector: selected`);
             const instance = new JSONDataInstance(mixedData);
             const evaluator = createEvaluator(instance);
             const layoutInstance = new LayoutInstance(spec, evaluator, 0, true);

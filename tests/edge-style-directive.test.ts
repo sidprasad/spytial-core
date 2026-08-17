@@ -133,9 +133,10 @@ directives:
     it('composes a legacy edgeColor with an edgeStyle (different properties)', () => {
         const { layout } = layoutFor(`
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: left
-      value: '#111111'
+      lineStyle:
+        color: '#111111'
   - edgeStyle:
       field: left
       lineStyle:
@@ -149,53 +150,16 @@ directives:
     it('HARD ERRORS when a legacy edgeColor and an edgeStyle disagree on a property', () => {
         const run = layoutFor(`
 directives:
-  - edgeColor:
+  - edgeStyle:
       field: left
-      value: '#111111'
+      lineStyle:
+        color: '#111111'
   - edgeStyle:
       field: left
       lineStyle:
         color: '#3366cc'
 `);
         expect(run).toThrow(StyleCollisionError);
-    });
-});
-
-describe('edgeColor → edgeStyle desugar', () => {
-    it('desugars a standalone edgeColor into an edgeStyle rule (and empties edgeColors)', () => {
-        const spec = parseLayoutSpec(`
-directives:
-  - edgeColor:
-      field: left
-      value: '#111111'
-      style: dashed
-      weight: 2
-`);
-        expect(spec.directives.edgeColors).toEqual([]);
-        expect(spec.directives.edgeStyles).toHaveLength(1);
-        expect(spec.directives.edgeStyles[0].style).toEqual({
-            lineStyle: { color: '#111111', pattern: 'dashed', weight: 2 },
-        });
-    });
-
-    it('warns that edgeColor is deprecated', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        parseLayoutSpec("directives:\n  - edgeColor: { field: left, value: '#111111' }");
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining("'edgeColor' is deprecated"));
-        warn.mockRestore();
-    });
-
-    it('preserves a capitalized legacy style (Dashed → dashed) through to the LayoutEdge', () => {
-        // The old edgeColor path lowercased via normalizeEdgeStyle; the desugar must too.
-        const { layout } = layoutFor(`
-directives:
-  - edgeColor:
-      field: left
-      value: '#111111'
-      style: Dashed
-`)();
-        const e = layout.edges.find((edge) => edge.relationName === 'left');
-        expect(e?.style).toBe('dashed');
     });
 });
 
@@ -222,33 +186,4 @@ directives:
         expect(ie.textStyle).toEqual({ size: 'small' });
     });
 
-    it('still accepts legacy inline color/style/weight and warns', () => {
-        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-        const spec = parseLayoutSpec(`
-directives:
-  - inferredEdge:
-      name: reachable
-      selector: '^next'
-      color: '#a0f'
-      style: dotted
-`);
-        const ie = spec.directives.inferredEdges[0];
-        expect(ie.color).toBe('#a0f');
-        expect(ie.style).toBe('dotted');
-        expect(warn).toHaveBeenCalledWith(expect.stringContaining("inferredEdge's inline"));
-        warn.mockRestore();
-    });
-
-    it('prefers the lineStyle block over a legacy inline value', () => {
-        const spec = parseLayoutSpec(`
-directives:
-  - inferredEdge:
-      name: reachable
-      selector: '^next'
-      color: '#000'
-      lineStyle:
-        color: '#a0f'
-`);
-        expect(spec.directives.inferredEdges[0].color).toBe('#a0f');
-    });
 });

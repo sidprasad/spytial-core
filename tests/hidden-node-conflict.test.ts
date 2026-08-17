@@ -55,10 +55,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -71,10 +69,8 @@ constraints:
   - align:
       selector: edge
       direction: horizontal
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -87,10 +83,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: D
-`);
+      selector: D`);
 
       // D appears only as the target of the (C, D) tuple — target references
       // conflict just like source references do.
@@ -109,10 +103,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: Isolated
-`, dataWithExtra);
+      selector: Isolated`, dataWithExtra);
 
       // E is in no edge tuple, so the hide simply applies.
       expect(result.error).toBeNull();
@@ -140,10 +132,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       expect(error.errorMessages).toBeDefined();
@@ -162,10 +152,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       const sourceKeys = [...error.errorMessages.minimalConflictingConstraints.keys()];
@@ -182,10 +170,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       const sourceKeys = [...error.errorMessages.minimalConflictingConstraints.keys()];
@@ -202,10 +188,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       const entries = [...error.errorMessages.minimalConflictingConstraints.entries()];
@@ -223,10 +207,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       const entries = [...error.errorMessages.minimalConflictingConstraints.entries()];
@@ -247,10 +229,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       // B is referenced by the orientation constraint, so it is re-introduced (shown).
       const nodeIds = result.layout.nodes.map(n => n.id);
@@ -266,10 +246,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       // Constraints involving B are no longer dropped — at least one should reference B.
       const referencesB = result.layout.constraints.some(c => {
@@ -287,10 +265,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       // The C->D constraint (which never involved a hidden node) should still be present
       const hasCD = result.layout.constraints.some(c => {
@@ -310,10 +286,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const ids = (result.layout.reintroducedNodes ?? []).map(n => n.id);
       expect(ids).toContain('B');
@@ -328,10 +302,8 @@ constraints:
   - align:
       selector: edge
       direction: horizontal
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       expect(error.reintroducedNodeIds).toContain('B');
@@ -344,10 +316,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       // The error stands, but the counterfactual keeps every constraint.
       expect(result.error).not.toBeNull();
@@ -376,10 +346,8 @@ constraints:
   - orientation:
       selector: rel
       directions: [right]
-directives:
   - hideAtom:
-      selector: Node
-`, twoNodeData);
+      selector: Node`, twoNodeData);
 
       const nodeIds = result.layout.nodes.map(n => n.id);
       expect(nodeIds).toContain('X');
@@ -417,10 +385,8 @@ constraints:
   - cyclic:
       selector: next
       direction: clockwise
-directives:
   - hideAtom:
-      selector: Y
-`, ringData);
+      selector: Y`, ringData);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -445,10 +411,8 @@ constraints:
   - cyclic:
       selector: next
       direction: clockwise
-directives:
   - hideAtom:
-      selector: Other
-`, dataWithExtra);
+      selector: Other`, dataWithExtra);
 
       expect(result.error).toBeNull();
       const nodeIds = result.layout.nodes.map(n => n.id);
@@ -466,10 +430,8 @@ constraints:
   - group:
       selector: edge
       name: bucket
-directives:
   - hideAtom:
-      selector: D
-`);
+      selector: D`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -490,10 +452,8 @@ constraints:
   - group:
       selector: edge
       name: bucket
-directives:
   - hideAtom:
-      selector: A
-`);
+      selector: A`);
 
       // A is only ever a key (bucket[A]), never a member: no conflict, A stays hidden.
       expect(result.error).toBeNull();
@@ -514,10 +474,8 @@ constraints:
   - group:
       selector: edge
       name: bucket
-directives:
   - hideAtom:
-      selector: Other
-`, dataWithExtra);
+      selector: Other`, dataWithExtra);
 
       expect(result.error).toBeNull();
       const nodeIds = result.layout.nodes.map(n => n.id);
@@ -532,12 +490,10 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
       selector: B
   - hideAtom:
-      selector: C
-`);
+      selector: C`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -567,10 +523,8 @@ constraints:
   - align:
       selector: edge
       direction: horizontal
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -610,10 +564,8 @@ constraints:
   - orientation:
       selector: rel
       directions: [right]
-directives:
   - hideAtom:
-      selector: Node
-`, twoNodeData);
+      selector: Node`, twoNodeData);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -645,10 +597,8 @@ constraints:
   - orientation:
       selector: r
       directions: [right]
-directives:
   - hideAtom:
-      selector: TypeB
-`, disjointData);
+      selector: TypeB`, disjointData);
 
       // No conflict since the hidden node X is not referenced by the constraint
       expect(result.error).toBeNull();
@@ -661,10 +611,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       expect(error.hiddenNodes).toBeInstanceOf(Map);
@@ -677,10 +625,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       const error = result.error as HiddenNodeConflictError;
       expect(error.droppedConstraints).toBeInstanceOf(Map);
@@ -702,10 +648,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       // The whole point of the counterfactual: the relationships that made the
       // hide unsatisfiable are visible. B touches A->B and B->C.
@@ -743,10 +687,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [left]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('positional-conflict');
@@ -767,10 +709,8 @@ constraints:
       selector: edge
       directions: [right]
       hold: never
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -805,10 +745,8 @@ constraints:
       selector: next
       direction: clockwise
       hold: never
-directives:
   - hideAtom:
-      selector: Y
-`, ringData);
+      selector: Y`, ringData);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -825,10 +763,8 @@ constraints:
       selector: edge
       name: bucket
       hold: never
-directives:
   - hideAtom:
-      selector: D
-`);
+      selector: D`);
 
       expect(result.error?.type).not.toBe('hidden-node-conflict');
       const nodeIds = result.layout.nodes.map(n => n.id);
@@ -845,10 +781,8 @@ constraints:
   - group:
       selector: Node
       name: blob
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -869,10 +803,8 @@ constraints:
   - group:
       selector: edge
       name: bucket
-directives:
   - hideAtom:
-      selector: D
-`);
+      selector: D`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -890,18 +822,21 @@ directives:
     });
 
     it('carries spec warnings on the counterfactual result (the second pass does not lose them)', () => {
-      // `hideAtom` under `directives:` is a deprecated placement and raises a
-      // parse warning; the group it interacts with has a hidden member, so the
+      // The inferredEdge `draw` names a group that does not exist, which warns
+      // and skips; the group it interacts with has a hidden member, so the
       // layout also conflicts. Both must survive the re-run.
       const result = createLayout(`
 constraints:
   - group:
       selector: edge
       name: g
-directives:
   - hideAtom:
       selector: D
-`);
+directives:
+  - inferredEdge:
+      name: ie
+      selector: edge
+      draw: nosuchgroup -> nosuchgroup`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -919,12 +854,10 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
       selector: B
   - hideAtom:
-      selector: A + B
-`);
+      selector: A + B`);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -965,10 +898,8 @@ constraints:
   - group:
       selector: edge
       name: bucket
-directives:
   - hideAtom:
-      selector: C
-`, sharedData);
+      selector: C`, sharedData);
 
       expect(result.error).not.toBeNull();
       expect(result.error!.type).toBe('hidden-node-conflict');
@@ -1014,11 +945,11 @@ constraints:
   - orientation:
       selector: r3
       directions: [right]
-directives:
   - hideAtom:
       selector: B
   - hideAtom:
       selector: Y
+directives:
   - flag: hideDisconnected
 `, chainData);
 
@@ -1051,10 +982,8 @@ constraints:
   - orientation:
       selector: edge
       directions: [right]
-directives:
   - hideAtom:
-      selector: B
-`);
+      selector: B`);
 
       expect(isHiddenNodeConflictError(result.error)).toBe(true);
     });

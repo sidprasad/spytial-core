@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:spytial:layout-spec-schema:2026-08-14",
+  "$id": "urn:spytial:layout-spec-schema:2026-08-17",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-14, from spytial-core 5.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
-  "x-spytial-language-version": "2026-08-14",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-17, from spytial-core 5.2.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
+  "x-spytial-language-version": "2026-08-17",
   "x-spytial-core-version": "5.2.0",
   "type": "object",
   "properties": {
@@ -64,25 +64,6 @@
           },
           {
             "$ref": "#/$defs/inferredEdge"
-          },
-          {
-            "$ref": "#/$defs/icon"
-          },
-          {
-            "$ref": "#/$defs/atomColor"
-          },
-          {
-            "$ref": "#/$defs/edgeColor"
-          },
-          {
-            "$ref": "#/$defs/size",
-            "deprecated": true,
-            "description": "`size` here is deprecated — write it under `constraints`. Size fixes a node's geometry, which is what the layout solves over — not presentation layered on a solved layout. It is a constraint. The directives section still accepts it, identically, behind a deprecation warning."
-          },
-          {
-            "$ref": "#/$defs/hideAtom",
-            "deprecated": true,
-            "description": "`hideAtom` here is deprecated — write it under `constraints`. Hiding an atom changes what the layout has to place, and can make a spec unsatisfiable against the other constraints — it is a constraint, not presentation. The directives section still accepts it, identically, behind a deprecation warning."
           }
         ]
       }
@@ -848,13 +829,11 @@
               "$ref": "#/$defs/textStyle"
             },
             "color": {
-              "description": "Legacy inline line color. Deprecated — use `lineStyle.color` instead.",
-              "deprecated": true,
+              "description": "Legacy inline line color.",
               "type": "string"
             },
             "style": {
-              "description": "Legacy inline dash pattern. Deprecated — use `lineStyle.pattern` instead.",
-              "deprecated": true,
+              "description": "Legacy inline dash pattern.",
               "type": "string",
               "enum": [
                 "solid",
@@ -863,14 +842,12 @@
               ]
             },
             "weight": {
-              "description": "Legacy inline line thickness. Deprecated — use `lineStyle.weight` instead.",
-              "deprecated": true,
+              "description": "Legacy inline line thickness.",
               "type": "number",
               "exclusiveMinimum": 0
             },
             "highlight": {
-              "description": "Legacy inline highlight underlay. Deprecated — use `lineStyle.highlight` instead.",
-              "deprecated": true,
+              "description": "Legacy inline highlight underlay.",
               "type": "string"
             }
           },
@@ -885,140 +862,6 @@
         "inferredEdge"
       ],
       "additionalProperties": false
-    },
-    "icon": {
-      "title": "Icon",
-      "description": "Assign an icon to matching atoms. DEPRECATED — use `atomStyle` instead. The single `showLabels` boolean drove label visibility and icon geometry at once. atomStyle splits those into two independent knobs, which is what makes a faded watermark, or a hidden label with no icon, expressible.",
-      "type": "object",
-      "properties": {
-        "icon": {
-          "type": "object",
-          "properties": {
-            "selector": {
-              "description": "Which atoms get the icon. Omitting it drops the directive entirely — it never means \"every atom\". Selector arity: unary — 1 column.",
-              "type": "string",
-              "minLength": 1
-            },
-            "path": {
-              "description": "Bundled name, icon-pack reference, URL, or path. Omitting it drops the directive.",
-              "type": "string",
-              "minLength": 1
-            },
-            "showLabels": {
-              "description": "Whether the atom's label is drawn alongside the icon. Default when omitted: false.",
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "selector",
-            "path"
-          ]
-        }
-      },
-      "required": [
-        "icon"
-      ],
-      "additionalProperties": false,
-      "deprecated": true
-    },
-    "atomColor": {
-      "title": "Atom color",
-      "description": "Set the color of matching atoms. DEPRECATED — use `atomStyle` instead. atomStyle expresses the same recolor and also reaches the fill, the icon, and the label. The rewrite is border-preserving, so an existing diagram is unchanged.",
-      "type": "object",
-      "properties": {
-        "atomColor": {
-          "type": "object",
-          "properties": {
-            "value": {
-              "description": "Any CSS color. Applies to the node's outline, not its fill.",
-              "type": "string",
-              "minLength": 1
-            },
-            "selector": {
-              "description": "Which atoms to recolor. Omitting it drops the directive — it never means \"every atom\". Selector arity: unary — 1 column.",
-              "type": "string",
-              "minLength": 1
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "value",
-            "selector"
-          ]
-        }
-      },
-      "required": [
-        "atomColor"
-      ],
-      "additionalProperties": false,
-      "deprecated": true
-    },
-    "edgeColor": {
-      "title": "Edge color",
-      "description": "Style a relation's edges with flat, inline keys. DEPRECATED — use `edgeStyle` instead. edgeStyle groups the same knobs into the shared lineStyle/textStyle blocks that every other form uses.",
-      "type": "object",
-      "properties": {
-        "edgeColor": {
-          "type": "object",
-          "properties": {
-            "field": {
-              "description": "The relation whose edges this styles.",
-              "type": "string",
-              "minLength": 1
-            },
-            "value": {
-              "description": "Line color.",
-              "type": "string",
-              "minLength": 1
-            },
-            "selector": {
-              "description": "Apply only to edges whose source atom is in this set. Omit to apply to every source atom. Selector arity: unary — 1 column.",
-              "type": "string"
-            },
-            "filter": {
-              "description": "Apply only to the (source, target, …) tuples this selector returns. Use it to scope a directive to part of a relation, e.g. only the tuples whose value is True. Selector arity: n-ary — 2+ columns.",
-              "type": "string"
-            },
-            "style": {
-              "description": "Dash pattern. Trimmed and lowercased before matching, unlike `lineStyle.pattern`.",
-              "type": "string",
-              "enum": [
-                "solid",
-                "dashed",
-                "dotted"
-              ]
-            },
-            "weight": {
-              "description": "Line thickness in pixels.",
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "highlight": {
-              "description": "A wider, translucent underlay beneath the line.",
-              "type": "string"
-            },
-            "showLabel": {
-              "description": "Whether the edge label is drawn. Default when omitted: true.",
-              "type": "boolean"
-            },
-            "hidden": {
-              "description": "Hide the edge entirely. Default when omitted: false.",
-              "type": "boolean"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "field",
-            "value"
-          ]
-        }
-      },
-      "required": [
-        "edgeColor"
-      ],
-      "additionalProperties": false,
-      "deprecated": true
     }
   }
 }

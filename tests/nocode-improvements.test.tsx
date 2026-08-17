@@ -130,12 +130,14 @@ constraints:
         it('should validate known directive types', () => {
             const validDirectives = `
 directives:
-  - atomColor:
+  - atomStyle:
       selector: Node
-      value: "#ff0000"
-  - edgeColor:
+      borderStyle:
+        color: "#ff0000"
+  - edgeStyle:
       field: edges
-      value: "#00ff00"
+      lineStyle:
+        color: "#00ff00"
   - flag: hideDisconnected
 `;
             const result = validateSpytialSpec(validDirectives);
@@ -174,11 +176,14 @@ directives:
             )).toBe(true);
         });
 
-        it('allows size/hideAtom in the directives section (dual-placed)', () => {
+        it('flags size/hideAtom written in the directives section', () => {
+            // 6.0.0 made this placement an error, so the validator must not
+            // call it clean — it would be reporting a spec as valid that
+            // parseLayoutSpec then throws on.
             const result = validateSpytialSpec(
-                'directives:\n  - size: { width: 100, height: 60, selector: X }\n  - hideAtom: { selector: X }\n',
+                'directives:\n  - size: { width: 100, height: 60, selector: X }\n',
             );
-            expect(result.warnings.filter(w => w.includes('Unrecognized directive'))).toHaveLength(0);
+            expect(result.isValid).toBe(false);
         });
     });
 });

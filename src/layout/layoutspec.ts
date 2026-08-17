@@ -1,8 +1,8 @@
 import * as yaml from 'js-yaml';
 import { EdgeStyle } from './edge-style';
-import { EdgeStyleRule, parseEdgeStyleSpec, edgeColorToEdgeStyleRule } from './style/edge-style-spec';
+import { EdgeStyleRule, parseEdgeStyleSpec } from './style/edge-style-spec';
 import type { LineStyle } from './style/edge-style-spec';
-import { AtomStyleRule, parseAtomStyleSpec, atomColorToAtomStyleRule, iconToAtomStyleRule } from './style/atom-style-spec';
+import { AtomStyleRule, parseAtomStyleSpec } from './style/atom-style-spec';
 import { parseTextStyle } from './style/text-style';
 import type { TextStyle } from './style/text-style';
 
@@ -236,18 +236,9 @@ export interface VisualManipulation extends Operation {
     selector : string;
 }
 
-export interface AtomColorDirective extends VisualManipulation {
-    color : string;
-}
-
 export interface AtomSizeDirective extends VisualManipulation {
     height : number;
     width : number;
-}
-
-export interface AtomIconDirective extends VisualManipulation {
-    path : string;
-    showLabels : boolean;
 }
 
 export interface InferredEdgeDirective extends VisualManipulation {
@@ -369,11 +360,6 @@ export interface EdgeStyleDirective extends FieldDirective {
     highlight?: string;
 }
 
-/**
- * @deprecated Use EdgeStyleDirective instead. EdgeColorDirective is retained for backwards compatibility.
- */
-export type EdgeColorDirective = EdgeStyleDirective;
-
 
 /////////////////////////////////////////////////
 
@@ -391,11 +377,8 @@ interface ConstraintsBlock
 }
 
 interface DirectivesBlock {
-    atomColors: AtomColorDirective[];
     atomStyles: AtomStyleRule[];
     sizes: AtomSizeDirective[];
-    icons: AtomIconDirective[];
-    edgeColors: EdgeColorDirective[];
     edgeStyles: EdgeStyleRule[];
     attributes: AttributeDirective[];
     tags: TagDirective[];
@@ -475,11 +458,8 @@ function DEFAULT_LAYOUT() : LayoutSpec
             }
         },
         directives: {
-            atomColors: [],
             atomStyles: [],
             sizes: [],
-            icons: [],
-            edgeColors: [],
             edgeStyles: [],
             attributes: [],
             tags: [],
@@ -574,9 +554,10 @@ export function parseLayoutSpec(s: string): LayoutSpec {
             let directivesParsed = parseDirectives(directives, warnings);
             layoutSpec.directives = directivesParsed;
             
-            // Merge size and hideAtom from constraints into directives
-            layoutSpec.directives.sizes = [...sizesFromConstraints, ...directivesParsed.sizes];
-            layoutSpec.directives.hiddenAtoms = [...hiddenAtomsFromConstraints, ...directivesParsed.hiddenAtoms];
+            // size and hideAtom are constraints, and only the constraints section
+            // may carry them now.
+            layoutSpec.directives.sizes = sizesFromConstraints;
+            layoutSpec.directives.hiddenAtoms = hiddenAtomsFromConstraints;
         }
 
         catch (e) {
@@ -902,104 +883,48 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
  * @returns List of CnD directives
  * @throws Error if there are inconsistencies in the directives.
  */
-function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): DirectivesBlock {
+function parseDirectives(directives: unknown[], _warnings: ParseWarning[] = []): DirectivesBlock {
     // Type assertion since we expect specific structure from YAML
     const typedDirectives = directives as Record<string, any>[];
 
-    // Emit a deprecation both to the console (back-compat: several tests assert
-    // this) and to the consumable `warnings` accumulator (rides out on the spec).
-    const deprecate = (specType: string, message: string): void => {
-        console.warn(message);
-        warnings.push({ code: 'deprecated', message, specType });
-    };
+    // No directive form warns any more: the deprecated ones became errors in
+    // 6.0.0. `_warnings` stays in the signature because parseLayoutSpec threads
+    // one accumulator through every parse step, and directives are a likely
+    // place for the next advisory to land.
 
-    // CURRENTLY NO SUGAR HERE!
-
-    // icon is the deprecated flat form of atomStyle's `iconStyle` block. Its one
-    // `showLabels` boolean conflated label visibility with icon geometry; the
-    // desugar splits it into `showLabel` + `iconStyle.placement` (see
-    // iconToAtomStyleRule for the exact, behavior-preserving mapping) so icons
-    // resolve through the single atomStyle path — composing, inheriting, and
-    // colliding by the same rules as every other atom style.
-    // `icons` is kept empty only to satisfy the DirectivesBlock shape.
-    const rawIcons = typedDirectives.filter(d => d.icon);
-    if (rawIcons.length > 0) {
-        deprecate(
-            'icon',
-            "[spytial] 'icon' is deprecated and will be removed in a future major; " +
-            "use 'atomStyle' with an 'iconStyle' block ({ path, placement: full | badge, opacity }), " +
-            "and atomStyle's own 'showLabel' to control the atom's label."
+    // The flat legacy forms below were removed in 6.0.0. Each parsed and
+    // desugared with a warning for several releases; they now fail, because the
+    // alternative is worse: unknown keys are ignored silently, so leaving them
+    // out would let an old spec parse clean and quietly lose its styling. The
+    // message names the rewrite, so the fix is mechanical.
+    if (typedDirectives.some(d => d.icon)) {
+        throw new Error(
+            "[spytial] 'icon' was removed in 6.0.0. Use 'atomStyle' with an 'iconStyle' block " +
+            "({ path, placement: full | badge, opacity }), and atomStyle's own 'showLabel' for the " +
+            "atom's label. The old 'showLabels: false' is 'showLabel: false' plus 'placement: full'; " +
+            "'showLabels: true' is 'showLabel: true' plus 'placement: badge'."
         );
     }
-    // A selectorless or pathless icon desugars to null and is dropped — it drew
-    // nothing before, and must not become a graph-wide icon now that an absent
-    // atomStyle selector means "every atom".
-    const desugaredIcons: AtomStyleRule[] = rawIcons
-        .map(d => iconToAtomStyleRule(d.icon))
-        .filter((rule): rule is AtomStyleRule => rule !== null);
-    let icons : AtomIconDirective[] = [];
-    // atomColor is the deprecated flat form of atomStyle. Desugar each into an
-    // AtomStyleRule (border-preserving: value→borderStyle.color, so existing
-    // diagrams stay outlined exactly as before) and resolve through the one
-    // atomStyle path (compose / collide together). Emit one deprecation warning.
-    // `atomColors` is kept empty only to satisfy the DirectivesBlock shape; its
-    // sole consumer (getNodeColorMap) now reads the resolved atomStyle instead,
-    // and atom styling flows via `atomStyles`.
-    const rawAtomColors = typedDirectives.filter(d => d.atomColor);
-    if (rawAtomColors.length > 0) {
-        deprecate(
-            'atomColor',
-            "[spytial] 'atomColor' is deprecated and will be removed in a future major; " +
-            "use 'atomStyle' with a 'borderStyle' block (value→borderStyle.color), " +
-            "or a 'fillStyle' block for a real interior fill."
+    if (typedDirectives.some(d => d.atomColor)) {
+        throw new Error(
+            "[spytial] 'atomColor' was removed in 6.0.0. Use 'atomStyle' with a 'borderStyle' block " +
+            "('value' becomes borderStyle.color, which keeps the node outlined exactly as before), " +
+            "or a 'fillStyle' block if you want a real interior fill."
         );
     }
-    // A selectorless (malformed) atomColor desugars to null and is dropped — it
-    // was a no-op before, and must not become a global recolor of every atom.
-    const desugaredAtomColors: AtomStyleRule[] = rawAtomColors
-        .map(d => atomColorToAtomStyleRule(d.atomColor))
-        .filter((rule): rule is AtomStyleRule => rule !== null);
-    let atomColors : AtomColorDirective[] = [];
-
-    // `size` is a constraint: it fixes a node's geometry, which is what the
-    // layout solves over — not presentation layered on top of a solved layout.
-    // It has always been accepted here too, and still is (identically), behind a
-    // deprecation warning that names the section to move it to.
-    const rawSizes = typedDirectives.filter(d => d.size);
-    if (rawSizes.length > 0) {
-        deprecate(
-            'size',
-            "[spytial] 'size' in the 'directives' section is deprecated and will be removed in a " +
-            "future major; it is a constraint — move it to the 'constraints' section. Its fields " +
-            "and meaning are unchanged."
+    if (typedDirectives.some(d => d.size)) {
+        throw new Error(
+            "[spytial] 'size' was removed from the 'directives' section in 6.0.0. It is a constraint — " +
+            "move it to the 'constraints' section. Its fields and meaning are unchanged."
         );
     }
-    let sizes : AtomSizeDirective[] = rawSizes
-                .map(d => {
-                    assertValidSizeParams(d.size, "directive");
-                    return {
-                        height: d.size.height,
-                        width: d.size.width,
-                        selector: d.size.selector
-                    };
-                });
-
-    // edgeColor is the deprecated flat form of edgeStyle. Desugar each into an
-    // EdgeStyleRule so both forms resolve through the one edgeStyle path (and
-    // compose / collide together). Emit one deprecation warning. `edgeColors` is
-    // kept empty only to satisfy the DirectivesBlock shape; its sole consumer
-    // (findEdgeDirective) then no-ops, and edge styling flows via `edgeStyles`.
-    const rawEdgeColors = typedDirectives.filter(d => d.edgeColor);
-    if (rawEdgeColors.length > 0) {
-        deprecate(
-            'edgeColor',
-            "[spytial] 'edgeColor' is deprecated and will be removed in a future major; " +
-            "use 'edgeStyle' with a 'lineStyle' block " +
-            "(value→lineStyle.color, style→lineStyle.pattern, weight→lineStyle.weight, highlight→lineStyle.highlight)."
+    if (typedDirectives.some(d => d.edgeColor)) {
+        throw new Error(
+            "[spytial] 'edgeColor' was removed in 6.0.0. Use 'edgeStyle' with a 'lineStyle' block: " +
+            "'value' becomes lineStyle.color, 'style' becomes lineStyle.pattern, 'weight' becomes " +
+            "lineStyle.weight, 'highlight' becomes lineStyle.highlight."
         );
     }
-    const desugaredEdgeColors: EdgeStyleRule[] = rawEdgeColors.map(d => edgeColorToEdgeStyleRule(d.edgeColor));
-    let edgeColors : EdgeColorDirective[] = [];
 
     let attributes : AttributeDirective[]  = typedDirectives.filter(d => d.attribute).map(d => {
         return {
@@ -1018,56 +943,47 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
         }
     });
 
+    // 'size' and 'hideAtom' are constraints; the directives section rejects them
+    // above, so these are always empty here. parseLayoutSpec fills the block's
+    // fields from the constraints section.
+    const sizes : AtomSizeDirective[] = [];
+    const hiddenAtoms : AtomHidingDirective[] = [];
+
     let flags = typedDirectives.filter(d => d.flag).map(d => d.flag);
     let hideDisconnected = flags.includes("hideDisconnected");
     let hideDisconnectedBuiltIns = flags.includes("hideDisconnectedBuiltIns");
 
-    // inferredEdge keeps its structural identity (name/selector) but adopts the
-    // shared lineStyle/textStyle blocks. Legacy inline color/style/weight/highlight
-    // still parse (mapped onto the flat fields) but are deprecated.
-    let usedLegacyInferredInline = false;
+    // inferredEdge keeps its structural identity (name/selector) and takes its
+    // look from the shared lineStyle/textStyle blocks. The old inline
+    // color/style/weight/highlight fields are rejected (see below).
     let inferredEdges : InferredEdgeDirective[] = typedDirectives.filter(d => d.inferredEdge).map(d => {
         const ie = d.inferredEdge;
-        const spec = parseEdgeStyleSpec(ie); // extracts lineStyle / textStyle blocks
         if (ie.color !== undefined || ie.style !== undefined || ie.weight !== undefined || ie.highlight !== undefined) {
-            usedLegacyInferredInline = true;
+            throw new Error(
+                "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' were removed in " +
+                "6.0.0. Use a 'lineStyle' block instead: { color, pattern, weight, highlight } — note " +
+                "'style' is spelled 'pattern' there."
+            );
         }
+        const spec = parseEdgeStyleSpec(ie); // extracts lineStyle / textStyle blocks
         return {
             name: ie.name,
             selector: ie.selector,
-            color: spec.lineStyle?.color ?? ie.color,
-            style: spec.lineStyle?.pattern ?? ie.style,
-            weight: spec.lineStyle?.weight ?? ie.weight,
-            highlight: spec.lineStyle?.highlight ?? ie.highlight,
+            color: spec.lineStyle?.color,
+            style: spec.lineStyle?.pattern,
+            weight: spec.lineStyle?.weight,
+            highlight: spec.lineStyle?.highlight,
             textStyle: spec.textStyle,
             draw: parseInferredEdgeDraw(ie.draw),
         };
     });
-    if (usedLegacyInferredInline) {
-        deprecate(
-            'inferredEdge',
-            "[spytial] inferredEdge's inline 'color'/'style'/'weight'/'highlight' are deprecated; " +
-            "use a 'lineStyle' block (color, pattern, weight, highlight) instead."
-        );
-    }
 
-    // `hideAtom` is a constraint for the same reason: removing an atom changes
-    // what the layout has to place, and it can make a spec unsatisfiable against
-    // the other constraints. Accepted here too, deprecated, unchanged in meaning.
-    const rawHiddenAtoms = typedDirectives.filter(d => d.hideAtom);
-    if (rawHiddenAtoms.length > 0) {
-        deprecate(
-            'hideAtom',
-            "[spytial] 'hideAtom' in the 'directives' section is deprecated and will be removed in a " +
-            "future major; it is a constraint — move it to the 'constraints' section. Its fields " +
-            "and meaning are unchanged."
+    if (typedDirectives.some(d => d.hideAtom)) {
+        throw new Error(
+            "[spytial] 'hideAtom' was removed from the 'directives' section in 6.0.0. It is a " +
+            "constraint — move it to the 'constraints' section. Its fields and meaning are unchanged."
         );
     }
-    let hiddenAtoms : AtomHidingDirective[] = rawHiddenAtoms.map(d => {
-        return {
-            selector: d.hideAtom.selector
-        }
-    });
 
     let tags : TagDirective[] = typedDirectives.filter(d => d.tag).map(d => {
         return {
@@ -1078,7 +994,7 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
         }
     });
 
-    let edgeStyles : EdgeStyleRule[] = typedDirectives.filter(d => d.edgeStyle).map(d => {
+    const edgeStyles : EdgeStyleRule[] = typedDirectives.filter(d => d.edgeStyle).map(d => {
         return {
             field: d.edgeStyle.field,
             selector: d.edgeStyle.selector,
@@ -1087,26 +1003,19 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
         }
     });
     // Desugared legacy edgeColor rules join the native ones — one resolution path.
-    edgeStyles = [...edgeStyles, ...desugaredEdgeColors];
 
     // atomStyle (composite: fillStyle + borderStyle + textStyle + iconStyle, plus
-    // the showLabel behavior flag), keyed by an optional unary selector. Native
-    // rules plus desugared legacy atomColor / icon rules resolve through the one
-    // atomStyle path.
-    let atomStyles : AtomStyleRule[] = typedDirectives.filter(d => d.atomStyle).map(d => {
+    // the showLabel behavior flag), keyed by an optional unary selector.
+    const atomStyles : AtomStyleRule[] = typedDirectives.filter(d => d.atomStyle).map(d => {
         return {
             selector: d.atomStyle.selector,
             style: parseAtomStyleSpec(d.atomStyle)
         }
     });
-    atomStyles = [...atomStyles, ...desugaredAtomColors, ...desugaredIcons];
 
     return {
-        atomColors,
         atomStyles,
         sizes,
-        icons,
-        edgeColors,
         edgeStyles,
         attributes,
         tags,
