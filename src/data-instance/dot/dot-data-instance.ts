@@ -533,53 +533,6 @@ export class DotDataInstance extends DataInstanceEventEmitter implements IInputD
     return relations;
   }
 
-  /**
-   * Apply type-aware projections: keep only the specified atoms and their
-   * connecting edges. Returns a **new** DotDataInstance (does not mutate this one).
-   */
-  applyProjections(atomIds: string[]): DotDataInstance {
-    const keepSet = new Set(atomIds);
-
-    // Build a new DOT string from the projected subset.
-    const isDirected = this.graph.isDirected();
-    const lines: string[] = [];
-    lines.push(isDirected ? 'digraph {' : 'graph {');
-
-    // Emit kept nodes with their attributes.
-    for (const id of atomIds) {
-      const atom = this.atomMap.get(id);
-      if (!atom) continue;
-      const nodeData = this.graph.node(id);
-      const attrs: string[] = [];
-      attrs.push(`label="${escapeLabel(atom.label)}"`);
-      attrs.push(`${this.opts.typeAttribute}="${escapeLabel(atom.type)}"`);
-      // Preserve other DOT attributes.
-      if (typeof nodeData === 'object' && nodeData !== null) {
-        for (const [k, v] of Object.entries(nodeData)) {
-          if (k === 'label' || k === this.opts.typeAttribute) continue;
-          attrs.push(`${k}="${escapeLabel(String(v))}"`);
-        }
-      }
-      lines.push(`  "${escapeLabel(id)}" [${attrs.join(', ')}];`);
-    }
-
-    // Emit kept edges.
-    const edgeOp = isDirected ? '->' : '--';
-    for (const edge of this.graph.edges()) {
-      if (keepSet.has(edge.v) && keepSet.has(edge.w)) {
-        const label = this.graph.edge(edge) ?? this.opts.defaultRelationName;
-        lines.push(
-          `  "${escapeLabel(edge.v)}" ${edgeOp} "${escapeLabel(edge.w)}" [label="${escapeLabel(label)}"];`,
-        );
-      }
-    }
-
-    lines.push('}');
-
-    return new DotDataInstance(lines.join('\n'), {
-      ...this.opts,
-    });
-  }
 
   /**
    * Generate a graphlib Graph for visualization.

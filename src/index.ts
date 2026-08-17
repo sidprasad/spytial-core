@@ -216,9 +216,6 @@ export { ErrorStateManager } from './layout/error-state';
 // InstanceLayout.
 export type { SystemError, SelectorErrorDetail, LayoutWarning } from './layout/error-state';
 
-// Projection Transform (pre-layout data instance transformation)
-export { applyProjectionTransform, topologicalSortWithCycleBreaking } from './data-instance/projection-transform';
-export type { Projection, ProjectionTransformOptions, ProjectionTransformResult } from './data-instance/projection-transform';
 
 // Evaluation API — headless layout + visual-consistency metrics from
 // multiple sources (Penlloy PLATEAU 2025; Liang TOSEM 2026), plus a

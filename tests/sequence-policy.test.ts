@@ -45,7 +45,6 @@ function makeInstance(
     getRelations: () => iRelations,
     getTypes: () => [] as IType[],
     getAtomType: () => ({ id: 'T', types: ['T'], atoms: [], isBuiltin: false }),
-    applyProjections: () => { throw new Error('not implemented'); },
     generateGraph: () => new Graph(),
   };
 }

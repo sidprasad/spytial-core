@@ -123,7 +123,6 @@ inst.getTypes().find(t => t.id === 'Student');
 ```
 
 This hierarchy powers:
-- **Projections** — `applyProjections()` filters type-aware
 - **Schema generation** — `generateAlloySchema()` / `generateSQLSchema()` use `extends`
 - **Ancestry checks** — `inst.typeIsOfType('Student', 'Entity')` → `true`
 
@@ -246,16 +245,6 @@ const graph = inst.generateGraph(
   true,   // hideDisconnected: remove isolated nodes
   false,  // hideDisconnectedBuiltIns: only hide isolated built-in type nodes
 );
-```
-
-## Projections
-
-`applyProjections()` returns a **new** `DotDataInstance` with only the specified atoms:
-
-```typescript
-const projected = inst.applyProjections(['alice', 'cs101']);
-// projected has only alice and cs101, plus edges between them.
-// The original inst is unmodified.
 ```
 
 ## Merging Instances

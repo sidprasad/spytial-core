@@ -175,19 +175,6 @@ See [Sequences of States](sequences.md) for usage. `classifyChangeEmphasisChange
 
 ---
 
-## Projection transform
-
-Projections are a **pre-layout data transformation**, not a layout directive.
-
-```typescript
-import { applyProjectionTransform, topologicalSortWithCycleBreaking } from 'spytial-core';
-import type { Projection, ProjectionTransformOptions, ProjectionTransformResult } from 'spytial-core';
-```
-
-Pass an `evaluateOrderBy` callback (`(selector) => string[][]`) to support relation-driven ordering. See [docs/DEV_GUIDE.md § Projection Transform](https://github.com/sidprasad/spytial-core/blob/main/docs/DEV_GUIDE.md#projection-transform-pre-layout-data-rewriting) for the full discussion.
-
----
-
 ## Web components (custom elements)
 
 These register themselves automatically when the bundle loads in a browser.

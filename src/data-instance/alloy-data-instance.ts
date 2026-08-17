@@ -11,7 +11,6 @@ import {
 } from './alloy/alloy-instance';
 import { getAtomType } from './alloy/alloy-instance/src/atom';
 import { isBuiltin } from './alloy/alloy-instance/src/type';
-import { applyProjections } from './alloy/alloy-instance/src/projection';
 import { generateGraph } from './alloy/alloy-graph';
 import { Graph } from 'graphlib';
 
@@ -150,17 +149,6 @@ export class AlloyDataInstance extends DataInstanceEventEmitter implements IInpu
     }));
   }
 
-  /**
-   * Apply projections to filter/transform the instance
-   * Creates a new instance with filtered data based on provided atom IDs
-   * 
-   * @param atomIds - Array of atom IDs to project onto
-   * @returns New filtered AlloyDataInstance
-   */
-  public applyProjections(atomIds: string[]): AlloyDataInstance {
-    const projectedAlloyInstance = applyProjections(this.alloyInstance, atomIds);
-    return new AlloyDataInstance(projectedAlloyInstance);
-  }
 
   /**
    * Generate graph representation of this instance

@@ -107,30 +107,6 @@ export class TlaDataInstance implements IDataInstance {
     return this.relations;
   }
 
-  /** Create a projected instance containing only the requested atoms and their incident tuples. */
-  applyProjections(atomIds: string[]): IDataInstance {
-    const allowed = new Set(atomIds);
-    const atoms = this.atoms.filter(atom => allowed.has(atom.id));
-
-    const relations = this.relations
-      .map(relation => {
-        const tuples = relation.tuples.filter(tuple => tuple.atoms.every(atomId => allowed.has(atomId)));
-        if (tuples.length === 0) {
-          return null;
-        }
-        return { ...relation, tuples } as IRelation;
-      })
-      .filter((relation): relation is IRelation => relation !== null);
-
-    const types = this.rebuildTypes(atoms);
-
-    return new TlaDataInstance(this.datum, {
-      atoms,
-      relations,
-      types,
-      builtinTypes: new Set(this.builtinTypes),
-    });
-  }
 
   /** Convert the instance into a graphlib Graph for layout algorithms. */
   generateGraph(hideDisconnected: boolean = false, hideDisconnectedBuiltIns: boolean = false): Graph {

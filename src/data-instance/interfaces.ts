@@ -69,8 +69,6 @@ export interface IDataInstance {
     getAtoms(): readonly IAtom[];
     getRelations(): readonly IRelation[]; // Assuming relations are just strings for simplicity
 
-    applyProjections(atomIds: string[]) : IDataInstance;
-
     generateGraph(hideDisconnected : boolean, hideDisconnectedBuiltIns : boolean) : Graph;
 
 }
@@ -89,7 +87,9 @@ export function isDataInstance(value: unknown): value is IDataInstance {
            typeof candidate.getAtoms === 'function' &&
            typeof candidate.getRelations === 'function' &&
            typeof candidate.getTypes === 'function' &&
-           typeof candidate.applyProjections === 'function' &&
+           // applyProjections was checked here until 6.0.0 dropped it from the
+           // interface. Removing the check is deliberate: a 5.x adapter that
+           // still defines the method passes, and a new one need not write it.
            typeof candidate.generateGraph === 'function';
 }
 
