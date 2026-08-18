@@ -33,8 +33,11 @@ Each type object includes:
   tuple has the same width; on a ragged relation it is `[]`. Never read
   `types.length` as the relation's arity — arity lives on the tuple, as
   `tuple.atoms.length`.
-- Known gap: the SQL evaluator has no table shape for a ragged relation, so it
-  skips one and warns. Use the selector evaluator for ragged data.
+- The SQL evaluator gives each relation **name** one table. A ragged relation's
+  table is as wide as its widest tuple, with `arity` (how many atoms that row
+  has), `src`/`tgt` (first and last), and `elem_0..elem_n` holding the whole
+  tuple, NULL past the row's own width. Uniform relations keep the columns they
+  always had (`atom`, or `src`/`tgt`, or `elem_*`).
 
 ## Notes
 

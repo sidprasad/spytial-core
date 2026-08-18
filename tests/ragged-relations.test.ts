@@ -14,8 +14,9 @@ import type { EvaluationContext } from '../src/evaluator-contracts';
  * declare a field `foo` — different ids (`A<:foo`, `B<:foo`), one name.
  *
  * These tests pin the permissive contract: the name is the relation, every
- * tuple survives, arity lives on the tuple, and `IRelation.types` is only a
- * summary that goes empty when the tuples disagree.
+ * tuple survives, arity lives on the tuple, `IRelation.types` is only a
+ * summary that goes empty when the tuples disagree, and both evaluators answer
+ * over the whole relation.
  */
 
 /** Two relations, both named `foo`: `A -> B` and `B -> C -> D`. */
@@ -123,15 +124,80 @@ describe('ragged relations: selectors', () => {
   });
 });
 
-describe('ragged relations: SQL (known gap)', () => {
-  it('skips the relation and says so, rather than truncating its wide tuples', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+describe('ragged relations: SQL', () => {
+  const evaluatorFor = async (instance: JSONDataInstance) => {
     const evaluator = new SQLEvaluator();
+    await evaluator.initialize({ sourceData: instance } as unknown as EvaluationContext);
+    return evaluator;
+  };
 
-    await evaluator.initialize({ sourceData: new JSONDataInstance(raggedFoo()) } as unknown as EvaluationContext);
+  it('gives the relation one table as wide as its widest tuple', async () => {
+    const evaluator = await evaluatorFor(new JSONDataInstance(raggedFoo()));
 
-    expect(evaluator.getTableSchemas().map(s => s.name)).not.toContain('foo');
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('foo'));
-    warn.mockRestore();
+    const schema = evaluator.getTableSchemas().find(s => s.name === 'foo')!;
+    expect(schema).toBeDefined();
+    expect(schema.columns).toEqual(['arity', 'src', 'tgt', 'elem_0', 'elem_1', 'elem_2']);
+    expect(schema.description).toContain('ragged');
+  });
+
+  it('keeps every atom of a wide tuple, padding the short ones with NULL', async () => {
+    const evaluator = await evaluatorFor(new JSONDataInstance(raggedFoo()));
+
+    // The third atom of the 3-tuple used to vanish here: the table was built
+    // two columns wide and `d1` was simply not written.
+    const result = evaluator.evaluate('SELECT arity, elem_0, elem_1, elem_2 FROM foo ORDER BY arity');
+    expect(result.isError()).toBe(false);
+    // A padded column reads back as the string 'null' — this evaluator has
+    // always rendered SQL NULL that way, and `arity` is the clean way to ask
+    // a row how wide it is.
+    expect(result.getRawResult()).toEqual([
+      [2, 'a1', 'b1', 'null'],
+      [3, 'b1', 'c1', 'd1'],
+    ]);
+  });
+
+  it('answers the plain edge query across both widths', async () => {
+    const evaluator = await evaluatorFor(new JSONDataInstance(raggedFoo()));
+
+    // src/tgt is the same (first, last) reduction the graph draws, so this
+    // needs no COALESCE over the elem columns.
+    const result = evaluator.evaluate('SELECT src, tgt FROM foo ORDER BY src');
+    expect(result.selectedTwoples()).toEqual([['a1', 'b1'], ['b1', 'd1']]);
+  });
+
+  it('lets a query pick out one width', async () => {
+    const evaluator = await evaluatorFor(new JSONDataInstance(raggedFoo()));
+
+    const result = evaluator.evaluate('SELECT elem_1 FROM foo WHERE arity = 3');
+    expect(result.selectedAtoms()).toEqual(['c1']);
+  });
+
+  it('builds one table when two same-named relations are not merged', async () => {
+    // mergeRelations off leaves two records both named `foo`. Both used to try
+    // `CREATE TABLE foo`, and the second threw, taking initialize() down.
+    const instance = new JSONDataInstance(raggedFoo(), { mergeRelations: false });
+    expect(instance.getRelations()).toHaveLength(2);
+
+    const evaluator = await evaluatorFor(instance);
+
+    expect(evaluator.getTableSchemas().filter(s => s.name.startsWith('foo'))).toHaveLength(1);
+    const result = evaluator.evaluate('SELECT src, tgt FROM foo ORDER BY src');
+    expect(result.selectedTwoples()).toEqual([['a1', 'b1'], ['b1', 'd1']]);
+  });
+
+  it('leaves a uniform relation with the shape it always had', async () => {
+    const evaluator = await evaluatorFor(new JSONDataInstance({
+      atoms: [
+        { id: 'a1', type: 'A', label: 'a1' },
+        { id: 'b1', type: 'B', label: 'b1' },
+      ],
+      relations: [
+        { id: 'foo', name: 'foo', types: ['A', 'B'], tuples: [{ atoms: ['a1', 'b1'], types: ['A', 'B'] }] },
+      ],
+    } as IJsonDataInstance));
+
+    const schema = evaluator.getTableSchemas().find(s => s.name === 'foo')!;
+    expect(schema.columns).toEqual(['src', 'tgt']);
+    expect(schema.description).toBe('Relation: foo (arity 2)');
   });
 });

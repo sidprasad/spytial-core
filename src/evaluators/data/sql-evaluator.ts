@@ -6,7 +6,7 @@ import IEvaluator, {
   EvaluatorResult,
   Tuple
 } from '../../evaluator-contracts';
-import { IDataInstance, IAtom, IRelation, isDataInstance } from '../../data-instance/interfaces';
+import { IDataInstance, IAtom, IRelation, ITuple, isDataInstance } from '../../data-instance/interfaces';
 import { BaseEvaluatorResult } from './base-evaluator-result';
 
 function isSQLErrorResult(result: EvaluatorResult): boolean {
@@ -266,71 +266,126 @@ export class SQLEvaluator implements IEvaluator {
       ]);
     }
 
-    // Create relation tables
-    const relations: readonly IRelation[] = dataInstance.getRelations();
+    this.createRelationTables(dataInstance.getRelations());
+  }
+
+  /**
+   * Give every relation NAME one table.
+   *
+   * The name is the relation: two records that share a name are one relation
+   * whose tuples sit together, exactly how the selector evaluator resolves
+   * them (`foo` there is every tuple named `foo`). Building a table per
+   * RECORD instead made two relations named `foo` — an ordinary thing for a
+   * host language to produce — collide on `CREATE TABLE foo` and take
+   * initialize() down with them.
+   */
+  private createRelationTables(relations: readonly IRelation[]): void {
+    const byName = new Map<string, IRelation[]>();
     for (const relation of relations) {
-      this.createRelationTable(relation);
+      const group = byName.get(relation.name);
+      if (group) group.push(relation);
+      else byName.set(relation.name, [relation]);
+    }
+
+    // Distinct names can still sanitize down to one identifier (`a-b` and
+    // `a.b` both become `a_b`). Those are NOT one relation, so the second
+    // gets its own table rather than being merged into the first or throwing.
+    const taken = new Set<string>([
+      SQLEvaluator.ATOMS_TABLE,
+      SQLEvaluator.ATOM_TYPES_TABLE,
+      SQLEvaluator.TYPES_TABLE,
+    ]);
+
+    for (const [name, group] of byName) {
+      const base = this.sanitizeTableName(name);
+      let tableName = base;
+      for (let n = 2; taken.has(tableName); n++) tableName = `${base}_${n}`;
+      taken.add(tableName);
+      this.createRelationTable(name, tableName, group);
     }
   }
 
   /**
-   * Create a table for a specific relation
+   * Build one table for one relation name.
+   *
+   * The table's width comes from the TUPLES, never from `relation.types.length`
+   * — that list is only a summary of the columns, and it is empty on a ragged
+   * relation (see IRelation). Reading it as the arity is what used to write a
+   * three-atom tuple into a two-column table and drop the third atom in
+   * silence.
+   *
+   * A RAGGED relation — one name holding tuples of different width, which a
+   * host language produces whenever two unrelated things have a field of the
+   * same name — gets a wider table than any single tuple fills:
+   *
+   *   arity           how many atoms this row actually has
+   *   src, tgt        first and last: the same (first, last) reduction
+   *                   generateGraph draws and `selectedTwoples()` returns, so
+   *                   the ordinary "show me the edges" query keeps working
+   *                   across arities without a COALESCE over the elem columns
+   *   elem_0..elem_n  the whole tuple, NULL past this row's own width
+   *
+   * Relations whose tuples agree on a width keep the shape they always had.
    */
-  private createRelationTable(relation: IRelation): void {
-    const tableName = this.sanitizeTableName(relation.name);
-    const arity = relation.types.length;
+  private createRelationTable(name: string, tableName: string, group: IRelation[]): void {
+    const tuples = group.flatMap(relation => relation.tuples);
+    const arities = new Set(tuples.map(tuple => tuple.atoms.length));
+    const ragged = arities.size > 1;
 
-    // No signature means no columns, and `CREATE TABLE t ()` is a SQL parse
-    // error, so skip the relation rather than abort initialize() for every
-    // other one. Two things land here:
-    //   - an empty relation with nothing to infer from (`{ name, tuples: [] }`
-    //     from lenient JSON) — nothing queryable is lost;
-    //   - a RAGGED relation, whose tuples disagree on width. Those carry
-    //     `types: []` by design (see IRelation), and this evaluator has no
-    //     shape for them yet. Skipping loses the whole relation, so say so —
-    //     the alternative, forcing them into a fixed-width table, silently
-    //     truncated the wider tuples.
-    // TODO: give ragged relations a table (widest arity, NULL-padded).
-    if (arity === 0) {
-      if (relation.tuples.length > 0) {
-        console.warn(
-          `SQLEvaluator: relation "${relation.name}" has no single column signature ` +
-          `(its ${relation.tuples.length} tuples do not agree on a width), so no table was ` +
-          `created for it. Query it through the selector evaluator instead.`
-        );
-      }
+    // With no tuples to measure, fall back to the declared summary so an
+    // empty-but-declared relation still gets a queryable 0-row table.
+    const width = arities.size > 0
+      ? Math.max(...arities)
+      : (group.find(relation => relation.types.length > 0)?.types.length ?? 0);
+
+    // No columns at all, and `CREATE TABLE t ()` is a SQL parse error. Nothing
+    // is lost: an empty relation with no signature has nothing to query.
+    if (width === 0) {
       return;
     }
 
-    // Determine column names based on arity
-    // Use simple names that won't conflict with SQL reserved words
     let columns: string[];
-    if (arity === 1) {
+    if (ragged) {
+      columns = ['arity', 'src', 'tgt', ...Array.from({ length: width }, (_, i) => `elem_${i}`)];
+    } else if (width === 1) {
       columns = ['atom'];
-    } else if (arity === 2) {
+    } else if (width === 2) {
       columns = ['src', 'tgt'];
     } else {
-      columns = Array.from({ length: arity }, (_, i) => `elem_${i}`);
+      columns = Array.from({ length: width }, (_, i) => `elem_${i}`);
     }
-
-    // Sanitize column names
     columns = columns.map(col => this.sanitizeColumnName(col));
 
-    // Create the table
-    const columnDefs = columns.map(col => `${col} STRING`).join(', ');
+    const arityColumn = ragged ? this.sanitizeColumnName('arity') : null;
+    const columnDefs = columns
+      .map(col => `${col} ${col === arityColumn ? 'INTEGER' : 'STRING'}`)
+      .join(', ');
     this.db.exec(`CREATE TABLE ${tableName} (${columnDefs})`);
-    
+
     this.tableSchemas.push({
       name: tableName,
       columns: columns,
-      description: `Relation: ${relation.name} (arity ${arity})`
+      description: ragged
+        ? `Relation: ${name} (ragged, arities ${[...arities].sort((a, b) => a - b).join(', ')})`
+        : `Relation: ${name} (arity ${width})`
     });
 
-    // Insert tuples
     const placeholders = columns.map(() => '?').join(', ');
-    for (const tuple of relation.tuples) {
-      this.db.exec(`INSERT INTO ${tableName} VALUES (${placeholders})`, tuple.atoms);
+    for (const tuple of tuples) {
+      const row = ragged ? SQLEvaluator.raggedRow(tuple, width) : tuple.atoms;
+      this.db.exec(`INSERT INTO ${tableName} VALUES (${placeholders})`, row);
     }
+  }
+
+  /** `arity, src, tgt`, then the tuple's atoms padded to `width` with NULL. */
+  private static raggedRow(tuple: ITuple, width: number): (string | number | null)[] {
+    const atoms = tuple.atoms;
+    return [
+      atoms.length,
+      atoms[0],
+      atoms[atoms.length - 1],
+      ...Array.from({ length: width }, (_, i) => atoms[i] ?? null),
+    ];
   }
 
   /**
