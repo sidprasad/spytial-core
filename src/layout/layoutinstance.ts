@@ -708,7 +708,7 @@ export class LayoutInstance {
      * @param validatorStrategy - Which constraint validator to use. `QUALITATIVE` is the only strategy and the default; the parameter is kept so existing positional callers still compile.
      *
      * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
-     * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
+     * It applies constraints and directives to produce a structured layout that can be rendered using a graph visualization library.
      */
     constructor(
         layoutSpec: LayoutSpec,
