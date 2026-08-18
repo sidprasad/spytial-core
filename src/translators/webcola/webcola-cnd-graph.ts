@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
-import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
+import { InstanceLayout, isInstanceLayout, LayoutNode } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
 import type { Layout, ID3StyleLayoutAdaptor } from 'webcola';
 
@@ -13,7 +13,8 @@ type D3Layout = Layout & ID3StyleLayoutAdaptor;
 import { ITuple } from '../../data-instance/interfaces';
 import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
-import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
+import { type NodeColorParams } from '../../layout/colorpicker';
+import { ThemeController, type GraphTheme, type ThemeSlots } from './theming';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import {
   type EdgeRouter as SpytialEdgeRouter,
@@ -119,34 +120,10 @@ const DEFAULT_SCALE_FACTOR = 5;
  */
 
 /**
- * A named display theme for {@link WebColaCnDGraph}. A theme is the single source
- * of truth for the graph's colors and bundles the three levers:
- *  1. the canvas background (the `--cnd-canvas-bg` slot),
- *  2. the default edge color (the `--cnd-edge-color` slot), and
- *  3. the default node-color palette ({@link GraphTheme.nodeColors}).
- *
- * `light` and `dark` are built in; register more via
- * {@link WebColaCnDGraph.registerTheme} / {@link WebColaCnDGraph.registerThemes}
- * and they appear in the Mode dropdown.
+ * The theme shape now lives in `theming/`, but it has always been part of this
+ * module's public surface, so it is re-exported from here.
  */
-export interface GraphTheme {
-  /** Unique key — used as the `theme` attribute value and the dropdown option value. */
-  name: string;
-  /** Human-readable label for the dropdown. Defaults to a title-cased `name`. */
-  label?: string;
-  /**
-   * `--cnd-*` custom-property values layered over the light baseline (the
-   * stylesheet literals). An absent/empty map IS the light theme. Slots are
-   * applied to the host element and read by the shadow stylesheet via `var()`.
-   */
-  slots?: Record<string, string>;
-  /**
-   * Tuning for the default (phyllotactic) node palette — e.g. a dark canvas
-   * passes `{ lightness: 74 }` so the algorithm-assigned type colors stay
-   * legible. Absent = leave the canonical light palette untouched.
-   */
-  nodeColors?: NodeColorParams;
-}
+export type { GraphTheme };
 
 // HTMLElement doesn't exist in Node; fall back to a plain class so the module
 // can be imported headless. Instantiating the element still requires a DOM.
@@ -191,84 +168,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly NODE_STROKE_WIDTH = 1.5;
 
   /**
-   * Default canvas color (tufte-css `#fffff8` warm white). Used when the host
-   * element has no `background` attribute. The canvas color drives the
-   * container background, node fills, edge-label halos, and PNG export
-   * background so they all stay in sync.
+   * Owns every display decision the host can configure: the theme registry, the
+   * active theme, the override layers, the colors resolved from them, and the
+   * font stack. This element keeps only the three places that write the result
+   * to the DOM — {@link applyTheme}, {@link repaintThemedColors}, and
+   * {@link updateThemeDropdown}.
+   *
+   * The controller reads `background` and `font-family` back off this element
+   * rather than holding a snapshot, so it always sees the live attribute.
    */
-  private static readonly DEFAULT_CANVAS_BG = '#fffff8';
-
-  /**
-   * Returns the active canvas color, resolved highest-priority-first: an
-   * explicit `--cnd-canvas-bg` theme override, then the legacy `background`
-   * attribute (sugar for the canvas slot — composes with either base theme),
-   * then the base theme's canvas (dark canvas, or the warm-white default).
-   * Drives node fills, the edge-label halo, and PNG export so they stay in sync.
-   */
-  private getCanvasBackground(): string {
-    const override = this.themeOverrides['--cnd-canvas-bg'];
-    if (override) return override;
-    const bg = this.getAttribute('background');
-    if (bg) return bg;
-    return this.activeSlots()['--cnd-canvas-bg'] ?? WebColaCnDGraph.DEFAULT_CANVAS_BG;
-  }
-
-  /**
-   * Name of the active theme (a key into {@link themeRegistry}). `'light'`
-   * (default) preserves the historical warm-white look exactly. Switching theme
-   * sets `--cnd-*` custom properties on the host; the shadow stylesheet reads
-   * them via `var(--cnd-*, <light-literal>)`, so an unthemed graph is
-   * pixel-identical to before. Data-driven colors (`d.color`/`d.highlight`) are
-   * never overridden — only static fallbacks and algorithm defaults are themed.
-   */
-  private currentThemeName: string = 'light';
-
-  /**
-   * Registry of available themes, keyed by name. Seeded with the built-in
-   * `light` and `dark`; hosts add more via {@link registerTheme} /
-   * {@link registerThemes}, which surface in the Mode dropdown. Per-instance, so
-   * different graphs can offer different theme sets.
-   */
-  private themeRegistry: Map<string, GraphTheme> = new Map<string, GraphTheme>([
-    ['light', { name: 'light', label: 'Light', slots: {}, nodeColors: {} }],
-    ['dark', { name: 'dark', label: 'Dark', slots: WebColaCnDGraph.DARK_THEME, nodeColors: { lightness: 74 } }]
-  ]);
-
-  /**
-   * Per-slot color overrides layered on top of the active theme (e.g.
-   * `{ '--cnd-canvas-bg': '#101010' }`). Set via the second argument to
-   * {@link setTheme}. The `background` attribute is sugar for `--cnd-canvas-bg`.
-   */
-  private themeOverrides: Record<string, string> = {};
-
-  /**
-   * Per-call node-color overrides layered on top of the active theme's
-   * `nodeColors` (e.g. `{ lightness: 80 }`). Set via the third argument to
-   * {@link setTheme}.
-   */
-  private nodeColorOverrides: NodeColorParams = {};
-
-  /** The active theme object (falls back to `light` if the name is unknown). */
-  private getActiveTheme(): GraphTheme {
-    return this.themeRegistry.get(this.currentThemeName) ?? this.themeRegistry.get('light')!;
-  }
-
-  /** The active theme's `--cnd-*` slot values (empty for the light baseline). */
-  private activeSlots(): Record<string, string> {
-    return this.getActiveTheme().slots ?? {};
-  }
-
-  /**
-   * Every `--cnd-*` slot key any registered theme can set — the set to clear
-   * before applying a theme so a switch never leaves stale custom properties.
-   */
-  private allSlotKeys(): Set<string> {
-    const keys = new Set<string>(Object.keys(WebColaCnDGraph.DARK_THEME));
-    for (const theme of this.themeRegistry.values()) {
-      if (theme.slots) for (const key of Object.keys(theme.slots)) keys.add(key);
-    }
-    return keys;
-  }
+  private readonly themeController = new ThemeController({
+    attribute: (name: string) => this.getAttribute(name)
+  });
 
   /**
    * Register one or more custom themes (or override a built-in by reusing its
@@ -276,13 +187,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * needs a unique `name`; see {@link GraphTheme}.
    */
   public registerThemes(themes: GraphTheme[]): void {
-    for (const theme of themes) {
-      if (!theme || !theme.name) {
-        console.warn('registerThemes: each theme needs a non-empty `name`; skipping', theme);
-        continue;
-      }
-      this.themeRegistry.set(theme.name, { ...theme });
-    }
+    this.themeController.register(themes);
     this.updateThemeDropdown();
   }
 
@@ -293,12 +198,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /** Names of all registered themes, in registration order (built-ins first). */
   public getThemeNames(): string[] {
-    return [...this.themeRegistry.keys()];
-  }
-
-  /** Title-case a theme name for display when it has no explicit `label`. */
-  private titleCaseThemeName(name: string): string {
-    return name.charAt(0).toUpperCase() + name.slice(1);
+    return this.themeController.names();
   }
 
   /**
@@ -314,45 +214,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (select.getAttribute('data-themes') !== signature) {
       select.textContent = '';
       for (const name of names) {
-        const theme = this.themeRegistry.get(name)!;
         const option = document.createElement('option');
         option.value = name;
-        option.textContent = theme.label ?? this.titleCaseThemeName(name);
+        option.textContent = this.themeController.labelFor(name);
         select.appendChild(option);
       }
       select.setAttribute('data-themes', signature);
     }
-    select.value = this.currentThemeName;
+    select.value = this.themeController.name;
   }
-
-  /**
-   * Dark-theme custom-property values. Light mode simply removes these
-   * properties, falling back to the literals baked into the stylesheet. A few
-   * entries (canvas-bg, edge-color, node-border, label-text) are also read
-   * directly from JS for colors applied as SVG presentation attributes, where
-   * a CSS `var()` cannot reach.
-   */
-  private static readonly DARK_THEME: Record<string, string> = {
-    '--cnd-canvas-bg': '#1e1e1e',
-    '--cnd-label-text': '#e6e6e6',
-    '--cnd-edge-color': '#7d828b',
-    '--cnd-node-border': '#8b919b',
-    '--cnd-edge-highlight': '#f0f0f0',
-    '--cnd-inferred-highlight': '#9aa0a8',
-    '--cnd-group-fill': 'rgba(140, 140, 140, 0.12)',
-    '--cnd-group-stroke': '#7a7f87',
-    '--cnd-loading-bg': 'rgba(30, 32, 37, 0.95)',
-    '--cnd-loading-text': '#c9cdd4',
-    '--cnd-loading-dot': '#5dade2',
-    '--cnd-panel-bg': '#23262d',
-    '--cnd-panel-text': '#e6e6e6',
-    '--cnd-panel-text-muted': '#a7adb8',
-    '--cnd-panel-border': '#3a3f49',
-    '--cnd-toolbar-bg': 'rgba(30, 32, 37, 0.95)',
-    '--cnd-control-bg': '#2b2f37',
-    '--cnd-control-bg-hover': '#343a44',
-    '--cnd-control-border': '#3a3f49'
-  };
 
   /**
    * Set the graph's theme by name. `'light'` (default) and `'dark'` are built
@@ -370,12 +240,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   public setTheme(
     name: string,
-    overrides?: Record<string, string>,
+    overrides?: ThemeSlots,
     nodeColors?: NodeColorParams
   ): void {
-    this.currentThemeName = this.themeRegistry.has(name) ? name : 'light';
-    this.themeOverrides = overrides ? { ...overrides } : {};
-    this.nodeColorOverrides = nodeColors ? { ...nodeColors } : {};
+    this.themeController.select(name, overrides, nodeColors);
     this.applyTheme();
     // Re-tint data-driven colors on the live DOM (no-op before first render).
     this.repaintThemedColors();
@@ -383,8 +251,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.updateThemeDropdown();
     // Reflect for declarative hosts / introspection (guarded against the
     // attributeChangedCallback re-entering setTheme).
-    if (this.getAttribute('theme') !== this.currentThemeName) {
-      this.setAttribute('theme', this.currentThemeName);
+    if (this.getAttribute('theme') !== this.themeController.name) {
+      this.setAttribute('theme', this.themeController.name);
     }
   }
 
@@ -396,73 +264,22 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * stylesheet literals).
    */
   private applyTheme(): void {
-    for (const key of this.allSlotKeys()) {
+    for (const key of this.themeController.allSlotKeys()) {
       this.style.removeProperty(key);
     }
-    for (const [key, value] of Object.entries(this.activeSlots())) {
+    for (const [key, value] of Object.entries(this.themeController.resolvedSlots())) {
       this.style.setProperty(key, value);
     }
-    const bg = this.getAttribute('background');
-    if (bg) this.style.setProperty('--cnd-canvas-bg', bg);
-    for (const [key, value] of Object.entries(this.themeOverrides)) {
-      if (value) this.style.setProperty(key, value);
-    }
-  }
-
-  /**
-   * The active theme's node-color tuning (its `nodeColors`, e.g. light `{}` /
-   * dark `{ lightness: 74 }`) with any per-call `nodeColors` override from
-   * {@link setTheme} layered on top. Consumed by {@link themedNodeColor}.
-   */
-  private resolvedNodeColorParams(): NodeColorParams {
-    return {
-      ...this.getActiveTheme().nodeColors,
-      ...this.nodeColorOverrides
-    };
-  }
-
-  /**
-   * Whether the renderer may re-tune a node's color for the active theme, based
-   * on its {@link ColorSource}. Only the default palette is themeable today;
-   * this is the single decision point, so a new ColorSource variant opts in here
-   * (and defaults to non-themeable until it does). Absent source is treated as
-   * the default palette for backward compatibility.
-   */
-  private isThemeableNodeColor(source: ColorSource | undefined): boolean {
-    return (source ?? ColorSource.DefaultPalette) === ColorSource.DefaultPalette;
-  }
-
-  /**
-   * Resolve a node's effective color for the active theme. An algorithm-assigned
-   * color (a themeable {@link ColorSource}) is re-tinted to the theme's node
-   * lightness so the canonical palette adapts to the canvas; a user `color`
-   * directive, or the implicit black fallback, is passed through to
-   * {@link themedDataColor} unchanged. With no themed lightness (light theme)
-   * this is identity — the historical look is preserved exactly.
-   */
-  private themedNodeColor(
-    d: any,
-    darkVar: keyof typeof WebColaCnDGraph.DARK_THEME,
-    lightFallback: string | null
-  ): string | null {
-    const lightness = this.resolvedNodeColorParams().lightness;
-    const isBlackish =
-      !d.color || d.color === 'black' || d.color === '#000' || d.color === '#000000';
-    const base =
-      lightness !== undefined && this.isThemeableNodeColor(d.colorSource) && !isBlackish
-        ? setLabLightness(d.color, lightness)
-        : d.color;
-    return this.themedDataColor(base, darkVar, lightFallback);
   }
 
   /** Node border stroke (themed). Shared by initial render and live repaint. */
   private nodeBorderColor(d: any): string | null {
-    return this.themedNodeColor(d, '--cnd-node-border', 'black');
+    return this.themeController.nodeColor(d.color, d.colorSource, '--cnd-node-border', 'black');
   }
 
   /** Most-specific-type label fill (themed). */
   private nodeTypeLabelColor(d: any): string | null {
-    return this.themedNodeColor(d, '--cnd-label-text', 'black');
+    return this.themeController.nodeColor(d.color, d.colorSource, '--cnd-label-text', 'black');
   }
 
   /**
@@ -481,7 +298,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (this.isHiddenNode(d)) return 'transparent';
     if (d.fillColor) return d.fillColor;
     if (d.icon && !this.isBadgeIcon(d)) return 'transparent';
-    return this.getCanvasBackground();
+    return this.themeController.canvasBackground();
   }
 
   /** True when the node's icon draws as a small corner marker rather than filling the box. */
@@ -521,7 +338,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /** Edge stroke (themed): preserves chosen colors, themes the implicit default. */
   private edgeStrokeColor(d: any): string | null {
-    return this.isAlignmentEdge(d) ? 'none' : this.themedDataColor(d.color, '--cnd-edge-color', null);
+    return this.isAlignmentEdge(d) ? 'none' : this.themeController.dataColor(d.color, '--cnd-edge-color', null);
   }
 
   /**
@@ -571,63 +388,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
   attributeChangedCallback(name: string, _oldValue: string | null, newValue: string | null): void {
     if (name === 'theme') {
       const requested = newValue || 'light';
-      if (requested !== this.currentThemeName) {
-        this.setTheme(requested, this.themeOverrides, this.nodeColorOverrides);
+      if (requested !== this.themeController.name) {
+        this.setTheme(requested, this.themeController.overrides, this.themeController.nodeColors);
       }
     } else if (name === 'background') {
       // `background` is canvas sugar; re-apply so it composes with the base
       // theme in either mode (and so clearing it reverts to the theme canvas).
       this.applyTheme();
     }
-  }
-
-  /**
-   * Resolve a data-driven stroke/fill color that may be the *implicit* black
-   * default (Alloy/Forge assign `"black"` to uncolored edges, node borders, and
-   * type labels). A genuinely chosen non-black color is preserved under every
-   * theme; the implicit black/empty default is replaced with the theme's slot
-   * value when the active theme defines that slot, so edges, arrowheads (which
-   * inherit via `context-stroke`), and borders stay legible on a themed canvas.
-   * Under the light baseline (no slot) the literal fallback is used — unchanged.
-   */
-  private themedDataColor(
-    color: string | null | undefined,
-    slotKey: keyof typeof WebColaCnDGraph.DARK_THEME,
-    lightFallback: string | null
-  ): string | null {
-    const isImplicitDefault =
-      !color || color === 'black' || color === '#000' || color === '#000000';
-    const themed = this.themeOverrides[slotKey] ?? this.activeSlots()[slotKey];
-    if (themed !== undefined) {
-      return isImplicitDefault ? themed : color!;
-    }
-    return color || lightFallback;
-  }
-
-  /**
-   * Default font stack. Atkinson Hyperlegible (Braille Institute, OFL) is
-   * designed for low-vision and dyslexic readers — distinguishable letterforms
-   * (a/g/q/d, 0/O, 1/l/I) without looking childlike. Falls back to system-ui
-   * if the host hasn't loaded the web font.
-   */
-  private static readonly DEFAULT_FONT_FAMILY = "'Atkinson Hyperlegible', system-ui, -apple-system, sans-serif";
-
-  /**
-   * Returns the active font stack: the host's `font-family` attribute if
-   * set, otherwise the Atkinson Hyperlegible default.
-   */
-  private getFontFamily(): string {
-    return this.getAttribute('font-family') ?? WebColaCnDGraph.DEFAULT_FONT_FAMILY;
-  }
-
-  /**
-   * Returns the @import statement(s) needed to load the default font from
-   * Google Fonts. Skipped when the host has set a custom `font-family`, since
-   * users with their own font shouldn't pay for an unused download.
-   */
-  private getFontImports(): string {
-    if (this.hasAttribute('font-family')) return '';
-    return "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');";
   }
 
   /**
@@ -3467,7 +3235,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr("class", "linklabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", this.getFontFamily())
+      .attr("font-family", this.themeController.fontFamily())
       // Edge-label styling from the edge's textStyle block. Use .style() (not
       // .attr) so the inline value overrides the .linklabel CSS rule — a
       // presentation attribute would lose to it. null → the CSS default applies.
@@ -4054,7 +3822,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr("class", "groupLabelBg")
       .attr("rx", 6)
       .attr("ry", 6)
-      .attr("fill", this.getCanvasBackground())
+      .attr("fill", this.themeController.canvasBackground())
       .attr("fill-opacity", 0.92)
       .attr("stroke", (d: any) => {
         const targetNode = allNodes[d.keyNode];
@@ -4073,7 +3841,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr("class", "groupLabel")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "hanging")
-      .attr("font-family", this.getFontFamily())
+      .attr("font-family", this.themeController.fontFamily())
       .attr("font-size", (d: any) => {
         const computedFontSize = this.calculateGroupLabelFontSize(d, groups);
         d._groupLabelFontSize = computedFontSize;
@@ -4346,7 +4114,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private measureTextWidth(text: string, fontSize: number, fontFamily?: string): number {
     const context = this.getTextMeasurementContext();
-    context.font = `${fontSize}px ${fontFamily ?? this.getFontFamily()}`;
+    context.font = `${fontSize}px ${fontFamily ?? this.themeController.fontFamily()}`;
     return context.measureText(text).width;
   }
 
@@ -4368,7 +4136,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr("class", "label")
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle")
-      .attr("font-family", this.getFontFamily())
+      .attr("font-family", this.themeController.fontFamily())
       .attr("fill", "black")
       .each((d: any, i: number, nodes: ArrayLike<SVGTextElement>) => {
         if (this.isHiddenNode(d)) {
@@ -6882,9 +6650,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private getCSS(): string {
     return getGraphCSS({
-      fontImports: this.getFontImports(),
-      fontFamily: this.getFontFamily(),
-      canvasBackground: this.getCanvasBackground(),
+      fontImports: this.themeController.fontImports(),
+      fontFamily: this.themeController.fontFamily(),
+      canvasBackground: this.themeController.canvasBackground(),
     });
   }
 
@@ -7342,7 +7110,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       bgRect.setAttribute('width', '100%');
       bgRect.setAttribute('height', '100%');
-      bgRect.setAttribute('fill', this.getCanvasBackground());
+      bgRect.setAttribute('fill', this.themeController.canvasBackground());
       svgClone.insertBefore(bgRect, svgClone.firstChild);
 
       // Serialize the clone to a string
@@ -7480,7 +7248,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         if (!ctx) { URL.revokeObjectURL(url); resolve(null); return; }
 
         ctx.scale(scale, scale);
-        ctx.fillStyle = this.getCanvasBackground();
+        ctx.fillStyle = this.themeController.canvasBackground();
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 

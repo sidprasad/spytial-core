@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
+import { lightTheme } from './helpers/renderer-stubs';
 
 const proto = WebColaCnDGraph.prototype as any;
 
@@ -26,14 +27,12 @@ describe('webcola-cnd-graph — line pattern → stroke-dasharray', () => {
 });
 
 describe('webcola-cnd-graph — edge color → stroke', () => {
-    // A theme-less `this`: no slots defined, so themedDataColor returns the
-    // chosen color verbatim (its theming branch only fires for the implicit
-    // black default under an active theme slot).
+    // The light baseline defines no slots, so the controller returns the chosen
+    // color verbatim — its theming branch only fires for the implicit black
+    // default under an active theme slot.
     const themeless = {
         isAlignmentEdge: () => false,
-        themedDataColor: proto.themedDataColor,
-        themeOverrides: {},
-        activeSlots: () => ({}),
+        themeController: lightTheme(),
     };
 
     it('passes a chosen edge color straight through to the stroke', () => {

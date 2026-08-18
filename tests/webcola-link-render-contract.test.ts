@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as d3 from 'd3';
+import { lightTheme } from './helpers/renderer-stubs';
 
 /**
  * The render-side half of the link-path lookup coverage.
@@ -61,7 +62,7 @@ function renderLinks(links: any[]) {
     isAlignmentEdge: () => false,
     isInferredEdge: (d: any) => String(d.id).startsWith('_inferred'),
     edgeStrokeColor: () => 'black',
-    getFontFamily: () => 'sans-serif',
+    themeController: lightTheme(),
   };
 
   proto.setupLinks.call(graph, links, null);

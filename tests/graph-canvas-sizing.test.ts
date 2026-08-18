@@ -14,15 +14,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { stylesheetHost } from './helpers/renderer-stubs';
 
 const proto = WebColaCnDGraph.prototype as any;
 
-const cssFor = (): string =>
-    proto.getCSS.call({
-        getFontImports: () => '',
-        getFontFamily: () => 'sans-serif',
-        getCanvasBackground: () => '#fffff8',
-    });
+const cssFor = (): string => proto.getCSS.call(stylesheetHost());
 
 /** Body of the first rule matching `selector` (an id) in the shadow stylesheet. */
 const rule = (css: string, selector: string): string => {

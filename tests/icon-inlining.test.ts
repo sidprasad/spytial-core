@@ -27,6 +27,7 @@ import {
     resolveIconPath,
 } from '../src/layout/icon-registry';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { stylesheetHost } from './helpers/renderer-stubs';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const XLINK_NS = 'http://www.w3.org/1999/xlink';
@@ -286,11 +287,7 @@ describe('themed glyph color', () => {
         // `currentColor` is only half the fix — this rule is what it resolves
         // against. Light keeps the historical pure black; a dark canvas sets
         // --cnd-label-text and the glyph follows the labels.
-        const css: string = proto.getCSS.call({
-            getFontImports: () => '',
-            getFontFamily: () => 'sans-serif',
-            getCanvasBackground: () => '#fffff8',
-        });
+        const css: string = proto.getCSS.call(stylesheetHost());
         expect(css).toMatch(/\.node-icon\s*\{[^}]*color:\s*var\(--cnd-label-text,\s*#000\)/);
     });
 });
