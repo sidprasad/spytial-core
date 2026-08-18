@@ -391,20 +391,15 @@ Projection is **not** part of the spec language. A `- projection:` entry in a `d
 
 Projections are a **pre-layout data transformation**: you rewrite the data instance before handing it to the layout, rather than asking the layout to do it.
 
-```typescript
-import { applyProjectionTransform } from 'spytial-core';
+spytial-core does not do that rewrite for you. It shipped `applyProjectionTransform` through 5.x and removed it in 6.0.0 — the engine had no use for it, and every host that projects was already doing so in its own data layer. Build the projected instance in your host, then diagram it:
 
-const { instance, choices } = applyProjectionTransform(
-  originalInstance,
-  [{ sig: 'Time', orderBy: 'next' }],
-  selections,                       // type → chosen atom id
-  { evaluateOrderBy: (sel) => evaluator.evaluate(sel) },
-);
+```typescript
+const projected = myHostProjection(originalInstance, { sig: 'Time', atom: 'Time0' });
+
+const layout = new LayoutInstance(spec, evaluator).generateLayout(projected).layout;
 ```
 
-Without `orderBy`, atoms are ordered alphabetically by id; with it, the selector returns pairs `(a, b)` meaning "a comes before b" and atoms are topologically sorted, breaking cycles lexicographically. `evaluateOrderBy` is required for `orderBy` to have any effect.
-
-For an interactive version — a type/atom picker plus navigation — drive `applyProjectionTransform` from your own UI: it returns the projected instance along with the choices available for each projected type. See the [API Reference](api-reference.md#projection-transform).
+For an interactive version — a type/atom picker plus navigation — keep the picker state in your own UI, rebuild the projected instance when the selection changes, and re-render. Ordering (which atom is "next") is a question about your data, so your host is the only place that can answer it well.
 
 ---
 

@@ -222,18 +222,6 @@
             <textarea id="instance-export-output" readonly placeholder="Exported view will appear here..."></textarea>
         </div>
         
-        <!-- Inline Projection Controls -->
-        <div id="projection-panel" class="mb-3">
-            <h6 class="h6 text-dark">Projections:</h6>
-            <div class="d-flex gap-2 mb-2">
-                <input id="projection-type-input" type="text" class="form-control form-control-sm"
-                       placeholder="Type name (e.g. Node, Int)" autocomplete="off" />
-                <button id="addProjectionBtn" class="btn btn-sm btn-outline-primary" onclick="addProjection()" style="white-space:nowrap">Add</button>
-            </div>
-            <div id="projection-error" class="text-danger small mb-2" style="display:none"></div>
-            <div id="projection-list"></div>
-        </div>
-        
         <!-- Sequence Explorer for multiple instances -->
         <div id="sequence-explorer" class="mb-3" style="display: none;">
             <h6 class="h6 text-dark">Sequence Explorer:</h6>
@@ -294,11 +282,7 @@
         let cachedEvaluatorInstanceIndex = null;
         let cachedLayoutSpec = null;       // Cached layout specification
         
-        // Projection state (maps type to selected atom)
-        // Active projections: array of { sig: string }
-        let activeProjections = [];
         // User selections: maps type name → selected atom id
-        let projectionSelections = {};
         // The projected IDataInstance (null = use raw)
         window._projectedInstance = null;
 
@@ -525,14 +509,6 @@
                 alloyInstances = parsedAlloyDatum.instances;
                 currentInstanceIndex = 0;
                 
-                // IMPORTANT: Reset projections when loading new data
-                window._projectedInstance = null;
-                activeProjections = [];
-                projectionSelections = {};
-                const projListEl = document.getElementById('projection-list');
-                if (projListEl) projListEl.innerHTML = '';
-                clearProjectionError();
-                
                 // Show sequence explorer if multiple instances
                 updateSequenceExplorer();
 
@@ -619,34 +595,9 @@
             // Step 5: Generate layout using Alloy data instance
             updateStatus('Generating layout with Alloy data...', 'info');
 
-            // Apply projection transform if any projections are active
-            let instanceForLayout = alloyDataInstance;
-            if (activeProjections.length > 0) {
-                try {
-                    const result = CndCore.applyProjectionTransform(
-                        alloyDataInstance,
-                        activeProjections,
-                        projectionSelections
-                    );
-                    instanceForLayout = result.instance;
-                    window._projectedInstance = result.instance;
-                    // Update the atom dropdowns with the choices
-                    renderProjectionChoices(result.choices);
-                } catch (err) {
-                    console.error('Projection transform failed:', err);
-                    showProjectionError(err.message);
-                    // Render rows with remove buttons so the user can fix/remove the bad projection.
-                    // Pass empty choices — renderProjectionChoices falls back to "Type not found" per row.
-                    renderProjectionChoices([]);
-                    // Fall back to un-projected
-                }
-            } else {
-                window._projectedInstance = null;
-            }
-
             let layoutResult;
             try {
-                layoutResult = layoutInstance.generateLayout(instanceForLayout);
+                layoutResult = layoutInstance.generateLayout(alloyDataInstance);
                 currentInstanceLayout = layoutResult.layout;
 
                 // 1. Report selector errors, but keep rendering. A broken selector drops
@@ -1028,139 +979,6 @@
             }
         }
 
-        // ── Projection UI (vanilla JS) ─────────────────────────────────
-
-        /** Show an error message in the projection panel */
-        function showProjectionError(msg) {
-            const el = document.getElementById('projection-error');
-            el.textContent = msg;
-            el.style.display = 'block';
-        }
-
-        /** Hide the projection error */
-        function clearProjectionError() {
-            const el = document.getElementById('projection-error');
-            el.textContent = '';
-            el.style.display = 'none';
-        }
-
-        /** Add a new projection type from the input field */
-        function addProjection() {
-            const input = document.getElementById('projection-type-input');
-            const sig = input.value.trim();
-            if (!sig) return;
-
-            // Prevent duplicates
-            if (activeProjections.some(p => p.sig === sig)) {
-                showProjectionError('Already projecting over "' + sig + '".');
-                return;
-            }
-
-            clearProjectionError();
-            activeProjections.push({ sig });
-            input.value = '';
-
-            // Re-run layout with the new projection
-            rerunProjectedLayout();
-        }
-
-        /** Remove a projection and re-run layout */
-        function removeProjection(sig) {
-            activeProjections = activeProjections.filter(p => p.sig !== sig);
-            delete projectionSelections[sig];
-            clearProjectionError();
-            rerunProjectedLayout();
-        }
-
-        /** Handle atom selection change for a projected type */
-        function onProjectionAtomChange(sig, atomId) {
-            projectionSelections[sig] = atomId;
-            rerunProjectedLayout();
-        }
-
-        /** Re-run layout with current projection state */
-        async function rerunProjectedLayout() {
-            if (!alloyInstances.length || !cachedEvaluator || !cachedLayoutSpec) return;
-            try {
-                await generateLayoutForCurrentInstance();
-                await renderGraph();
-            } catch (error) {
-                console.error('Error re-running projected layout:', error);
-                updateStatus('Projection layout error: ' + error.message, 'error');
-            }
-        }
-
-        /**
-         * Render the projection atom-selector dropdowns.
-         * Called after applyProjectionTransform returns choices.
-         */
-        function renderProjectionChoices(choices) {
-            const listEl = document.getElementById('projection-list');
-            listEl.innerHTML = '';
-
-            for (const proj of activeProjections) {
-                const choice = choices.find(c => c.type === proj.sig);
-
-                const row = document.createElement('div');
-                row.className = 'd-flex align-items-center gap-2 mb-1';
-
-                // Tag with remove button
-                const tag = document.createElement('span');
-                tag.className = 'badge bg-secondary d-flex align-items-center gap-1';
-                tag.textContent = proj.sig;
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'btn-close btn-close-white ms-1';
-                removeBtn.style.fontSize = '0.5rem';
-                removeBtn.setAttribute('aria-label', 'Remove ' + proj.sig);
-                removeBtn.onclick = () => removeProjection(proj.sig);
-                tag.appendChild(removeBtn);
-                row.appendChild(tag);
-
-                // Atom dropdown
-                if (choice && choice.atoms.length > 0) {
-                    const select = document.createElement('select');
-                    select.className = 'form-select form-select-sm';
-                    select.style.maxWidth = '200px';
-                    select.setAttribute('aria-label', 'Atom for ' + proj.sig);
-                    for (const atom of choice.atoms) {
-                        const opt = document.createElement('option');
-                        opt.value = atom;
-                        opt.textContent = atom;
-                        if (atom === choice.projectedAtom) opt.selected = true;
-                        select.appendChild(opt);
-                    }
-                    select.onchange = () => onProjectionAtomChange(proj.sig, select.value);
-                    row.appendChild(select);
-                } else if (choice) {
-                    const noAtoms = document.createElement('span');
-                    noAtoms.className = 'text-muted small';
-                    noAtoms.textContent = 'No atoms';
-                    row.appendChild(noAtoms);
-                } else {
-                    const notFound = document.createElement('span');
-                    notFound.className = 'text-danger small';
-                    notFound.textContent = 'Type not found';
-                    row.appendChild(notFound);
-                }
-
-                listEl.appendChild(row);
-            }
-
-            // If no projections, show nothing
-            if (activeProjections.length === 0) {
-                listEl.innerHTML = '';
-            }
-        }
-
-        // Wire up the Enter key on the projection text input
-        document.getElementById('projection-type-input')?.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addProjection();
-            }
-        });
-
         // Expose functions globally for buttons
         // ─── Spatial Query REPL ────────────────────────────────────────────
         function initSpatialQueryPanel(layoutResult) {
@@ -1218,8 +1036,6 @@
         window.clearGraph = clearGraph;
         window.navigateInstance = navigateInstance;
         window.resetAll = resetAll;
-        window.addProjection = addProjection;
-        window.removeProjection = removeProjection;
     </script>
 </body>
 </html>

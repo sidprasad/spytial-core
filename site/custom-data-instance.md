@@ -45,7 +45,7 @@ You only need this if:
 
 - Your data is huge and JSON serialization would be wasteful.
 - Your host already has a graph data structure you'd prefer to reuse.
-- You want fine-grained control over the `applyProjections` rewrite or the `generateGraph` step.
+- You want fine-grained control over the `generateGraph` step.
 
 The interface ([src/data-instance/interfaces.ts](https://github.com/sidprasad/spytial-core/blob/main/src/data-instance/interfaces.ts)) is small:
 
@@ -56,10 +56,11 @@ interface IDataInstance {
   getAtoms(): readonly IAtom[];
   getRelations(): readonly IRelation[];
 
-  applyProjections(atomIds: string[]): IDataInstance;
   generateGraph(hideDisconnected: boolean, hideDisconnectedBuiltIns: boolean): Graph;
 }
 ```
+
+It got smaller in 6.0.0: `applyProjections` is gone. Adapters used to have to write a projection rewrite the engine never called. If your host projects, do it in your own data layer and hand the engine the instance you want diagrammed.
 
 For mutable instances (e.g. an interactive instance builder), `IInputDataInstance` extends it with `addAtom`, `removeAtom`, `addRelationTuple`, `removeRelationTuple`, an event system, `addFromDataInstance`, and a `reify(): unknown` round-trip back to the source language.
 

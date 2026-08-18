@@ -86,7 +86,7 @@ For reproducibility (papers, locked notebooks), keep the version pinned in the s
 
 Visualization often depends on information that is not present in the value you are walking. Handle those cases explicitly:
 
-**Implicit ordering.** A `set` has no order. A red-black tree's left/right children are ordered, but a Python `dict` of children is not (until 3.7). When users want a stable left-to-right rendering, you need to either (a) preserve insertion order during relationalization, or (b) emit an explicit ordering relation and drive an `orientation` constraint off it (or pass it as `orderBy` to `applyProjectionTransform`, if you are stepping through states). Caraspace uses field declaration order; sPyTial uses dictionary insertion order.
+**Implicit ordering.** A `set` has no order. A red-black tree's left/right children are ordered, but a Python `dict` of children is not (until 3.7). When users want a stable left-to-right rendering, you need to either (a) preserve insertion order during relationalization, or (b) emit an explicit ordering relation and drive an `orientation` constraint off it (or carry the order in your own projection step, if you are stepping through states). Caraspace uses field declaration order; sPyTial uses dictionary insertion order.
 
 **Derived metrics.** Tree height, subtree size, RB-tree black-height, balance factor — none of these live in the data, but users want to color or label by them. Two options:
 
@@ -97,7 +97,7 @@ Caraspace's red-black tree example does the first.
 
 **Hidden structure.** Sharing in immutable values, reference cycles (Python), interior pointers (Rust). The relationalizer must decide whether to expose sharing as one atom referenced twice (faithful) or two duplicate atoms (cleaner-looking, but false). Faithful is the default; offer a "duplicate-on-share" mode if the visual blow-up is too painful.
 
-**Cycles in the projection ordering.** When a projection is given `orderBy: "next"` and `next` has a cycle, `applyProjectionTransform` breaks the cycle by lexicographic order. If your host can produce a more meaningful tiebreak (e.g. source-position in Pyret), you can pass an `evaluateOrderBy` callback that returns a deterministic ordering.
+**Cycles in the projection ordering.** If your host projects over an ordered type and the ordering relation has a cycle, you need a deterministic tiebreak — source position in Pyret, say, or lexicographic order as a last resort. spytial-core does not project (see [Directives](directives.md)), so this is entirely the host's call.
 
 **Ambient state the user can't see.** Debugger frames, evaluation contexts, proof goals. Decide what counts as "the value" for diagramming and what is environment that should be summarised (or omitted).
 

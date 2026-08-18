@@ -381,7 +381,7 @@ authoritative parser (`src/layout/layoutspec.ts`):
 - **`projection` is NOT a registry entry.** The design listed it "if currently
   parsed by `parseLayoutSpec`". It is not: `parseLayoutSpec` has no `projection`
   branch (projection is a runtime UI concern in the Alloy demo — atom-selection
-  panels — applied via `instance.applyProjections(...)`, not a spec directive).
+  panels — a host-side data transform, not a spec directive).
   Adding a registry entry would emit YAML the engine rejects, breaking the
   round-trip-through-`parseLayoutSpec` invariant. Revisit if the parser gains a
   `projection:` directive.

@@ -1,7 +1,6 @@
 export * from './src/atom';
 export * from './src/datum';
 export * from './src/instance';
-export * from './src/projection';
 export * from './src/relation';
 export * from './src/tuple';
 export * from './src/type';

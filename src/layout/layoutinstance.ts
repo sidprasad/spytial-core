@@ -708,7 +708,7 @@ export class LayoutInstance {
      * @param validatorStrategy - Which constraint validator to use. `QUALITATIVE` is the only strategy and the default; the parameter is kept so existing positional callers still compile.
      *
      * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
-     * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
+     * It applies constraints and directives to produce a structured layout that can be rendered using a graph visualization library.
      */
     constructor(
         layoutSpec: LayoutSpec,
@@ -868,7 +868,7 @@ export class LayoutInstance {
     /**
      * Generates groups based on the specified graph.
      * @param g - The graph, which will be modified to remove the edges that are used to generate groups.
-     * @param a - The ORIGINAL (pre-projection) Data Instance.
+     * @param a - The Data Instance.
      * @returns A record of groups.
      */
     private normalizeComparableGroupToken(token: string): string {
@@ -1451,8 +1451,9 @@ export class LayoutInstance {
 
     /**
      * Generates the layout for the given data instance.
-     * Projections should be applied to the data instance before calling this method
-     * using `applyProjectionTransform()` from the data-instance module.
+     * The engine lays out exactly the instance it is handed. To diagram a
+     * projected view, project in the host and pass the resulting instance —
+     * spytial-core dropped its own projection helpers in 6.0.0.
      *
      * When a hideAtom directive hides an atom that a layout constraint references, the
      * spec is unsatisfiable: the atom cannot be both hidden and placed. The returned

@@ -730,9 +730,9 @@ constraints:
 
 ---
 
-> **Note:** Projection is no longer a layout directive. Projections are applied as a pre-layout
-> data transformation using `applyProjectionTransform()`. See the [DEV_GUIDE](./DEV_GUIDE.md) 
-> for details on the projection transform API.
+> **Note:** Projection is not a layout directive, and since 6.0.0 it is not part of
+> spytial-core at all. Project your data in the host and pass the projected instance
+> to the engine. See the [DEV_GUIDE](./DEV_GUIDE.md).
 
 ---
 

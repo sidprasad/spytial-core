@@ -647,43 +647,6 @@ describe('DotDataInstance — generateGraph', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 10. applyProjections — returns new instance
-// ═══════════════════════════════════════════════════════════════════════════════
-
-describe('DotDataInstance — applyProjections', () => {
-  it('returns a new instance with only the specified atoms', () => {
-    const inst = new DotDataInstance(`digraph {
-      a [type="Person" label="Alice"];
-      b [type="Person" label="Bob"];
-      c [type="Course" label="CS"];
-      a -> c [label="enrolled"];
-      b -> c [label="enrolled"];
-    }`);
-
-    const projected = inst.applyProjections(['a', 'c']);
-    expect(projected.nodeCount).toBe(2);
-    expect(atomIds(projected)).toEqual(['a', 'c']);
-
-    // Only edges between kept atoms survive.
-    expect(projected.edgeCount).toBe(1);
-    expect(projected.getRelations()[0].id).toBe('enrolled');
-
-    // Original is unaffected.
-    expect(inst.nodeCount).toBe(3);
-  });
-
-  it('preserves type attributes in projection', () => {
-    const inst = new DotDataInstance(
-      'digraph { a [type="Person" label="Alice"]; b; a -> b [label="r"]; }',
-      { typeConfig: { types: { Person: { extends: 'Entity' } } } },
-    );
-    const projected = inst.applyProjections(['a']);
-    const atom = projected.getAtoms().find((a) => a.id === 'a')!;
-    expect(atom.type).toBe('Person');
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════════
 // 11. reify — round-trip to DOT
 // ═══════════════════════════════════════════════════════════════════════════════
 

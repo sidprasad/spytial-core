@@ -1147,47 +1147,6 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     return graph;
   }
 
-  /**
-   * Applies projections to filter the data instance
-   */
-  applyProjections(atomIds: string[]): PyretDataInstance {
-    if (atomIds.length === 0) {
-      return this;
-    }
-
-    // Create a new instance with filtered data
-    const projected = Object.create(PyretDataInstance.prototype) as PyretDataInstance;
-    projected.atoms = new Map([...this.atoms].filter(([id]) => atomIds.includes(id)));
-    projected.relations = new Map();
-    projected.types = new Map();
-    projected.atomCounter = projected.atoms.size;
-
-    // Filter relations to only include tuples where all atoms are in the projection
-    this.relations.forEach((relation, name) => {
-      const filteredTuples = relation.tuples.filter(tuple =>
-        tuple.atoms.every(atomId => atomIds.includes(atomId))
-      );
-      if (filteredTuples.length > 0) {
-        projected.relations.set(name, {
-          ...relation,
-          tuples: filteredTuples
-        });
-      }
-    });
-
-    // Filter types to only include atoms in the projection
-    this.types.forEach((type, typeName) => {
-      const filteredAtoms = type.atoms.filter(atom => atomIds.includes(atom.id));
-      if (filteredAtoms.length > 0) {
-        projected.types.set(typeName, {
-          ...type,
-          atoms: filteredAtoms
-        });
-      }
-    });
-
-    return projected;
-  }
 
   /**
    * Adds a PyretDataInstance to this instance, optionally unifying built-in types

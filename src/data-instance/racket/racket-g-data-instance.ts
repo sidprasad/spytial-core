@@ -174,21 +174,6 @@ export class RacketGDataInstance implements IDataInstance {
         return this.relations;
     }
 
-    /**
-     * Apply projections to the data instance, returning a new instance with only the
-     * atoms and relations that are in the given atomIds.
-     * 
-     * SidP: TODO: I'm not sure if this is the right interpretation of projections.
-     * I don't think its the same as Alloy projections.
-     */
-    applyProjections(_atomIds: string[]): IDataInstance {
-
-        // TODO: NO PROJECTION FOR NOW.
-
-        return this; // No projection applied, return the original instance
-
-
-    }
 
     /**
      * Generate a graphlib Graph from the data instance.

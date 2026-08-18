@@ -22,7 +22,8 @@ import { IDataInstance } from '../data-instance/interfaces';
 /**
  * Convenience function to set up and generate a layout
  * @param spec The layout specification (YAML content or LayoutSpec object)
- * @param instance The data instance to layout (apply projections before passing)
+ * @param instance The data instance to layout. To diagram a projected view,
+ *                 project in the host and pass the resulting instance.
  * @param evaluator The evaluator to use for constraint evaluation
  * @returns The generated layout
  */
