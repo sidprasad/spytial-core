@@ -19,12 +19,15 @@ export interface SettledTuple {
  * Settle a tuple's column types against the relation it is being written into.
  *
  * `IRelation.types` is POSITIONAL — one entry per column, read back as
- * `relation.types[index]` (projections) and as the relation's arity
- * (`relation.types.length`, in the schema descriptor and the SQL evaluator).
- * It is NOT a set of the types a relation touches, so a write must never
- * append to it: sending per-atom types would otherwise widen the column list,
- * turning a binary `Person -> City` into `[Person, City, Student]` the first
- * time a `Student` endpoint shows up.
+ * `relation.types[index]` by the schema descriptor. It is NOT a set of the
+ * types a relation touches, so a write must never append to it: sending
+ * per-atom types would otherwise widen the column list, turning a binary
+ * `Person -> City` into `[Person, City, Student]` the first time a `Student`
+ * endpoint shows up.
+ *
+ * It is a SUMMARY, and only exists when every tuple has the same arity. A
+ * relation is allowed to be ragged — one name holding tuples of different
+ * arity — and a ragged relation carries `types: []`.
  *
  * The rules:
  * - The relation already declares one type per column: that signature wins.
@@ -37,8 +40,8 @@ export interface SettledTuple {
  *   signature, and not from whatever the caller passed, which is routinely a
  *   placeholder such as `'unknown'`.
  * - The relation declares a different NUMBER of columns than the tuple has
- *   atoms: the relation is already inconsistent (mixed arity). Warn and leave
- *   its signature alone rather than widen it, which would hide the problem.
+ *   atoms: the relation is ragged. Clear its signature to `[]` — no positional
+ *   list describes it — and give the tuple its own seeded one.
  *
  * @param tuple - The tuple being written (`types` may be missing or a placeholder)
  * @param relation - The relation it is going into, or undefined if it is new
@@ -62,12 +65,14 @@ export function settleTupleTypes(
   const seeded = tuple.atoms.map((id, i) => atomType(id) ?? supplied[i] ?? 'untyped');
 
   if (declared.length > 0) {
-    console.warn(
-      `settleTupleTypes: relation "${relation!.id}" declares ${declared.length} column type(s) ` +
-      `(${declared.join(', ')}) but this tuple has ${arity} atom(s) ` +
-      `(${tuple.atoms.join(', ')}); leaving the declared signature alone.`
-    );
-    return { tuple: { ...tuple, types: seeded }, relationTypes: [...declared] };
+    // The relation is now RAGGED: it declares one width, this tuple is another.
+    // That is legal — one name may hold tuples of different arity — but no
+    // positional list describes the relation any more, so drop the signature to
+    // `[]`. Keeping the declared one would leave a width that only some tuples
+    // match, and every reader of `relation.types` would be told the wrong
+    // thing. This is the same answer the bulk JSON path reaches in
+    // DataInstanceNormalizer.inferRelationSignatures.
+    return { tuple: { ...tuple, types: seeded }, relationTypes: [] };
   }
 
   return { tuple: { ...tuple, types: seeded }, relationTypes: seeded };

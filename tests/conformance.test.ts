@@ -135,18 +135,21 @@ describe('checkDatum', () => {
         expect(diagnostics[0].severity).toBe('warning');
     });
 
-    it('warns about a relation whose tuples have different arities', () => {
+    it('says nothing about a relation whose tuples have different arities', () => {
+        // Ragged relations are legal — one name may hold tuples of different
+        // width. Two Python classes with a `foo` field of different shape land
+        // here, and drawing, selectors and constraints all cope tuple by tuple.
         const datum = {
             atoms: [
                 { id: 'a', type: 'Node', label: 'a' },
                 { id: 'b', type: 'Node', label: 'b' },
             ],
             relations: [{
-                id: 'r', name: 'r', types: ['Node', 'Node'],
+                id: 'r', name: 'r', types: [],
                 tuples: [{ atoms: ['a'] }, { atoms: ['a', 'b'] }],
             }],
         };
-        expect(codes(checkDatum(datum))).toContain('datum/ragged-relation');
+        expect(codes(checkDatum(datum))).toEqual([]);
     });
 
     it('does not compare tuple arity against the relation types list', () => {

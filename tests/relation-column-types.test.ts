@@ -10,13 +10,16 @@ import type { ITuple } from '../src/data-instance/interfaces';
 
 /**
  * `IRelation.types` is POSITIONAL: one entry per column, read back as
- * `relation.types[index]` (projections) and as the relation's arity
- * (`relation.types.length`, in the schema descriptor and the SQL evaluator).
+ * `relation.types[index]` by the schema descriptor.
  *
  * A write must therefore never append to it. These tests pin that invariant on
  * every implementation that stores a signature, against a Person/Student/City
  * hierarchy: writing a `Student` endpoint into a relation declared
  * `Person -> City` must not turn its types into `[Person, City, Student]`.
+ *
+ * The list is only a SUMMARY, and only exists while every tuple has the same
+ * width. Relations are allowed to be ragged, and a ragged one carries `[]` —
+ * see tests/ragged-relations.test.ts.
  */
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -162,7 +165,7 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
     expect(relationNamed(instance, 'born_in').types).toEqual(['Student', 'City']);
   });
 
-  it('warns and leaves the signature alone on an arity mismatch', () => {
+  it('clears the signature, without complaint, when a write makes the relation ragged', () => {
     const instance = new JSONDataInstance(personStudentCity());
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -171,9 +174,23 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
       types: ['Person', 'Student', 'City'],
     });
 
-    expect(relationNamed(instance, 'lives_in').types).toEqual(['Person', 'City']);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('lives_in'));
+    // Ragged is legal, so no positional list describes the relation any more.
+    // Keeping `[Person, City]` would claim a width only one of the two tuples
+    // has; widening it would claim a width neither has.
+    expect(relationNamed(instance, 'lives_in').types).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+  });
+
+  it('keeps every tuple when a write makes the relation ragged', () => {
+    const instance = new JSONDataInstance(personStudentCity());
+    instance.addRelationTuple('lives_in', { atoms: ['P1', 'S1', 'C1'], types: [] } as unknown as ITuple);
+
+    const tuples = relationNamed(instance, 'lives_in').tuples;
+    expect(tuples.map(t => t.atoms.length).sort()).toEqual([2, 3]);
+    // The wide tuple keeps its OWN signature: the relation has none to lend it.
+    const wide = tuples.find(t => t.atoms.length === 3)!;
+    expect(wide.types).toEqual(['Person', 'Student', 'City']);
   });
 
   it('keeps the SQL schema binary after a subtype endpoint is written', () => {

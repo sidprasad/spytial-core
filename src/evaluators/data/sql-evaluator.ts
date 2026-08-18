@@ -280,11 +280,25 @@ export class SQLEvaluator implements IEvaluator {
     const tableName = this.sanitizeTableName(relation.name);
     const arity = relation.types.length;
 
-    // An arity-0 relation (an empty relation with no inferable signature, e.g.
-    // `{ name, tuples: [] }` from lenient JSON) has no columns — `CREATE TABLE
-    // t ()` is a SQL parse error. It carries no queryable data, so skip it
-    // rather than aborting initialize() for every other relation.
+    // No signature means no columns, and `CREATE TABLE t ()` is a SQL parse
+    // error, so skip the relation rather than abort initialize() for every
+    // other one. Two things land here:
+    //   - an empty relation with nothing to infer from (`{ name, tuples: [] }`
+    //     from lenient JSON) — nothing queryable is lost;
+    //   - a RAGGED relation, whose tuples disagree on width. Those carry
+    //     `types: []` by design (see IRelation), and this evaluator has no
+    //     shape for them yet. Skipping loses the whole relation, so say so —
+    //     the alternative, forcing them into a fixed-width table, silently
+    //     truncated the wider tuples.
+    // TODO: give ragged relations a table (widest arity, NULL-padded).
     if (arity === 0) {
+      if (relation.tuples.length > 0) {
+        console.warn(
+          `SQLEvaluator: relation "${relation.name}" has no single column signature ` +
+          `(its ${relation.tuples.length} tuples do not agree on a width), so no table was ` +
+          `created for it. Query it through the selector evaluator instead.`
+        );
+      }
       return;
     }
 

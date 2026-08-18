@@ -214,7 +214,6 @@ Warnings are reported but do not fail a case:
 |---|---|
 | `datum/atom-missing-label` | the node will render without readable text |
 | `datum/empty-relation` | selectors over it will match nothing |
-| `datum/ragged-relation` | one relation mixes tuple arities |
 | `datum/tuple-type-arity-mismatch` | a tuple's `types` and `atoms` are different lengths |
 | `layout/warning` | the engine's own advisories — an unresolved name, a deprecated form |
 

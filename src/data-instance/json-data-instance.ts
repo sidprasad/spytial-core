@@ -795,11 +795,14 @@ export class DataInstanceNormalizer {
    * final relation: for each position, the shared type when all tuples agree,
    * else 'univ'.
    *
-   * A signature is trusted (left as-is) only when it is arity-consistent —
-   * `types.length === tuple arity`. Anything else is (re)derived from the
-   * tuples. That covers three cases, all of which must end up length === arity
-   * or SQLEvaluator (which reads `relation.types.length` as the arity)
-   * misbehaves:
+   * Relations may be RAGGED — tuples of different arity under one name. No
+   * positional list can describe those, so their signature is `[]`.
+   *
+   * Otherwise a signature is trusted (left as-is) only when it is
+   * arity-consistent — `types.length === tuple arity`. Anything else is
+   * (re)derived from the tuples. That covers three cases, all of which must end
+   * up length === arity or readers of the signature (the schema descriptor,
+   * SQLEvaluator) misbehave:
    *   1. the `[]` placeholder normalizeRelationShape leaves for lenient input;
    *   2. a signature `mergeRelations` collapsed via its type-dedup — a
    *      homogeneous `['Person','Person']` merged into a `[]` placeholder
@@ -820,6 +823,18 @@ export class DataInstanceNormalizer {
       // signature the caller gave (e.g. an empty relation declared
       // `types: ['Person','Person'], tuples: []`); only a missing one stays [].
       if (tuples.length === 0) return relation;
+
+      // Ragged relation: the tuples disagree on arity, so no positional list
+      // describes them. `[]` is IRelation.types' "no shared signature" value.
+      // Taking the arity from tuples[0] instead would hand back a signature
+      // that only some of the tuples match, and every reader of
+      // `relation.types` would then be told the wrong width.
+      if (new Set(tuples.map(t => t.atoms.length)).size > 1) {
+        return Array.isArray(relation.types) && relation.types.length === 0
+          ? relation
+          : { ...relation, types: [] };
+      }
+
       const arity = tuples[0].atoms.length;
       if (Array.isArray(relation.types) && relation.types.length === arity) return relation;
       const types = Array.from({ length: arity }, (_, i) => {
