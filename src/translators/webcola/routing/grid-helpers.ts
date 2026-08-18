@@ -1,4 +1,15 @@
-import type { Point } from './types';
+import type { GridRouter, Rectangle } from 'webcola';
+import type { BoundsRect, Point, RoutableNode } from './types';
+import { getCola, requireCola } from './cola-runtime';
+
+/**
+ * What the flatten passes read from an edge: the ids of its two endpoints, so
+ * a segment isn't judged to collide with the very nodes it connects.
+ */
+interface EdgeEndpoints {
+  source?: { id?: string };
+  target?: { id?: string };
+}
 
 /**
  * Pure route-cleanup helpers for the grid (orthogonal) pipeline. The pipeline
@@ -7,9 +18,9 @@ import type { Point } from './types';
  */
 
 /** Flattens Cola GridRouter segment output ([start, end] pairs) into a point list. */
-export function gridRouteToPoints(route: any[]): Point[] {
+export function gridRouteToPoints(route: Point[][]): Point[] {
   const points: Point[] = [];
-  route.forEach((segment: any, index: number) => {
+  route.forEach((segment, index) => {
     if (index === 0) {
       points.push({ x: segment[0].x, y: segment[0].y });
     }
@@ -66,7 +77,7 @@ export function dropCollinearGridPoints(points: Point[]): Point[] {
 export function isOrthogonalSegmentClearOfNodes(
   a: Point,
   b: Point,
-  nodes: any[],
+  nodes: RoutableNode[],
   excludeIds: Set<string>,
   margin: number
 ): boolean {
@@ -75,7 +86,7 @@ export function isOrthogonalSegmentClearOfNodes(
   if (!isHorizontal && !isVertical) return false;
 
   for (const node of nodes) {
-    if (excludeIds.has(node.id)) continue;
+    if (node.id !== undefined && excludeIds.has(node.id)) continue;
     const bounds = node.bounds || node.innerBounds;
     if (!bounds) continue;
 
@@ -112,8 +123,8 @@ export function isOrthogonalSegmentClearOfNodes(
  */
 export function flattenGridRouteZShapes(
   points: Point[],
-  nodes: any[],
-  edge: any
+  nodes: RoutableNode[],
+  edge: EdgeEndpoints | undefined
 ): Point[] {
   const MAX_FLATTEN_ATTEMPTS = 16;
   const NODE_COLLISION_MARGIN = 2; // px
@@ -181,8 +192,8 @@ export function flattenGridRouteZShapes(
  */
 export function flattenGridRouteUBumps(
   points: Point[],
-  nodes: any[],
-  edge: any
+  nodes: RoutableNode[],
+  edge: EdgeEndpoints | undefined
 ): Point[] {
   if (points.length < 5) return points;
   const MAX_FLATTEN_ATTEMPTS = 16;
@@ -247,7 +258,7 @@ export function flattenGridRouteUBumps(
  * @param nodes - All current layout nodes (for collision checks)
  * @param edge - The edge being flattened (its endpoints are excluded from collision checks)
  */
-export function flattenGridRouteBends(route: any[], nodes: any[], edge: any): any[] {
+export function flattenGridRouteBends(route: Point[][], nodes: RoutableNode[], edge: EdgeEndpoints | undefined): Point[][] {
   try {
     if (!route || route.length < 2) return route;
 
@@ -292,8 +303,8 @@ export function flattenGridRouteBends(route: any[], nodes: any[], edge: any): an
  */
 export function cleanupOrthogonalRoute(
   points: Point[],
-  nodes: any[],
-  edge: any,
+  nodes: RoutableNode[],
+  edge: EdgeEndpoints | undefined,
   allowFlatten: boolean
 ): Point[] {
   if (!points || points.length < 3) return points;
@@ -309,4 +320,249 @@ export function cleanupOrthogonalRoute(
     if (out.length === before) break; // converged
   }
   return out;
+}
+
+/**
+ * A node or group as the WebCola GridRouter needs to see it: a rectangle, and
+ * for groups the indices of the children it contains.
+ */
+interface GridRouterNode {
+  id?: number;
+  name?: string;
+  bounds?: Rectangle;
+  children?: number[];
+}
+
+/** A layout node or group, plus the router view {@link buildGridRouter} stamps on it. */
+interface GridRoutable {
+  id?: string | number;
+  index?: number;
+  name?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  visualWidth?: number;
+  visualHeight?: number;
+  bounds?: Rectangle;
+  innerBounds?: Rectangle;
+  leaves?: Array<{ index?: number }>;
+  groups?: Array<{ id?: number }>;
+  routerNode?: GridRouterNode;
+}
+
+/**
+ * A node's rectangle derived straight from its position and visual size, for
+ * grid routing when WebCola hasn't produced bounds yet. Null before the
+ * WebCola runtime has loaded.
+ */
+export function fallbackBounds(node: GridRoutable): Rectangle | null {
+  const cola = getCola();
+  if (!cola?.Rectangle) {
+    return null;
+  }
+  const halfWidth = ((node.visualWidth ?? node.width) || 50) / 2;
+  const halfHeight = ((node.visualHeight ?? node.height) || 30) / 2;
+  const x = (node.x || 0) - halfWidth;
+  const X = (node.x || 0) + halfWidth;
+  const y = (node.y || 0) - halfHeight;
+  const Y = (node.y || 0) + halfHeight;
+  return new cola.Rectangle(x, X, y, Y);
+}
+
+/**
+ * Builds the WebCola GridRouter for one orthogonal routing pass.
+ *
+ * Router nodes cover both plain nodes and groups: a group contributes its
+ * inflated-inward rectangle plus the indices of its children, so the router
+ * treats it as a container to route around rather than through. Stamps
+ * `routerNode` on each input as a side effect — the grid pipeline reads it back
+ * when mapping routes to edges.
+ */
+export function buildGridRouter(
+  nodes: GridRoutable[] = [],
+  groups: GridRoutable[] = [],
+  margin: number,
+  groupMargin: number
+): GridRouter<GridRouterNode> {
+  nodes.forEach((d) => {
+    d.routerNode = {
+      name: d.name,
+      bounds: d.bounds || d.innerBounds || fallbackBounds(d) || undefined,
+    };
+  });
+  groups.forEach((d) => {
+    if (!d.bounds) {
+      console.warn("Grid routing group missing bounds; routing may be degraded.", d);
+    }
+    d.routerNode = {
+      bounds: d.bounds?.inflate(-groupMargin) ?? d.bounds,
+      children: (typeof d.groups !== 'undefined' ? d.groups.map((c) => nodes.length + (c.id ?? 0)) : [])
+        .concat(typeof d.leaves !== 'undefined' ? d.leaves.map((c) => c.index ?? 0) : []),
+    };
+  });
+  const gridRouterNodes = nodes.concat(groups).map((d, i) => {
+    if (!d.routerNode) {
+      return null;
+    }
+    d.routerNode.id = i;
+    return d.routerNode;
+  }).filter((n): n is GridRouterNode => n !== null);
+
+  return new (requireCola().GridRouter)(gridRouterNodes, {
+    getChildren: (v: GridRouterNode) => v.children!,
+    getBounds: (v: GridRouterNode) => v.bounds!,
+  }, margin - groupMargin);
+}
+
+/**
+ * Which way two rectangles are adjacent: 'horizontal' when they sit side by
+ * side, 'vertical' when stacked, 'none' when they are further apart than
+ * `threshold` or don't overlap on the shared axis.
+ */
+export function touchDirection(a: BoundsRect, b: BoundsRect, threshold: number): 'horizontal' | 'vertical' | 'none' {
+  const aLeft = a.x;
+  const aRight = a.x + a.width();
+  const aTop = a.y;
+  const aBottom = a.y + a.height();
+
+  const bLeft = b.x;
+  const bRight = b.x + b.width();
+  const bTop = b.y;
+  const bBottom = b.y + b.height();
+
+  const xGap = Math.max(0, Math.max(bLeft - aRight, aLeft - bRight));
+  const yGap = Math.max(0, Math.max(bTop - aBottom, aTop - bBottom));
+
+  // Side-by-side needs vertical overlap; stacked needs horizontal overlap.
+  const verticalOverlap = !(aBottom < bTop || bBottom < aTop);
+  const horizontalOverlap = !(aRight < bLeft || bRight < aLeft);
+
+  if (xGap <= threshold && verticalOverlap) {
+    return 'horizontal';
+  }
+  if (yGap <= threshold && horizontalOverlap) {
+    return 'vertical';
+  }
+  return 'none';
+}
+
+/**
+ * Endpoints and waypoints for an edge between two near-touching nodes, routed
+ * out of the sides PERPENDICULAR to the direction they touch in. Drawn straight
+ * across, such an edge would be a stub hidden in the gap between the nodes.
+ */
+export function perpendicularRoute(
+  sourceBounds: BoundsRect,
+  targetBounds: BoundsRect,
+  touching: 'horizontal' | 'vertical'
+): { sourcePoint: Point; targetPoint: Point; middlePoints: Point[] } {
+  const sw = sourceBounds.width();
+  const sh = sourceBounds.height();
+  const tw = targetBounds.width();
+  const th = targetBounds.height();
+
+  const sCenterX = sourceBounds.x + sw / 2;
+  const sCenterY = sourceBounds.y + sh / 2;
+  const tCenterX = targetBounds.x + tw / 2;
+  const tCenterY = targetBounds.y + th / 2;
+
+  /** How far clear of the nodes the detour runs. */
+  const ROUTE_OFFSET = 15;
+
+  if (touching === 'horizontal') {
+    // Nodes sit side by side — go over the top or under the bottom.
+    if (sCenterY <= tCenterY) {
+      const routeY = Math.min(sourceBounds.y, targetBounds.y) - ROUTE_OFFSET;
+      return {
+        sourcePoint: { x: sCenterX, y: sourceBounds.y },
+        targetPoint: { x: tCenterX, y: targetBounds.y },
+        middlePoints: [{ x: sCenterX, y: routeY }, { x: tCenterX, y: routeY }],
+      };
+    }
+    const routeY = Math.max(sourceBounds.y + sh, targetBounds.y + th) + ROUTE_OFFSET;
+    return {
+      sourcePoint: { x: sCenterX, y: sourceBounds.y + sh },
+      targetPoint: { x: tCenterX, y: targetBounds.y + th },
+      middlePoints: [{ x: sCenterX, y: routeY }, { x: tCenterX, y: routeY }],
+    };
+  }
+
+  // Nodes are stacked — go around the left or the right.
+  if (sCenterX <= tCenterX) {
+    const routeX = Math.min(sourceBounds.x, targetBounds.x) - ROUTE_OFFSET;
+    return {
+      sourcePoint: { x: sourceBounds.x, y: sCenterY },
+      targetPoint: { x: targetBounds.x, y: tCenterY },
+      middlePoints: [{ x: routeX, y: sCenterY }, { x: routeX, y: tCenterY }],
+    };
+  }
+  const routeX = Math.max(sourceBounds.x + sw, targetBounds.x + tw) + ROUTE_OFFSET;
+  return {
+    sourcePoint: { x: sourceBounds.x + sw, y: sCenterY },
+    targetPoint: { x: targetBounds.x + tw, y: tCenterY },
+    middlePoints: [{ x: routeX, y: sCenterY }, { x: routeX, y: tCenterY }],
+  };
+}
+
+/**
+ * The point halfway ALONG a grid route (by arc length), where its label goes.
+ * Falls back to the midpoint between the two node centres when the edge has no
+ * route yet, and to the middle waypoint if the arc-length walk can't land.
+ */
+export function gridRouteMidpoint(
+  edgeData: { id: string; source?: GridRoutable; target?: GridRoutable },
+  routesByEdgeId: Map<string, Point[][]>
+): Point | null {
+  const route = routesByEdgeId.get(edgeData.id);
+  if (!route) {
+    // node.x/y first (same as the standard pipeline), bounds as the fallback.
+    const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
+    const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
+    const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
+    const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
+    return { x: (sourceX + targetX) / 2, y: (sourceY + targetY) / 2 };
+  }
+
+  const points: Point[] = [];
+  route.forEach((segment) => {
+    if (points.length === 0 && segment.length > 0) {
+      points.push(segment[0]);
+    }
+    if (segment.length > 1) {
+      points.push(segment[1]);
+    }
+  });
+
+  if (points.length < 2) {
+    return null;
+  }
+
+  let totalLength = 0;
+  const segmentLengths: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    segmentLengths.push(length);
+    totalLength += length;
+  }
+
+  // Walk the polyline until half its length is behind us.
+  const targetLength = totalLength / 2;
+  let accumulatedLength = 0;
+  for (let i = 0; i < segmentLengths.length; i++) {
+    const segmentLength = segmentLengths[i];
+    if (accumulatedLength + segmentLength >= targetLength) {
+      const remainingLength = targetLength - accumulatedLength;
+      const t = segmentLength > 0 ? remainingLength / segmentLength : 0;
+      return {
+        x: points[i].x + t * (points[i + 1].x - points[i].x),
+        y: points[i].y + t * (points[i + 1].y - points[i].y),
+      };
+    }
+    accumulatedLength += segmentLength;
+  }
+
+  return points[Math.floor(points.length / 2)];
 }

@@ -2,7 +2,7 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
-import type { GridRouter, Layout, ID3StyleLayoutAdaptor } from 'webcola';
+import type { Layout, ID3StyleLayoutAdaptor } from 'webcola';
 
 /**
  * What `cola.d3adaptor()` actually hands back: a Layout plus the D3 shims.
@@ -19,24 +19,39 @@ import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
   type RoutingModeDefinition,
-  type RectSide,
   choosePortSides,
-  sideCenter,
-  SIDE_NORMALS,
   getRoutingMode,
   listRoutingModes,
   TautRouter,
   EDGE_CLEARANCE_PX,
   CROSSING_OPTIMIZATION_EDGE_THRESHOLD,
   clipLineToRectExit,
-  isPointOnRectPerimeter,
-  sideNormal,
   getRouteLength,
   filletPath,
   gridRouteToPoints,
   pointsToGridRoute,
   flattenGridRouteBends,
   cleanupOrthogonalRoute,
+  getCola,
+  requireCola,
+  visibleBounds,
+  renderedBounds,
+  closestPointOnRect,
+  clipEndpointToVisibleBoundary,
+  addTangentGuides,
+  dominantDirection,
+  stableEdgePath,
+  portAttachment,
+  applyPortBasedEndpointsOrthogonal,
+  applyEdgeOffsetWithIndex,
+  calculateCurvatureWithIndex,
+  clampCurvature,
+  applyCurvatureToRoute,
+  applyLabelDisplacement,
+  buildGridRouter,
+  touchDirection,
+  perpendicularRoute,
+  gridRouteMidpoint,
 } from './routing';
 
 // Guarded: this module is reachable from the npm entries' static import graph
@@ -44,21 +59,7 @@ import {
 // (SSR, tests, headless evaluation) even though the element itself needs a DOM.
 // In the browser these evaluate exactly as before.
 let d3 = typeof window !== 'undefined' ? (window.d3v4 || window.d3) : undefined; // Use d3 v4 if available, otherwise fallback to the default window.d3
-let cola = typeof window !== 'undefined' ? window.cola : undefined;
 
-/**
- * The vendored WebCola runtime, asserted present.
- *
- * For code that only runs inside a live render (routing, bounds) the library is
- * necessarily loaded — `renderLayout` throws long before these are reached if it
- * is not. This keeps that invariant in one place instead of a null check per use.
- */
-function requireCola(): NonNullable<typeof cola> {
-  if (!cola) {
-    throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
-  }
-  return cola;
-}
 
 /**
  * Checks if two SVG elements are overlapping.
@@ -659,42 +660,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly GROUP_LABEL_PILL_PADDING_Y = 3;
   private static readonly GROUP_LABEL_PILL_OFFSET_Y = 4;
   private static readonly DEFAULT_GROUP_COMPACTNESS = 1e-5;
-
-  /**
-   * Configuration constants for edge routing
-   */
-  private static readonly EDGE_ROUTE_MARGIN_DIVISOR = 3;
-  private static readonly CURVATURE_BASE_MULTIPLIER = 0.15;
-  private static readonly MIN_EDGE_DISTANCE = 10;
-  private static readonly MAX_EDGE_OFFSET_RATIO = 0.35;
-  private static readonly MAX_EDGE_CURVATURE_RATIO = 0.6;
   private static readonly SELF_LOOP_CURVATURE_SCALE = 0.2;
   private static readonly VIEWBOX_PADDING = 10;
-
-  // Router configuration constants (EDGE_CLEARANCE_PX, TAUT_*, the polish-pass
-  // gates, …) live in ./routing — shared between the routers and this
-  // component's obstacle/port machinery.
-  private static readonly PORT_MARGIN_FRACTION = 0.15;
-  /**
-   * Minimum perimeter distance (px) between adjacent ports on the same node side.
-   * Translates to ≈18° angular separation for a node half-dimension of ~30px,
-   * which is the threshold above which fanning edges read as visually distinct.
-   * Used by computePortMargin() to shrink the side margin when port density is high.
-   */
-  private static readonly MIN_PORT_PERIMETER_SPACING = 10;
-  /**
-   * Absolute floor on port-margin (px). Below this, ports start to visually
-   * collide with the node's corner radius and arrowheads can splay weirdly.
-   * Even on overcrowded nodes, margin is never reduced below this value.
-   */
-  private static readonly MIN_ABSOLUTE_PORT_MARGIN_PX = 2;
-  /**
-   * Visible (rendered) inset for group containers, expressed as the inverse
-   * of the inflation applied at routing time (see route() — `bounds.inflate(-groupMargin)`).
-   * Edges should clip to this visible boundary so arrowheads land on the
-   * rendered group rectangle rather than on the inflated WebCola bounds.
-   */
-  private static readonly GROUP_VISUAL_MARGIN_PX = 10;
 
   /**
    * Configuration constants for WebCola layout iterations
@@ -947,7 +914,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   private routerHost(): RouterHost {
     return this.cachedRouterHost ??= {
-      portAttachment: (edge, end) => this.getPortAttachment(edge, end),
+      portAttachment: (edge, end) => portAttachment(edge, end),
       obstaclesFor: (edge) => this.buildRouterObstacles(edge),
       obstacles: () => {
         if (!this.routerObstacleCache) this.buildRouterObstacleCache();
@@ -2388,13 +2355,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       if (!d3) {
         throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
       }
-      if (!cola) {
-        if(!window.cola) {
-
-          throw new Error('WebCola library not available. Please ensure vendor/cola.js is loaded.');
-        }
-        cola = window.cola;
-      }
+      requireCola();
 
       // Ensure D3 and container are properly initialized
       if (!this.container || !this.svg) {
@@ -2490,7 +2451,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const convergenceThreshold = hasPriorPositions ? 0.1 : 1e-3;
 
       // Create WebCola layout using d3adaptor
-      const layout: D3Layout = cola.d3adaptor(d3)
+      const layout: D3Layout = requireCola().d3adaptor(d3)
         .linkDistance(linkLength)
         .convergenceThreshold(convergenceThreshold)
         .avoidOverlaps(true)
@@ -4535,7 +4496,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * way until real bounds arrive.
    */
   private ensureGroupBounds(group: any, ref: any): void {
-    const Rectangle = (cola as any)?.Rectangle;
+    const Rectangle = getCola()?.Rectangle;
     if (!group || group.bounds || !ref || ref.x == null || ref.y == null || !Rectangle) return;
     const hw = (ref.visualWidth ?? ref.width ?? 100) / 2;
     const hh = (ref.visualHeight ?? ref.height ?? 60) / 2;
@@ -4747,7 +4708,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         // Use stable anchor-based edge routing to prevent jitter during dragging
         // This approach selects consistent edge anchor points based on dominant direction
         // rather than computing dynamic ray intersections that can jump erratically
-        const route = this.getStableEdgePath(source, target, d);
+        const route = stableEdgePath(source, target, d);
         return this.lineFunction(route);
       })
       .attr('marker-end', (d: EdgeWithMetadata) => {
@@ -5152,7 +5113,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * @param forceRecompute - If true, always recompute bounds even if they exist
    */
   private ensureNodeBounds(forceRecompute: boolean = false): void {
-    if (!this.currentLayout?.nodes || !cola?.Rectangle) return;
+    const Rectangle = getCola()?.Rectangle;
+    if (!this.currentLayout?.nodes || !Rectangle) return;
 
     for (const node of this.currentLayout.nodes) {
       // Skip if bounds already exist and are valid, unless forceRecompute is true
@@ -5177,7 +5139,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const y = (node.y || 0) - halfHeight;
       const Y = (node.y || 0) + halfHeight;
 
-      node.bounds = new cola.Rectangle(x, X, y, Y);
+      node.bounds = new Rectangle(x, X, y, Y);
       node.innerBounds = node.bounds.inflate(-1);
     }
   }
@@ -5242,8 +5204,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         // blocker — see routing/port-sides.ts. The stamps drive bucketing
         // here, the attachment point/normal in getPortAttachment, and the
         // distribution axis in applyPortBasedEndpoints, so all three agree.
-        const sB = this.getRenderedBounds(edge.source);
-        const tB = this.getRenderedBounds(edge.target);
+        const sB = renderedBounds(edge.source);
+        const tB = renderedBounds(edge.target);
         const choice = choosePortSides(
           { minX: sB.x, minY: sB.y, maxX: sB.x + sB.width(), maxY: sB.y + sB.height() },
           { minX: tB.x, minY: tB.y, maxX: tB.x + tB.width(), maxY: tB.y + tB.height() },
@@ -5256,8 +5218,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       } else {
         // Grid pipeline: historical dominant-direction bucketing.
         const angle = Math.atan2(targetCy - sourceCy, targetCx - sourceCx);
-        const sourceDirRaw = this.getDominantDirection(angle);
-        const targetDirRaw = this.getDominantDirection(angle + Math.PI); // Reverse direction for target
+        const sourceDirRaw = dominantDirection(angle);
+        const targetDirRaw = dominantDirection(angle + Math.PI); // Reverse direction for target
         // Map getDominantDirection's 'up'/'down' to our 'top'/'bottom' side names
         const dirToSide = (d: string | null): 'top' | 'bottom' | 'left' | 'right' | null => {
           if (d === 'up') return 'top';
@@ -5351,38 +5313,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private getNodePairKey(sourceId: string, targetId: string): string {
     return sourceId < targetId ? `${sourceId}:${targetId}` : `${targetId}:${sourceId}`;
-  }
-
-  private route(nodes: any[] = [], groups: any[] = [], margin: number, groupMargin: number): GridRouter<any> {
-    nodes.forEach((d: any) => {
-      const bounds = d.bounds || d.innerBounds || this.createFallbackBounds(d);
-      d.routerNode = {
-        name: d.name,
-        bounds
-      };
-    });
-    groups.forEach((d: any) => {
-      if (!d.bounds) {
-        console.warn("Grid routing group missing bounds; routing may be degraded.", d);
-      }
-      d.routerNode = {
-        bounds: d.bounds?.inflate(-groupMargin) ?? d.bounds,
-        children: (typeof d.groups !== 'undefined' ? d.groups.map((c: any) => nodes.length + c.id) : [])
-          .concat(typeof d.leaves !== 'undefined' ? d.leaves.map((c: any) => c.index) : [])
-      };
-    });
-    let gridRouterNodes = nodes.concat(groups).map((d: any, i: number) => {
-      if (!d.routerNode) {
-        return null;
-      }
-      d.routerNode.id = i;
-      return d.routerNode;
-    }).filter(Boolean);
-    // NOTE: Router nodes are nodes needed for grid routing, which include both nodes and groups
-    return new (requireCola().GridRouter)(gridRouterNodes, {
-        getChildren: (v: any) => v.children,
-        getBounds: (v: any) => v.bounds
-    }, margin - groupMargin);
   }
 
   private gridify(nudgeGap: number, margin: number, groupMargin: number): void {
@@ -5486,7 +5416,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       this.sortEdgePortsByAngle();
 
       // Create the grid router
-      const gridrouter = this.route(nodes, groups, margin, groupMargin);
+      const gridrouter = buildGridRouter(nodes, groups, margin, groupMargin);
 
       // Route all edges using the GridRouter
       let routes: any[] = [];
@@ -5694,7 +5624,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
             // Fallback if path is not yet rendered
           }
         }
-        const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
+        const midpoint = gridRouteMidpoint(edgeData, routesByEdgeId);
         // Use node.x/y as primary source (same as default mode)
         return midpoint?.x ?? (edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0);
       })
@@ -5710,74 +5640,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
             // Fallback if path is not yet rendered
           }
         }
-        const midpoint = this.getGridRouteMidpoint(edgeData, routesByEdgeId);
+        const midpoint = gridRouteMidpoint(edgeData, routesByEdgeId);
         // Use node.x/y as primary source (same as default mode)
         return midpoint?.y ?? (edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0);
       })
       .attr("text-anchor", "middle")
       .attr("dominant-baseline", "middle");
-  }
-
-  private getGridRouteMidpoint(edgeData: any, routesByEdgeId: Map<string, any>) {
-    const route = routesByEdgeId.get(edgeData.id);
-    if (!route) {
-      // Use node.x/y as primary source (same as default mode) with bounds as fallback
-      const sourceX = edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0;
-      const sourceY = edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0;
-      const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
-      const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
-      return {
-        x: (sourceX + targetX) / 2,
-        y: (sourceY + targetY) / 2
-      };
-    }
-
-    // Build array of all points in the route
-    const points: Array<{ x: number; y: number }> = [];
-    route.forEach((segment: any) => {
-      if (points.length === 0 && segment.length > 0) {
-        points.push(segment[0]);
-      }
-      if (segment.length > 1) {
-        points.push(segment[1]);
-      }
-    });
-
-    if (points.length < 2) {
-      return null;
-    }
-
-    // Calculate total path length
-    let totalLength = 0;
-    const segmentLengths: number[] = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const dx = points[i + 1].x - points[i].x;
-      const dy = points[i + 1].y - points[i].y;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      segmentLengths.push(length);
-      totalLength += length;
-    }
-
-    // Find the segment containing the midpoint
-    const targetLength = totalLength / 2;
-    let accumulatedLength = 0;
-    for (let i = 0; i < segmentLengths.length; i++) {
-      const segmentLength = segmentLengths[i];
-      if (accumulatedLength + segmentLength >= targetLength) {
-        // Midpoint is in this segment
-        const remainingLength = targetLength - accumulatedLength;
-        const t = segmentLength > 0 ? remainingLength / segmentLength : 0;
-        return {
-          x: points[i].x + t * (points[i + 1].x - points[i].x),
-          y: points[i].y + t * (points[i + 1].y - points[i].y)
-        };
-      }
-      accumulatedLength += segmentLength;
-    }
-
-    // Fallback to geometric midpoint of all points
-    const midIndex = Math.floor(points.length / 2);
-    return points[midIndex];
   }
 
   private adjustGridRouteForEdge(edgeData: any, route: any[]) {
@@ -5816,13 +5684,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Use the *visible* rectangle (visualWidth/visualHeight for plain nodes,
       // inset bounds for groups) so the arrowhead lands on the rendered border
       // rather than on WebCola's inflated collision rectangle.
-      const sourceBounds = this.getVisibleBounds(source) ?? source.bounds ?? {
+      const sourceBounds = visibleBounds(source) ?? source.bounds ?? {
         x: source.x - (source.width || 0) / 2,
         y: source.y - (source.height || 0) / 2,
         width: () => source.width || 0,
         height: () => source.height || 0
       };
-      const targetBounds = this.getVisibleBounds(target) ?? target.bounds ?? {
+      const targetBounds = visibleBounds(target) ?? target.bounds ?? {
         x: target.x - (target.width || 0) / 2,
         y: target.y - (target.height || 0) / 2,
         width: () => target.width || 0,
@@ -5831,12 +5699,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
       // Check if nodes are near-touching and determine which direction
       const NEAR_TOUCH_THRESHOLD = 5;
-      const touchDirection = this.getTouchDirection(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD);
+      const touching = touchDirection(sourceBounds, targetBounds, NEAR_TOUCH_THRESHOLD);
 
-      if (touchDirection !== 'none') {
+      if (touching !== 'none') {
         // Nodes are near-touching, route edge from perpendicular sides
-        const { sourcePoint, targetPoint, middlePoints } = this.computePerpendicularRoute(
-          sourceBounds, targetBounds, touchDirection
+        const { sourcePoint, targetPoint, middlePoints } = perpendicularRoute(
+          sourceBounds, targetBounds, touching
         );
         
         // Build new path: source anchor -> middle waypoints -> target anchor
@@ -5849,8 +5717,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // segments, so we just snap route[0]/route[last] along the egress axis to
       // the visible side. Falls back to a center-line rectangle intersection if
       // the original segment isn't orthogonal (defensive — shouldn't happen).
-      points[0] = this.clipEndpointToVisibleBoundary(points[0], points[1], sourceBounds);
-      points[points.length - 1] = this.clipEndpointToVisibleBoundary(
+      points[0] = clipEndpointToVisibleBoundary(points[0], points[1], sourceBounds);
+      points[points.length - 1] = clipEndpointToVisibleBoundary(
         points[points.length - 1],
         points[points.length - 2],
         targetBounds
@@ -5859,7 +5727,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Distribute parallel edges across distinct ports on the visible boundary
       // and re-orthogonalize the entry/exit segments. Must run AFTER rectangle
       // clipping so the port shift isn't overwritten.
-      const portAdjusted = this.applyPortBasedEndpointsOrthogonal(edgeData, points);
+      const portAdjusted = applyPortBasedEndpointsOrthogonal(edgeData, points);
 
       // Final cleanup: the clip and port-shift steps above introduce backtrack
       // spurs (an L-bend that doubles back along the entry axis) and small
@@ -5878,274 +5746,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
       console.warn('Error adjusting grid route for arrow positioning:', error);
       return null;
     }
-  }
-
-  /**
-   * Snap an endpoint of an orthogonal route to the visible-boundary side it
-   * already exits, preserving axis alignment with the neighboring waypoint.
-   *
-   * For a route like [(245, 92), (245, -120), …], the first segment is
-   * vertical (same x), so route[0] is on the top or bottom of source. We pick
-   * whichever side route[0] is closer to and snap that coordinate to the
-   * visible boundary while keeping the perpendicular coordinate intact —
-   * preserving orthogonality automatically.
-   *
-   * Falls back to a center-line rectangle intersection if the original
-   * endpoint→neighbor segment isn't axis-aligned.
-   */
-  private clipEndpointToVisibleBoundary(
-    endpoint: { x: number; y: number },
-    neighbor: { x: number; y: number },
-    bounds: any
-  ): { x: number; y: number } {
-    const cx = bounds.x + bounds.width() / 2;
-    const cy = bounds.y + bounds.height() / 2;
-    const bx = bounds.x;
-    const bX = typeof bounds.X === 'number' ? bounds.X : bounds.x + bounds.width();
-    const by = bounds.y;
-    const bY = typeof bounds.Y === 'number' ? bounds.Y : bounds.y + bounds.height();
-    const eps = 0.5;
-
-    const dx = neighbor.x - endpoint.x;
-    const dy = neighbor.y - endpoint.y;
-
-    if (Math.abs(dx) < eps && Math.abs(dy) >= eps) {
-      // Vertical segment — endpoint is on top or bottom.
-      const targetY = endpoint.y > cy ? bY : by;
-      return { x: endpoint.x, y: targetY };
-    }
-    if (Math.abs(dy) < eps && Math.abs(dx) >= eps) {
-      // Horizontal segment — endpoint is on left or right.
-      const targetX = endpoint.x > cx ? bX : bx;
-      return { x: targetX, y: endpoint.y };
-    }
-
-    // Fallback: defensive rectangle intersection from center to neighbor.
-    const intersection = this.getRectangleIntersection(cx, cy, neighbor.x, neighbor.y, bounds);
-    return intersection ?? endpoint;
-  }
-
-  /**
-   * Determines which direction nodes are touching/near.
-   * Returns 'horizontal' if touching left-right, 'vertical' if touching top-bottom, 'none' otherwise.
-   */
-  private getTouchDirection(a: any, b: any, threshold: number): 'horizontal' | 'vertical' | 'none' {
-    const aLeft = a.x;
-    const aRight = a.x + a.width();
-    const aTop = a.y;
-    const aBottom = a.y + a.height();
-
-    const bLeft = b.x;
-    const bRight = b.x + b.width();
-    const bTop = b.y;
-    const bBottom = b.y + b.height();
-
-    // Check horizontal gap (left-right touching)
-    const xGap = Math.max(0, Math.max(bLeft - aRight, aLeft - bRight));
-    // Check vertical gap (top-bottom touching)
-    const yGap = Math.max(0, Math.max(bTop - aBottom, aTop - bBottom));
-
-    // Check if there's vertical overlap (needed for horizontal adjacency)
-    const verticalOverlap = !(aBottom < bTop || bBottom < aTop);
-    // Check if there's horizontal overlap (needed for vertical adjacency)
-    const horizontalOverlap = !(aRight < bLeft || bRight < aLeft);
-
-    // Nodes are horizontally adjacent (touching left-right) if:
-    // - Small horizontal gap AND vertical overlap
-    if (xGap <= threshold && verticalOverlap) {
-      return 'horizontal';
-    }
-
-    // Nodes are vertically adjacent (touching top-bottom) if:
-    // - Small vertical gap AND horizontal overlap
-    if (yGap <= threshold && horizontalOverlap) {
-      return 'vertical';
-    }
-
-    return 'none';
-  }
-
-  /**
-   * Computes anchor points and waypoints for edges between near-touching nodes.
-   * Routes the edge from perpendicular sides to avoid being hidden.
-   */
-  private computePerpendicularRoute(
-    sourceBounds: any,
-    targetBounds: any,
-    touchDirection: 'horizontal' | 'vertical'
-  ): { sourcePoint: { x: number; y: number }; targetPoint: { x: number; y: number }; middlePoints: Array<{ x: number; y: number }> } {
-    const sw = sourceBounds.width();
-    const sh = sourceBounds.height();
-    const tw = targetBounds.width();
-    const th = targetBounds.height();
-
-    const sCenterX = sourceBounds.x + sw / 2;
-    const sCenterY = sourceBounds.y + sh / 2;
-    const tCenterX = targetBounds.x + tw / 2;
-    const tCenterY = targetBounds.y + th / 2;
-
-    // Offset for the routing bend (go around the touching area)
-    const ROUTE_OFFSET = 15;
-
-    if (touchDirection === 'horizontal') {
-      // Nodes are side-by-side (left-right), route from top or bottom
-      // Determine whether to go above or below based on available space
-      const goTop = sCenterY <= tCenterY;
-      
-      if (goTop) {
-        // Route above both nodes
-        const routeY = Math.min(sourceBounds.y, targetBounds.y) - ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sCenterX, y: sourceBounds.y }, // top of source
-          targetPoint: { x: tCenterX, y: targetBounds.y }, // top of target
-          middlePoints: [
-            { x: sCenterX, y: routeY },
-            { x: tCenterX, y: routeY }
-          ]
-        };
-      } else {
-        // Route below both nodes
-        const routeY = Math.max(sourceBounds.y + sh, targetBounds.y + th) + ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sCenterX, y: sourceBounds.y + sh }, // bottom of source
-          targetPoint: { x: tCenterX, y: targetBounds.y + th }, // bottom of target
-          middlePoints: [
-            { x: sCenterX, y: routeY },
-            { x: tCenterX, y: routeY }
-          ]
-        };
-      }
-    } else {
-      // Nodes are stacked (top-bottom), route from left or right
-      // Determine whether to go left or right based on available space
-      const goLeft = sCenterX <= tCenterX;
-
-      if (goLeft) {
-        // Route to the left of both nodes
-        const routeX = Math.min(sourceBounds.x, targetBounds.x) - ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sourceBounds.x, y: sCenterY }, // left of source
-          targetPoint: { x: targetBounds.x, y: tCenterY }, // left of target
-          middlePoints: [
-            { x: routeX, y: sCenterY },
-            { x: routeX, y: tCenterY }
-          ]
-        };
-      } else {
-        // Route to the right of both nodes
-        const routeX = Math.max(sourceBounds.x + sw, targetBounds.x + tw) + ROUTE_OFFSET;
-        return {
-          sourcePoint: { x: sourceBounds.x + sw, y: sCenterY }, // right of source
-          targetPoint: { x: targetBounds.x + tw, y: tCenterY }, // right of target
-          middlePoints: [
-            { x: routeX, y: sCenterY },
-            { x: routeX, y: tCenterY }
-          ]
-        };
-      }
-    }
-  }
-
-  /**
-   * Normalizes node bounds to a consistent format with x, y and width/height as functions.
-   */
-  private normalizeNodeBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
-    // Use visual dimensions for rendering bounds (not the inflated collision width/height)
-    const vw = node.visualWidth ?? node.width ?? 50;
-    const vh = node.visualHeight ?? node.height ?? 30;
-    const bounds = node.bounds || {
-      x: node.x - vw / 2,
-      y: node.y - vh / 2,
-      width: () => vw,
-      height: () => vh
-    };
-    
-    return {
-      x: typeof bounds.x === 'number' ? bounds.x : (bounds.X !== undefined ? bounds.x : node.x - vw / 2),
-      y: typeof bounds.y === 'number' ? bounds.y : node.y - vh / 2,
-      width: () => typeof bounds.width === 'function' ? bounds.width() : (bounds.X !== undefined ? bounds.X - bounds.x : vw),
-      height: () => typeof bounds.height === 'function' ? bounds.height() : (bounds.Y !== undefined ? bounds.Y - bounds.y : vh)
-    };
-  }
-
-  private createFallbackBounds(node: any) {
-    if (!cola?.Rectangle) {
-      return null;
-    }
-    const halfWidth = ((node.visualWidth ?? node.width) || 50) / 2;
-    const halfHeight = ((node.visualHeight ?? node.height) || 30) / 2;
-    const x = (node.x || 0) - halfWidth;
-    const X = (node.x || 0) + halfWidth;
-    const y = (node.y || 0) - halfHeight;
-    const Y = (node.y || 0) + halfHeight;
-    return new cola.Rectangle(x, X, y, Y);
-  }
-
-  /**
-   * Calculate the intersection point between a line and a rectangle.
-   * Used for positioning arrow heads at node boundaries in grid mode.
-   * 
-   * @param x1 - Start x coordinate (usually center of node)
-   * @param y1 - Start y coordinate (usually center of node)
-   * @param x2 - End x coordinate (next point in path)
-   * @param y2 - End y coordinate (next point in path)
-   * @param bounds - Rectangle bounds with x, y, width(), height()
-   * @returns Intersection point or null if no intersection
-   */
-  private getRectangleIntersection(
-    x1: number,
-    y1: number,
-    x2: number,
-    y2: number,
-    bounds: any
-  ): { x: number; y: number } | null {
-    // Get rectangle boundaries
-    const rectLeft = bounds.x;
-    const rectRight = bounds.x + bounds.width();
-    const rectTop = bounds.y;
-    const rectBottom = bounds.y + bounds.height();
-
-    // Calculate line direction
-    const dx = x2 - x1;
-    const dy = y2 - y1;
-
-    // If line has no direction, return center point
-    if (dx === 0 && dy === 0) {
-      return { x: x1, y: y1 };
-    }
-
-    // Find intersection with each rectangle edge
-    let tMin = 0;
-    let tMax = 1;
-
-    // Check intersection with vertical edges (left and right)
-    if (dx !== 0) {
-      const t1 = (rectLeft - x1) / dx;
-      const t2 = (rectRight - x1) / dx;
-      tMin = Math.max(tMin, Math.min(t1, t2));
-      tMax = Math.min(tMax, Math.max(t1, t2));
-    }
-
-    // Check intersection with horizontal edges (top and bottom)
-    if (dy !== 0) {
-      const t1 = (rectTop - y1) / dy;
-      const t2 = (rectBottom - y1) / dy;
-      tMin = Math.max(tMin, Math.min(t1, t2));
-      tMax = Math.min(tMax, Math.max(t1, t2));
-    }
-
-    // If tMin > tMax, there's no intersection
-    if (tMin > tMax) {
-      return null;
-    }
-
-    // Return the intersection point at the rectangle boundary
-    // Use tMin if starting inside, tMax if starting outside
-    const t = tMin > 0 ? tMin : tMax;
-    return {
-      x: x1 + t * dx,
-      y: y1 + t * dy
-    };
   }
 
   /**
@@ -6187,109 +5787,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         if (d.source.id !== d.target.id && !this.isAlignmentEdge(d)) {
           return filletPath(route);
         }
-        return this.lineFunction(this.addTangentGuides(route));
+        return this.lineFunction(addTangentGuides(route));
       });
-  }
-
-  /**
-   * Inserts "tangent guide" points near each endpoint of a multi-point route
-   * to force the d3.curveBasis B-spline tangent to align with the actual
-   * final/first segment direction. Without these, interior control points
-   * can pull the endpoint tangent off-axis, causing arrowhead markers
-   * (orient="auto") to render at odd angles.
-   *
-   * Strategy: insert TWO co-linear guides (far + near) at each endpoint so
-   * the spline's last 2–3 control points all lie on the desired tangent
-   * line. The single-guide approach left enough slack for interior bends to
-   * still skew the endpoint tangent; two guides clamp it much harder.
-   *
-   * For 2-point routes (straight lines), the tangent is already correct
-   * so no guides are added.
-   */
-  private addTangentGuides(
-    route: Array<{ x: number; y: number }>
-  ): Array<{ x: number; y: number }> {
-    if (route.length <= 2) return route;
-
-    // Far guide steers the cubic block's far control; near guide locks the
-    // immediate tangent. Both must be collinear with the final segment.
-    const FAR_MAX = 8;   // px
-    const NEAR_MAX = 2;  // px
-    const result = [...route];
-
-    // ── End: build guides along the final segment direction ──
-    const last = result.length - 1;
-    const dxE = result[last].x - result[last - 1].x;
-    const dyE = result[last].y - result[last - 1].y;
-    const lenE = Math.sqrt(dxE * dxE + dyE * dyE);
-    if (lenE > 0.5) {
-      const ux = dxE / lenE;
-      const uy = dyE / lenE;
-      // Cap each guide at a fraction of the segment so very short final
-      // segments still get guides (the legacy 6px cutoff dropped them and
-      // those are exactly the cases where the arrow looked worst).
-      const farDist = Math.min(FAR_MAX, lenE * 0.5);
-      const nearDist = Math.min(NEAR_MAX, lenE * 0.2);
-      if (farDist > nearDist + 0.1) {
-        // Order: ..., farGuide, nearGuide, last
-        result.splice(last, 0,
-          { x: result[last].x - ux * farDist, y: result[last].y - uy * farDist },
-          { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
-        );
-      } else {
-        // Segment too short for two distinct guides — emit just the near one.
-        result.splice(last, 0,
-          { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
-        );
-      }
-    }
-
-    // ── Start: build guides along the first segment direction ──
-    const dx0 = result[1].x - result[0].x;
-    const dy0 = result[1].y - result[0].y;
-    const len0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
-    if (len0 > 0.5) {
-      const ux = dx0 / len0;
-      const uy = dy0 / len0;
-      const farDist = Math.min(FAR_MAX, len0 * 0.5);
-      const nearDist = Math.min(NEAR_MAX, len0 * 0.2);
-      if (farDist > nearDist + 0.1) {
-        // Order: 0, nearGuide, farGuide, ...
-        result.splice(1, 0,
-          { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist },
-          { x: result[0].x + ux * farDist, y: result[0].y + uy * farDist }
-        );
-      } else {
-        result.splice(1, 0,
-          { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist }
-        );
-      }
-    }
-
-    return result;
-  }
-
-  /**
-   * Returns the *rendered* rectangle of a node — what the user actually sees,
-   * not WebCola's inflated collision bounds. Prefers getVisibleBounds (which
-   * applies visualWidth/visualHeight and the group inset) and falls back to
-   * normalizeNodeBounds when getVisibleBounds can't derive a size.
-   *
-   * Edge endpoint placement should always use this; routing it against
-   * inflated bounds puts the arrowhead in the padding region where the node's
-   * fill covers the marker body.
-   */
-  private getRenderedBounds(node: any): { x: number; y: number; width: () => number; height: () => number } {
-    const visible = this.getVisibleBounds(node);
-    if (visible) {
-      return {
-        x: visible.x,
-        y: visible.y,
-        width: visible.width,
-        height: visible.height,
-      };
-    }
-    return this.normalizeNodeBounds(node);
   }
 
   /**
@@ -6357,8 +5856,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * group-attached end(s) to the group boundary.
    */
   private computeGroupEdgeRoute(edgeData: any): Array<{ x: number; y: number }> {
-    const sB = this.getRenderedBounds(edgeData.source);
-    const tB = this.getRenderedBounds(edgeData.target);
+    const sB = renderedBounds(edgeData.source);
+    const tB = renderedBounds(edgeData.target);
     const sC = { x: sB.x + sB.width() / 2, y: sB.y + sB.height() / 2 };
     const tC = { x: tB.x + tB.width() / 2, y: tB.y + tB.height() / 2 };
     const seed = [
@@ -6366,69 +5865,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
       clipLineToRectExit(tC, sC, tB),
     ];
     return this.routeGroupEdge(edgeData, seed);
-  }
-
-  /**
-   * Derives an edge endpoint as a {point, normal} port on the node's *visible*
-   * perimeter. The point reuses the existing port-distribution machinery
-   * (applyPortBasedEndpoints) so siblings sharing a side fan out; the normal is
-   * the outward unit vector of the side the point lands on, used to force a
-   * perpendicular exit/entry in the router and to orient the arrowhead.
-   *
-   * This makes applyPortBasedEndpoints the *sole* source of endpoints — the new
-   * router never re-derives an attachment point on its own.
-   */
-  private getPortAttachment(
-    edgeData: any,
-    end: 'source' | 'target'
-  ): { point: { x: number; y: number }; normal: { x: number; y: number } } {
-    const node = end === 'source' ? edgeData.source : edgeData.target;
-    const other = end === 'source' ? edgeData.target : edgeData.source;
-    const bounds = this.getRenderedBounds(node);
-    const otherBounds = this.getRenderedBounds(other);
-    const center = { x: bounds.x + bounds.width() / 2, y: bounds.y + bounds.height() / 2 };
-    const otherCenter = { x: otherBounds.x + otherBounds.width() / 2, y: otherBounds.y + otherBounds.height() / 2 };
-
-    // Side stamped by the obstacle-aware chooser during this pass (absent for
-    // callers outside a routing pass, e.g. unit tests — then the ray decides).
-    const stampedSide: RectSide | undefined =
-      end === 'source' ? edgeData._exitSide : edgeData._entrySide;
-
-    // Base perimeter point: where the center→other-center line exits this rect.
-    let point = clipLineToRectExit(center, otherCenter, bounds);
-    if (stampedSide) {
-      // A flipped edge anchors at the stamped side's midpoint — the ray clip
-      // sits on the side facing the blocker, which is exactly what the
-      // chooser decided against.
-      const n = sideNormal(point, bounds);
-      const sn = SIDE_NORMALS[stampedSide];
-      if (n.x !== sn.x || n.y !== sn.y) {
-        const rect = { minX: bounds.x, minY: bounds.y, maxX: bounds.x + bounds.width(), maxY: bounds.y + bounds.height() };
-        point = sideCenter(rect, stampedSide);
-      }
-    }
-
-    // Port distribution: spread siblings on the same side. Reuse
-    // applyPortBasedEndpoints by seeding a 2-point route and reading back the
-    // relevant end. The dominant-direction vs natural-clip side mismatch can
-    // push the distributed point inside the rect — validate and fall back to the
-    // base clip if so.
-    const portCount = end === 'source' ? edgeData._sourcePortCount : edgeData._targetPortCount;
-    if (portCount !== undefined && portCount > 1) {
-      const seed = end === 'source'
-        ? [{ ...point }, { ...otherCenter }]
-        : [{ ...otherCenter }, { ...point }];
-      const distributed = this.applyPortBasedEndpoints(edgeData, seed);
-      const candidate = end === 'source' ? distributed[0] : distributed[distributed.length - 1];
-      if (candidate && isPointOnRectPerimeter(candidate, bounds)) {
-        point = candidate;
-      }
-    }
-
-    return {
-      point,
-      normal: stampedSide ? { ...SIDE_NORMALS[stampedSide] } : sideNormal(point, bounds),
-    };
   }
 
   /**
@@ -6440,7 +5876,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const cache: Array<{ id: string; minX: number; minY: number; maxX: number; maxY: number }> = [];
     const c = EDGE_CLEARANCE_PX;
     for (const node of this.currentLayout?.nodes || []) {
-      const b = this.getRenderedBounds(node);
+      const b = renderedBounds(node);
       const w = b.width(), h = b.height();
       if (w <= 0 && h <= 0) continue;
       cache.push({ id: node.id, minX: b.x - c, minY: b.y - c, maxX: b.x + w + c, maxY: b.y + h + c });
@@ -6469,7 +5905,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const c = EDGE_CLEARANCE_PX;
     for (const node of this.currentLayout.nodes) {
       if (node.id === srcId || node.id === tgtId) continue;
-      const b = this.getRenderedBounds(node);
+      const b = renderedBounds(node);
       const w = b.width(), h = b.height();
       if (w <= 0 && h <= 0) continue;
       obstacles.push({ minX: b.x - c, minY: b.y - c, maxX: b.x + w + c, maxY: b.y + h + c });
@@ -6729,12 +6165,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const tgtRef = tGroup?.bounds ? centerOf(tGroup.bounds) : route[route.length - 1];
 
     if (tGroup?.bounds) {
-      route[route.length - 1] = this.closestPointOnRect(tGroup.bounds, srcRef);
+      route[route.length - 1] = closestPointOnRect(tGroup.bounds, srcRef);
     }
     if (sGroup?.bounds) {
       const bounds = sGroup.bounds.inflate?.(-1) ?? sGroup.bounds;
       // Aim at the (possibly just-snapped) target point for a taut line.
-      route[0] = this.closestPointOnRect(bounds, tGroup?.bounds ? route[route.length - 1] : tgtRef);
+      route[0] = closestPointOnRect(bounds, tGroup?.bounds ? route[route.length - 1] : tgtRef);
     }
 
     // Simplify route — remove intermediate waypoints for group edges.
@@ -6788,10 +6224,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // would clip an obstacle) — endpoint/port offsets are not scaled because
     // they stay on the node perimeter by construction.
     if (edgeIndex !== -1) {
-      route = this.applyEdgeOffsetWithIndex(edgeData, route, allEdgesBetweenNodes, angle, edgeIndex, distance);
-      const curvature = this.calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeData.id, edgeIndex);
-      const cappedCurvature = this.clampCurvature(curvature) * curvatureScale;
-      route = this.applyCurvatureToRoute(route, cappedCurvature, angle, distance);
+      route = applyEdgeOffsetWithIndex(edgeData, route, angle, edgeIndex, distance);
+      const curvature = calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeIndex);
+      const cappedCurvature = clampCurvature(curvature) * curvatureScale;
+      route = applyCurvatureToRoute(route, cappedCurvature, angle, distance);
     }
 
     return route;
@@ -6821,781 +6257,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
         (edge.source.id === targetId && edge.target.id === sourceId)
       );
     });
-  }
-
-  /**
-   * Calculates curvature for an edge based on the number of edges between nodes.
-   * 
-   * @param allEdges - All edges between the nodes
-   * @param sourceId - Source node ID
-   * @param targetId - Target node ID
-   * @param edgeId - Current edge ID
-   * @returns Curvature value for the edge
-   */
-  private calculateCurvature(allEdges: any[], sourceId: string, targetId: string, edgeId: string): number {
-    if (edgeId.startsWith('_alignment_')) {
-      return 0;
-    }
-
-    const edgeCount = allEdges.length;
-    const edgeIndex = allEdges.findIndex(edge => edge.id === edgeId);
-
-    if (edgeCount <= 1) {
-      return 0;
-    }
-
-    return (edgeIndex % 2 === 0 ? 1 : -1) * 
-            (Math.floor(edgeIndex / 2) + 1) * 
-            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER * 
-            edgeCount;
-  }
-
-  /**
-   * Calculates curvature using pre-computed edge index (optimized version).
-   * Alignment edges are already filtered out during cache building.
-   *
-   * Curvature direction is aligned with the edge's port offset from the side
-   * centerline: a port above center curves further up, a port below center
-   * curves further down. Without this alignment, two parallel edges between
-   * the same pair (assigned alternating ports by sortEdgePortsByAngle) get
-   * curves that bulge *toward* each other across the midline, producing the
-   * very crossings the port assignment was meant to prevent. The legacy
-   * formula (alternating sign by edge index) is kept as a fallback when port
-   * info hasn't been stamped on the edge.
-   *
-   * @param allEdges - All edges between the nodes
-   * @param edgeId - Current edge ID (only used for legacy fallback)
-   * @param edgeIndex - Pre-computed index of edge in allEdges array
-   * @returns Curvature value for the edge
-   */
-  private calculateCurvatureWithIndex(allEdges: any[], edgeId: string, edgeIndex: number): number {
-    const edgeCount = allEdges.length;
-    if (edgeCount <= 1) {
-      return 0;
-    }
-
-    // Prefer port-aligned curvature when available. Use the source-side port
-    // index; for parallel edges (same source/target pair), the source and
-    // target ports get the same sort order so this also aligns the target
-    // end.
-    const edge = allEdges[edgeIndex] as any;
-    const portIndex = edge?._sourcePortIndex;
-    const portCount = edge?._sourcePortCount;
-    if (
-      typeof portIndex === 'number' &&
-      typeof portCount === 'number' &&
-      portCount > 1
-    ) {
-      // Map port index to a signed offset in [-1, +1] relative to centerline.
-      const centerOffset = (portIndex - (portCount - 1) / 2) / ((portCount - 1) / 2);
-      // Scale matches the legacy peak magnitude: count × BASE.
-      // For 2 ports, outer offset (±1) × 2 × 0.15 = ±0.3 (= legacy 2-edge value).
-      // For 4 ports, outer ±1 × 4 × 0.15 = ±0.6 (= clamped legacy 4-edge value).
-      return centerOffset * portCount * WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER;
-    }
-
-    // Legacy fallback: alternating sign by edge index.
-    return (edgeIndex % 2 === 0 ? 1 : -1) *
-            (Math.floor(edgeIndex / 2) + 1) *
-            WebColaCnDGraph.CURVATURE_BASE_MULTIPLIER *
-            edgeCount;
-  }
-
-  /**
-   * Applies offset to edge points to prevent overlap between multiple edges.
-   * 
-   * @param edgeData - The edge data object
-   * @param route - Route points
-   * @param allEdges - All edges between the nodes
-   * @param angle - Edge angle
-   * @returns Modified route with offset applied
-   */
-  private applyEdgeOffset(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number): Array<{ x: number; y: number }> {
-    const edgeIndex = allEdges.findIndex(edge => edge.id === edgeData.id);
-    const distance = getRouteLength(route);
-    return this.applyEdgeOffsetWithIndex(edgeData, route, allEdges, angle, edgeIndex, distance);
-  }
-
-  /**
-   * Applies offset using pre-computed edge index (optimized version).
-   * Shared implementation for offset calculation to avoid code duplication.
-   * 
-   * @param edgeData - The edge data object
-   * @param route - Route points
-   * @param allEdges - All edges between the nodes
-   * @param angle - Edge angle
-   * @param edgeIndex - Pre-computed index of edge in allEdges array
-   * @returns Modified route with offset applied
-   */
-  private applyEdgeOffsetWithIndex(edgeData: any, route: Array<{ x: number; y: number }>, allEdges: any[], angle: number, edgeIndex: number, distance: number): Array<{ x: number; y: number }> {
-    const direction = this.getDominantDirection(angle);
-
-    // Use port-based positioning when available (from sortEdgePortsByAngle)
-    const sourcePortIndex = edgeData._sourcePortIndex;
-    const sourcePortCount = edgeData._sourcePortCount;
-    const targetPortIndex = edgeData._targetPortIndex;
-    const targetPortCount = edgeData._targetPortCount;
-    const hasPortInfo = sourcePortIndex !== undefined && sourcePortCount !== undefined && sourcePortCount > 1;
-    const hasTargetPortInfo = targetPortIndex !== undefined && targetPortCount !== undefined && targetPortCount > 1;
-
-    if (hasPortInfo || hasTargetPortInfo) {
-      // Distribute edge endpoints evenly across the node side
-      this.applyPortBasedOffset(route, edgeData, direction, hasPortInfo, hasTargetPortInfo);
-    } else {
-      // Fallback to legacy alternating offset for multi-edges between same pair
-      const offset = (edgeIndex % 2 === 0 ? 1 : -1) *
-                      (Math.floor(edgeIndex / 2) + 1) *
-                      WebColaCnDGraph.MIN_EDGE_DISTANCE;
-      const cappedOffset = this.clampOffset(offset, distance);
-
-      if (direction === 'right' || direction === 'left') {
-        route[0].y += cappedOffset;
-        route[route.length - 1].y += cappedOffset;
-      } else if (direction === 'up' || direction === 'down') {
-        route[0].x += cappedOffset;
-        route[route.length - 1].x += cappedOffset;
-      }
-    }
-
-    // Ensure points stay on rectangle perimeter
-    if (edgeData.source.innerBounds) {
-      route[0] = this.adjustPointToRectanglePerimeter(route[0], edgeData.source.innerBounds);
-    }
-    if (edgeData.target.innerBounds) {
-      route[route.length - 1] = this.adjustPointToRectanglePerimeter(route[route.length - 1], edgeData.target.innerBounds);
-    }
-
-    return route;
-  }
-
-  /**
-   * Computes the per-side margin used when distributing ports along a node side.
-   *
-   * Default behavior (low port density) returns `sideLength * PORT_MARGIN_FRACTION`,
-   * preserving the legacy look. When port density is high enough that adjacent ports
-   * would land closer than MIN_PORT_PERIMETER_SPACING, the margin is shrunk so the
-   * side is used more fully — improving angular separation between fanning edges at
-   * high-degree nodes (Tier 1.3 of the visual-polish plan).
-   *
-   * Margin is never shrunk below MIN_ABSOLUTE_PORT_MARGIN_PX so ports don't sit on
-   * the node corner. If the side is so small that even zero margin can't fit all
-   * ports at minimum spacing, the absolute floor is used and ports are accepted at
-   * tighter spacing — same as the legacy behavior, no worse.
-   *
-   * @param sideLength - Length of the node side (px)
-   * @param portCount - Number of ports being distributed on this side
-   * @returns Margin to use on each end of the side
-   */
-  private computePortMargin(sideLength: number, portCount: number): number {
-    const baseMargin = sideLength * WebColaCnDGraph.PORT_MARGIN_FRACTION;
-    if (portCount <= 1) return baseMargin;
-
-    const baseSpacing = (sideLength - 2 * baseMargin) / portCount;
-    if (baseSpacing >= WebColaCnDGraph.MIN_PORT_PERIMETER_SPACING) {
-      return baseMargin; // Density is comfortable — keep current behavior.
-    }
-
-    // Density is tight: solve for margin that gives exactly MIN_PORT_PERIMETER_SPACING.
-    // (sideLength - 2*margin) / portCount >= MIN  →  margin <= (sideLength - portCount*MIN) / 2
-    const desiredMargin =
-      (sideLength - portCount * WebColaCnDGraph.MIN_PORT_PERIMETER_SPACING) / 2;
-    return Math.max(WebColaCnDGraph.MIN_ABSOLUTE_PORT_MARGIN_PX, desiredMargin);
-  }
-
-  /**
-   * Adjusts route start/end points based on port assignments so that edges sharing
-   * the same node side are spread across it rather than all exiting from the center.
-   * This applies to ALL edges (not just multi-edges between the same pair), so that
-   * e.g. d→b and a→b arriving at b's top side are spread apart.
-   *
-   * Only adjusts endpoints when port info has been stamped by sortEdgePortsByAngle().
-   * Self-loops and group edges are excluded (handled by their own routing).
-   */
-  private applyPortBasedEndpoints(
-    edgeData: any,
-    route: Array<{ x: number; y: number }>
-  ): Array<{ x: number; y: number }> {
-    if (!route || route.length < 2) return route;
-    // Skip self-loops (already handled)
-    if (edgeData.source.id === edgeData.target.id) return route;
-
-    const hasSourcePort = edgeData._sourcePortIndex !== undefined &&
-                          edgeData._sourcePortCount !== undefined &&
-                          edgeData._sourcePortCount > 1;
-    const hasTargetPort = edgeData._targetPortIndex !== undefined &&
-                          edgeData._targetPortCount !== undefined &&
-                          edgeData._targetPortCount > 1;
-
-    if (!hasSourcePort && !hasTargetPort) return route;
-
-    // Distribution axis per end: a left/right side spreads ports along Y, a
-    // top/bottom side along X. Sides stamped by the obstacle-aware chooser
-    // win; without stamps (grid pipeline, direct test calls) fall back to the
-    // dominant direction of the center-to-center line.
-    const dx = (edgeData.target.x || 0) - (edgeData.source.x || 0);
-    const dy = (edgeData.target.y || 0) - (edgeData.source.y || 0);
-    const direction = this.getDominantDirection(Math.atan2(dy, dx));
-    const axisOf = (side: RectSide | undefined, horizontalEdge: boolean, verticalEdge: boolean): 'y' | 'x' | null =>
-      side ? (side === 'left' || side === 'right' ? 'y' : 'x')
-           : horizontalEdge ? 'y' : verticalEdge ? 'x' : null;
-
-    if (hasSourcePort) {
-      const bounds = this.normalizeNodeBounds(edgeData.source);
-      const portIndex = edgeData._sourcePortIndex;
-      const portCount = edgeData._sourcePortCount;
-      const axis = axisOf(
-        edgeData._exitSide,
-        direction === 'right' || direction === 'left',
-        direction === 'up' || direction === 'down'
-      );
-      if (axis === 'y') {
-        const sideLength = bounds.height();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        route[0] = { ...route[0], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
-      } else if (axis === 'x') {
-        const sideLength = bounds.width();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        route[0] = { ...route[0], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
-      }
-    }
-
-    if (hasTargetPort) {
-      const bounds = this.normalizeNodeBounds(edgeData.target);
-      const portIndex = edgeData._targetPortIndex;
-      const portCount = edgeData._targetPortCount;
-      // Without a stamp, the target side is opposite to the edge direction —
-      // same distribution axis as the source.
-      const axis = axisOf(
-        edgeData._entrySide,
-        direction === 'right' || direction === 'left',
-        direction === 'up' || direction === 'down'
-      );
-      if (axis === 'y') {
-        const sideLength = bounds.height();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const last = route.length - 1;
-        route[last] = { ...route[last], y: bounds.y + margin + (portIndex + 0.5) * usable / portCount };
-      } else if (axis === 'x') {
-        const sideLength = bounds.width();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const last = route.length - 1;
-        route[last] = { ...route[last], x: bounds.x + margin + (portIndex + 0.5) * usable / portCount };
-      }
-    }
-
-    return route;
-  }
-
-  /**
-   * Grid-mode variant of applyPortBasedEndpoints: shifts the route's first and
-   * last points to port-distributed positions on the *visible* node boundary,
-   * inserting an L-bend waypoint when needed so the entry/exit segments stay
-   * orthogonal. Without this, two parallel edges between the same node pair
-   * would share endpoints and overlap.
-   */
-  private applyPortBasedEndpointsOrthogonal(
-    edgeData: any,
-    route: Array<{ x: number; y: number }>
-  ): Array<{ x: number; y: number }> {
-    if (!route || route.length < 2) return route;
-    if (edgeData?.source?.id === edgeData?.target?.id) return route;
-
-    const hasSourcePort = edgeData._sourcePortIndex !== undefined &&
-                          edgeData._sourcePortCount !== undefined &&
-                          edgeData._sourcePortCount > 1;
-    const hasTargetPort = edgeData._targetPortIndex !== undefined &&
-                          edgeData._targetPortCount !== undefined &&
-                          edgeData._targetPortCount > 1;
-
-    if (!hasSourcePort && !hasTargetPort) return route;
-
-    let result = route.slice();
-
-    if (hasSourcePort) {
-      result = this.shiftRouteEndpointToPort(
-        result, edgeData.source,
-        edgeData._sourcePortIndex, edgeData._sourcePortCount,
-        'start'
-      );
-    }
-    if (hasTargetPort) {
-      result = this.shiftRouteEndpointToPort(
-        result, edgeData.target,
-        edgeData._targetPortIndex, edgeData._targetPortCount,
-        'end'
-      );
-    }
-
-    return result;
-  }
-
-  /**
-   * Shift the first or last route point to a port location on the visible node
-   * boundary, preserving orthogonality of the entry/exit segment by inserting
-   * an L-bend waypoint when necessary.
-   */
-  private shiftRouteEndpointToPort(
-    route: Array<{ x: number; y: number }>,
-    node: any,
-    portIndex: number,
-    portCount: number,
-    which: 'start' | 'end'
-  ): Array<{ x: number; y: number }> {
-    if (route.length < 2) return route;
-    const visible = this.getVisibleBounds(node);
-    if (!visible) return route;
-
-    const idx = which === 'start' ? 0 : route.length - 1;
-    const neighborIdx = which === 'start' ? 1 : route.length - 2;
-    const endpoint = route[idx];
-    const neighbor = route[neighborIdx];
-
-    const bx = visible.x;
-    const bX = visible.X;
-    const by = visible.y;
-    const bY = visible.Y;
-    const w = bX - bx;
-    const h = bY - by;
-    const eps = 1;
-
-    let side: 'left' | 'right' | 'top' | 'bottom';
-    const dLeft = Math.abs(endpoint.x - bx);
-    const dRight = Math.abs(endpoint.x - bX);
-    const dTop = Math.abs(endpoint.y - by);
-    const dBottom = Math.abs(endpoint.y - bY);
-    const minD = Math.min(dLeft, dRight, dTop, dBottom);
-    if (minD === dLeft) side = 'left';
-    else if (minD === dRight) side = 'right';
-    else if (minD === dTop) side = 'top';
-    else side = 'bottom';
-
-    const sideLength = (side === 'left' || side === 'right') ? h : w;
-    if (sideLength <= 0) return route;
-    const margin = this.computePortMargin(sideLength, portCount);
-    const usable = sideLength - 2 * margin;
-    const portOffset = margin + (portIndex + 0.5) * usable / portCount;
-
-    let newEndpoint: { x: number; y: number };
-    switch (side) {
-      case 'left':   newEndpoint = { x: bx, y: by + portOffset }; break;
-      case 'right':  newEndpoint = { x: bX, y: by + portOffset }; break;
-      case 'top':    newEndpoint = { x: bx + portOffset, y: by }; break;
-      case 'bottom': newEndpoint = { x: bx + portOffset, y: bY }; break;
-    }
-
-    const result = route.slice();
-    const isAxisAligned = Math.abs(newEndpoint.x - neighbor.x) < eps ||
-                          Math.abs(newEndpoint.y - neighbor.y) < eps;
-
-    if (isAxisAligned) {
-      result[idx] = newEndpoint;
-      return result;
-    }
-
-    // Need an L-bend to keep both new segments orthogonal.
-    let bend: { x: number; y: number };
-    if (side === 'left' || side === 'right') {
-      // Egress along X; the side direction is Y. Bend at (neighbor.x, port.y).
-      bend = { x: neighbor.x, y: newEndpoint.y };
-    } else {
-      // Egress along Y; the side direction is X. Bend at (port.x, neighbor.y).
-      bend = { x: newEndpoint.x, y: neighbor.y };
-    }
-
-    if (which === 'start') {
-      result[0] = newEndpoint;
-      result.splice(1, 0, bend);
-    } else {
-      result[result.length - 1] = newEndpoint;
-      result.splice(result.length - 1, 0, bend);
-    }
-    return result;
-  }
-
-  /**
-   * Distributes edge endpoints evenly across a node side using port assignments.
-   * For a side of length L with N ports, port i is placed at sideStart + margin + (i + 0.5) * usableLength / N.
-   */
-  private applyPortBasedOffset(
-    route: Array<{ x: number; y: number }>,
-    edgeData: any,
-    direction: 'right' | 'up' | 'left' | 'down' | null,
-    hasSourcePort: boolean,
-    hasTargetPort: boolean
-  ): void {
-    if (hasSourcePort) {
-      const bounds = this.normalizeNodeBounds(edgeData.source);
-      const portIndex = edgeData._sourcePortIndex;
-      const portCount = edgeData._sourcePortCount;
-
-      if (direction === 'right' || direction === 'left') {
-        // Edge goes horizontal: distribute along Y axis of the source side
-        const sideLength = bounds.height();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
-        route[0].y = portY;
-      } else if (direction === 'up' || direction === 'down') {
-        // Edge goes vertical: distribute along X axis of the source side
-        const sideLength = bounds.width();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
-        route[0].x = portX;
-      }
-    }
-
-    if (hasTargetPort) {
-      const bounds = this.normalizeNodeBounds(edgeData.target);
-      const portIndex = edgeData._targetPortIndex;
-      const portCount = edgeData._targetPortCount;
-      // For target, direction is reversed from edge direction
-      const targetDirection = direction === 'right' ? 'left' : direction === 'left' ? 'right' : direction === 'up' ? 'down' : 'up';
-
-      if (targetDirection === 'right' || targetDirection === 'left') {
-        const sideLength = bounds.height();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const portY = bounds.y + margin + (portIndex + 0.5) * usable / portCount;
-        route[route.length - 1].y = portY;
-      } else if (targetDirection === 'up' || targetDirection === 'down') {
-        const sideLength = bounds.width();
-        const margin = this.computePortMargin(sideLength, portCount);
-        const usable = sideLength - 2 * margin;
-        const portX = bounds.x + margin + (portIndex + 0.5) * usable / portCount;
-        route[route.length - 1].x = portX;
-      }
-    }
-  }
-
-  /**
-   * Clamp edge offset so dense edge bundles don't explode outward.
-   */
-  private clampOffset(offset: number, distance: number): number {
-    const maxOffset = Math.max(WebColaCnDGraph.MIN_EDGE_DISTANCE, distance * WebColaCnDGraph.MAX_EDGE_OFFSET_RATIO);
-    return Math.max(-maxOffset, Math.min(maxOffset, offset));
-  }
-
-  /**
-   * Clamp curvature to avoid excessive bulging for many parallel edges.
-   */
-  private clampCurvature(curvature: number): number {
-    return Math.max(-WebColaCnDGraph.MAX_EDGE_CURVATURE_RATIO, Math.min(WebColaCnDGraph.MAX_EDGE_CURVATURE_RATIO, curvature));
-  }
-
-  /**
-   * Applies curvature to control points in the route.
-   * 
-   * @param route - Route points
-   * @param curvature - Curvature value
-   * @param angle - Edge angle
-   * @param distance - Edge distance
-   * @returns Route with curvature applied
-   */
-  private applyCurvatureToRoute(route: Array<{ x: number; y: number }>, curvature: number, angle: number, distance: number): Array<{ x: number; y: number }> {
-    if (curvature === 0) return route;
-
-    route.forEach((point, index) => {
-      if (index > 0 && index < route.length - 1) {
-        const offsetX = curvature * Math.abs(Math.sin(angle)) * distance;
-        const offsetY = curvature * Math.abs(Math.cos(angle)) * distance;
-        
-        point.x += offsetX;
-        point.y += offsetY;
-      }
-    });
-
-    return route;
-  }
-
-  /**
-   * Gets the dominant direction of an edge based on its angle.
-   * 
-   * @param angle - Edge angle in radians
-   * @returns Dominant direction string
-   */
-  private getDominantDirection(angle: number): 'right' | 'up' | 'left' | 'down' | null {
-    // Normalize angle between -π and π
-    angle = ((angle + Math.PI) % (2 * Math.PI)) - Math.PI;
-
-    if (angle >= -Math.PI / 4 && angle <= Math.PI / 4) {
-      return 'right';
-    } else if (angle > Math.PI / 4 && angle < 3 * Math.PI / 4) {
-      return 'up';
-    } else if (angle >= 3 * Math.PI / 4 || angle <= -3 * Math.PI / 4) {
-      return 'left';
-    } else if (angle > -3 * Math.PI / 4 && angle < -Math.PI / 4) {
-      return 'down';
-    }
-    
-    return null;
-  }
-
-  /**
-   * Finds the closest point on a rectangle to a given point.
-   * 
-   * @param bounds - Rectangle bounds with x, y, X, Y properties
-   * @param point - Point to find closest position for
-   * @returns Closest point on rectangle perimeter
-   */
-  private closestPointOnRect(bounds: any, point: { x: number; y: number }): { x: number; y: number } {
-    if (!bounds) return point;
-
-    const { x, y, X, Y } = bounds;
-    const closestX = Math.max(x, Math.min(point.x, X));
-    const closestY = Math.max(y, Math.min(point.y, Y));
-
-    return { x: closestX, y: closestY };
-  }
-
-  /**
-   * Build a bounds-like object describing the *visible* rectangle of a node or
-   * group. WebCola inflates `node.width/height` for collision avoidance, and
-   * `group.bounds` covers the inflated container rectangle — both are larger
-   * than what is actually rendered. Edges should clip to the rendered boundary
-   * so arrowheads land exactly on it instead of behind a fill that draws over
-   * them.
-   *
-   * Returns null if visible dimensions can't be derived.
-   */
-  private getVisibleBounds(node: any): {
-    cx: () => number;
-    cy: () => number;
-    width: () => number;
-    height: () => number;
-    x: number;
-    X: number;
-    y: number;
-    Y: number;
-  } | null {
-    if (!node) return null;
-    const cx = node.x ?? (node.bounds && typeof node.bounds.cx === 'function' ? node.bounds.cx() : undefined);
-    const cy = node.y ?? (node.bounds && typeof node.bounds.cy === 'function' ? node.bounds.cy() : undefined);
-    if (cx === undefined || cy === undefined) return null;
-
-    let hw: number | undefined;
-    let hh: number | undefined;
-
-    if (node.visualWidth !== undefined || node.visualHeight !== undefined) {
-      hw = (node.visualWidth ?? node.width ?? 0) / 2;
-      hh = (node.visualHeight ?? node.height ?? 0) / 2;
-    } else if (Array.isArray(node.leaves) || Array.isArray(node.groups)) {
-      // Group container — visible rectangle is bounds inset by GROUP_VISUAL_MARGIN_PX
-      // (matches the bounds.inflate(-groupMargin) used at routing time).
-      if (node.bounds && typeof node.bounds.width === 'function') {
-        hw = node.bounds.width() / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
-        hh = node.bounds.height() / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
-      } else if (node.bounds && node.bounds.X !== undefined) {
-        hw = (node.bounds.X - node.bounds.x) / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
-        hh = (node.bounds.Y - node.bounds.y) / 2 - WebColaCnDGraph.GROUP_VISUAL_MARGIN_PX;
-      }
-    } else if (node.width !== undefined || node.height !== undefined) {
-      hw = (node.width ?? 0) / 2;
-      hh = (node.height ?? 0) / 2;
-    }
-
-    if (hw === undefined || hh === undefined || (hw <= 0 && hh <= 0)) return null;
-    hw = Math.max(0, hw);
-    hh = Math.max(0, hh);
-
-    return {
-      cx: () => cx,
-      cy: () => cy,
-      width: () => hw! * 2,
-      height: () => hh! * 2,
-      x: cx - hw,
-      X: cx + hw,
-      y: cy - hh,
-      Y: cy + hh,
-    };
-  }
-
-  /**
-   * Calculates a stable anchor point on a rectangle's perimeter for edge drawing.
-   * This method produces consistent, jitter-free anchor points by using the
-   * center of the rectangle edge that faces the target point.
-   * 
-   * Unlike intersection-based approaches that can jump erratically as rectangles
-   * move, this method selects one of four edge centers (top, bottom, left, right)
-   * based on the dominant direction to the target, producing smooth transitions.
-   * 
-   * @param bounds - Rectangle bounds with x, y, X, Y properties (or cx(), cy(), width(), height() methods)
-   * @param targetPoint - The point the edge is connecting to
-   * @returns Stable anchor point on the rectangle's perimeter
-   */
-  private getStableEdgeAnchor(bounds: any, targetPoint: { x: number; y: number }): { x: number; y: number } {
-    if (!bounds) return targetPoint;
-
-    // Get rectangle center and dimensions
-    let cx: number, cy: number, halfWidth: number, halfHeight: number;
-    
-    if (typeof bounds.cx === 'function') {
-      // WebCola Rectangle with methods
-      cx = bounds.cx();
-      cy = bounds.cy();
-      halfWidth = bounds.width() / 2;
-      halfHeight = bounds.height() / 2;
-    } else if (bounds.x !== undefined && bounds.X !== undefined) {
-      // Rectangle with x, y, X, Y properties
-      cx = (bounds.x + bounds.X) / 2;
-      cy = (bounds.y + bounds.Y) / 2;
-      halfWidth = (bounds.X - bounds.x) / 2;
-      halfHeight = (bounds.Y - bounds.y) / 2;
-    } else {
-      return targetPoint;
-    }
-
-    // Calculate direction from rectangle center to target
-    const dx = targetPoint.x - cx;
-    const dy = targetPoint.y - cy;
-
-    // Determine which edge to anchor to based on the dominant direction
-    // Use aspect-ratio-normalized comparison for accurate edge selection
-    const normalizedDx = Math.abs(dx) / halfWidth;
-    const normalizedDy = Math.abs(dy) / halfHeight;
-
-    if (normalizedDx > normalizedDy) {
-      // Horizontal edge - left or right
-      if (dx > 0) {
-        // Right edge
-        return { x: cx + halfWidth, y: cy };
-      } else {
-        // Left edge
-        return { x: cx - halfWidth, y: cy };
-      }
-    } else {
-      // Vertical edge - top or bottom
-      if (dy > 0) {
-        // Bottom edge
-        return { x: cx, y: cy + halfHeight };
-      } else {
-        // Top edge
-        return { x: cx, y: cy - halfHeight };
-      }
-    }
-  }
-
-  /**
-   * Calculates stable edge path points for drawing during tick/drag operations.
-   * This method avoids jitter by using stable anchor points instead of
-   * dynamic intersection calculations.
-   * 
-   * @param source - Source node or group with bounds
-   * @param target - Target node or group with bounds
-   * @returns Array of two points for a simple line path
-   */
-  private getStableEdgePath(
-    source: any,
-    target: any,
-    edgeData?: any
-  ): Array<{ x: number; y: number }> {
-    // Always use node.x/y as the center — these are the authoritative positions
-    // from the WebCola solver and are always in sync, whereas bounds.cx()/cy()
-    // lag slightly and can reflect the inflated collision rectangle center.
-    // Group endpoints have no x/y, only bounds — fall back to the bounds centre
-    // so the opposite anchor aims at the hull, not at the origin.
-    const centerFor = (ep: any): { x: number; y: number } => ({
-      x: ep.x ?? (typeof ep.bounds?.cx === 'function' ? ep.bounds.cx() : 0),
-      y: ep.y ?? (typeof ep.bounds?.cy === 'function' ? ep.bounds.cy() : 0),
-    });
-    const sourceCenter: { x: number; y: number } = centerFor(source);
-    const targetCenter: { x: number; y: number } = centerFor(target);
-
-    // Prefer visible bounds (visualWidth/visualHeight for plain nodes, bounds-inset
-    // for groups). Falling back to WebCola bounds would land arrowheads on the
-    // INFLATED rectangle, behind the rendered fill.
-    const sourceBounds = this.getVisibleBounds(source) ?? source.bounds ?? source.innerBounds;
-    const targetBounds = this.getVisibleBounds(target) ?? target.bounds ?? target.innerBounds;
-
-    // Calculate stable anchor points on the perimeter
-    let sourceAnchor = sourceBounds
-      ? this.getStableEdgeAnchor(sourceBounds, targetCenter)
-      : sourceCenter;
-
-    let targetAnchor = targetBounds
-      ? this.getStableEdgeAnchor(targetBounds, sourceCenter)
-      : targetCenter;
-
-    // Apply port-based distribution if port info is available on the edge.
-    // This spreads multiple edges sharing the same node side during drag/tick,
-    // preventing them from overlapping at the side center.
-    if (edgeData && sourceBounds) {
-      sourceAnchor = this.applyPortOffsetToAnchor(
-        sourceAnchor, sourceBounds, edgeData._sourcePortIndex, edgeData._sourcePortCount,
-        sourceCenter, targetCenter
-      );
-    }
-    if (edgeData && targetBounds) {
-      targetAnchor = this.applyPortOffsetToAnchor(
-        targetAnchor, targetBounds, edgeData._targetPortIndex, edgeData._targetPortCount,
-        targetCenter, sourceCenter
-      );
-    }
-
-    return [sourceAnchor, targetAnchor];
-  }
-
-  /**
-   * Adjusts an anchor point along a node side to reflect port assignment.
-   * If no port info is available or there's only one port, returns the original anchor.
-   */
-  private applyPortOffsetToAnchor(
-    anchor: { x: number; y: number },
-    bounds: any,
-    portIndex: number | undefined,
-    portCount: number | undefined,
-    _nodeCenter: { x: number; y: number },
-    _remoteCenter: { x: number; y: number }
-  ): { x: number; y: number } {
-    if (portIndex === undefined || portCount === undefined || portCount <= 1) {
-      return anchor;
-    }
-
-    // Determine which side the anchor is on by comparing to bounds
-    const bx = typeof bounds.x === 'number' ? bounds.x : 0;
-    const bX = bounds.X !== undefined ? bounds.X : bx + (typeof bounds.width === 'function' ? bounds.width() : 0);
-    const by = typeof bounds.y === 'number' ? bounds.y : 0;
-    const bY = bounds.Y !== undefined ? bounds.Y : by + (typeof bounds.height === 'function' ? bounds.height() : 0);
-    const w = bX - bx;
-    const h = bY - by;
-
-    const eps = 1;
-
-    if (Math.abs(anchor.x - bx) < eps || Math.abs(anchor.x - bX) < eps) {
-      // Anchor is on left or right side → distribute along Y
-      const margin = this.computePortMargin(h, portCount);
-      const usable = h - 2 * margin;
-      const portY = by + margin + (portIndex + 0.5) * usable / portCount;
-      return { x: anchor.x, y: portY };
-    } else if (Math.abs(anchor.y - by) < eps || Math.abs(anchor.y - bY) < eps) {
-      // Anchor is on top or bottom side → distribute along X
-      const margin = this.computePortMargin(w, portCount);
-      const usable = w - 2 * margin;
-      const portX = bx + margin + (portIndex + 0.5) * usable / portCount;
-      return { x: portX, y: anchor.y };
-    }
-
-    return anchor;
-  }
-
-  /**
-   * Adjusts a point to lie on the perimeter of a rectangle.
-   * 
-   * @param point - Point to adjust
-   * @param bounds - Rectangle bounds
-   * @returns Point on rectangle perimeter
-   */
-  private adjustPointToRectanglePerimeter(point: { x: number; y: number }, bounds: any): { x: number; y: number } {
-    if (!bounds) return point;
-
-    // Implementation would adjust point to rectangle edge
-    // This is a simplified version - full implementation would calculate
-    // the exact perimeter intersection
-    return this.closestPointOnRect(bounds, point);
   }
 
   /**
@@ -7696,13 +6357,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
           if (overlapY <= overlapX) {
             const push = (overlapY + MARGIN_PX) / 2;
             const sign = cay >= cby ? 1 : -1;
-            this.applyLabelDisplacement(a, 0, sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-            this.applyLabelDisplacement(b, 0, -sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            applyLabelDisplacement(a, 0, sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            applyLabelDisplacement(b, 0, -sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
           } else {
             const push = (overlapX + MARGIN_PX) / 2;
             const sign = cax >= cbx ? 1 : -1;
-            this.applyLabelDisplacement(a, sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-            this.applyLabelDisplacement(b, -sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            applyLabelDisplacement(a, sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
+            applyLabelDisplacement(b, -sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
           }
           resolvedAny = true;
         }
@@ -7710,41 +6371,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
       if (!resolvedAny) break;
     }
-  }
-
-  /**
-   * Applies a displacement delta to a label's x/y attributes, clamping the
-   * cumulative displacement magnitude to `cap`. If the new cumulative would
-   * exceed the cap, the displacement is scaled down so the magnitude lands
-   * exactly on the cap boundary.
-   */
-  private applyLabelDisplacement(
-    label: SVGTextElement,
-    deltaX: number,
-    deltaY: number,
-    dxMap: Map<SVGTextElement, number>,
-    dyMap: Map<SVGTextElement, number>,
-    cap: number
-  ): void {
-    const curDx = dxMap.get(label) || 0;
-    const curDy = dyMap.get(label) || 0;
-    let newDx = curDx + deltaX;
-    let newDy = curDy + deltaY;
-
-    const mag = Math.hypot(newDx, newDy);
-    if (mag > cap) {
-      const scale = cap / mag;
-      newDx *= scale;
-      newDy *= scale;
-    }
-
-    const sel = d3.select(label);
-    const x = parseFloat(sel.attr('x') || '0') + (newDx - curDx);
-    const y = parseFloat(sel.attr('y') || '0') + (newDy - curDy);
-    sel.attr('x', x).attr('y', y);
-
-    dxMap.set(label, newDx);
-    dyMap.set(label, newDy);
   }
 
   /**

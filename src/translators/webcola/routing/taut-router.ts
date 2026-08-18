@@ -1,4 +1,4 @@
-import type { EdgeRouter, ObstacleRect, Point, PortAttachment, RouterHost } from './types';
+import type { EdgeRouter, ObstacleRect, Point, PortAttachment, RoutedEdge, RouterHost } from './types';
 import {
   anyObstacleBlocks,
   getRouteLength,
@@ -432,7 +432,7 @@ export function tryBowRouteAside(
 function separateCorridors(host: RouterHost): void {
   if (host.routes.size < 2) return;
 
-  type Item = { id: string; edge: any; route: Point[]; len: number };
+  type Item = { id: string; edge: RoutedEdge; route: Point[]; len: number };
   const items: Item[] = [];
   for (const edge of host.routerEdges()) {
     const route = host.routes.get(edge.id);
@@ -517,7 +517,7 @@ function separateCorridors(host: RouterHost): void {
  * corridor separation as a finalize pass.
  */
 export class TautRouter implements EdgeRouter {
-  routeEdge(edge: any, host: RouterHost): Point[] {
+  routeEdge(edge: RoutedEdge, host: RouterHost): Point[] {
     const src = host.portAttachment(edge, 'source');
     const tgt = host.portAttachment(edge, 'target');
     const obstacles = host.obstaclesFor(edge);

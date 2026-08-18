@@ -17,8 +17,9 @@ import type { RoutingModeDefinition } from './types';
  * registry, no matter how many bundle copies of this file are loaded.
  */
 const REGISTRY_KEY = Symbol.for('spytial-core.routing-modes');
+type RegistryHolder = { [REGISTRY_KEY]?: Map<string, RoutingModeDefinition> };
 const modes: Map<string, RoutingModeDefinition> =
-  ((globalThis as any)[REGISTRY_KEY] ??= new Map<string, RoutingModeDefinition>());
+  ((globalThis as RegistryHolder)[REGISTRY_KEY] ??= new Map<string, RoutingModeDefinition>());
 
 export function registerRoutingMode(def: RoutingModeDefinition): void {
   modes.set(def.id, def);

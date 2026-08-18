@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import {
   routeTautPolyline,
   filletPath,
+  portAttachment,
   segmentEntersRect,
   routePolylineClips,
   simplifyCollinear,
@@ -10,13 +10,9 @@ import {
 
 /**
  * Tests for the consolidated "taut" curved router (corner-visibility shortest
- * path + fillet smoothing). The geometric core lives in
- * src/translators/webcola/routing/ as pure functions; the port machinery
- * (getPortAttachment) stays on the component and is exercised via prototype
- * injection.
+ * path + fillet smoothing). Both the geometric core and the port machinery live
+ * in src/translators/webcola/routing/ as pure functions.
  */
-
-const proto = WebColaCnDGraph.prototype as any;
 
 // Obstacles are passed to routeTautPolyline in already-inflated min/max form.
 const obs = (minX: number, minY: number, maxX: number, maxY: number) => ({ minX, minY, maxX, maxY });
@@ -186,27 +182,16 @@ describe('filletPath', () => {
   });
 });
 
-describe('getPortAttachment', () => {
+describe('portAttachment', () => {
   const mkNode = (id: string, x: number, y: number, w = 50, h = 30) => ({
     id, x, y, visualWidth: w, visualHeight: h,
     bounds: { x: x - w / 2, y: y - h / 2, X: x + w / 2, Y: y + h / 2, width: () => w, height: () => h },
   });
 
-  const ctx = () => ({
-    getRenderedBounds: proto.getRenderedBounds,
-    getVisibleBounds: proto.getVisibleBounds,
-    normalizeNodeBounds: proto.normalizeNodeBounds,
-    applyPortBasedEndpoints: proto.applyPortBasedEndpoints,
-    computePortMargin: proto.computePortMargin,
-    getDominantDirection: proto.getDominantDirection,
-    getPortAttachment: proto.getPortAttachment,
-  });
-
   it('lands the source on the side facing the target with the correct outward normal', () => {
     const a = mkNode('A', 0, 0);
     const b = mkNode('B', 200, 0);
-    const edge = { id: 'e1', source: a, target: b };
-    const att = ctx().getPortAttachment.call(ctx(), edge, 'source');
+    const att = portAttachment({ id: 'e1', source: a, target: b }, 'source');
     expect(att.point.x).toBeCloseTo(25, 1); // right edge of A
     expect(att.point.y).toBeCloseTo(0, 5);
     expect(att.normal).toEqual({ x: 1, y: 0 }); // outward = +x
@@ -215,8 +200,7 @@ describe('getPortAttachment', () => {
   it('lands the target on the side facing the source', () => {
     const a = mkNode('A', 0, 0);
     const b = mkNode('B', 200, 0);
-    const edge = { id: 'e1', source: a, target: b };
-    const att = ctx().getPortAttachment.call(ctx(), edge, 'target');
+    const att = portAttachment({ id: 'e1', source: a, target: b }, 'target');
     expect(att.point.x).toBeCloseTo(175, 1); // left edge of B
     expect(att.normal).toEqual({ x: -1, y: 0 });
   });

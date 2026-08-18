@@ -175,3 +175,97 @@ export function getRouteLength(route: Point[]): number {
     return total + Math.sqrt(dx * dx + dy * dy);
   }, 0);
 }
+
+/**
+ * The compass direction an edge at `angle` (radians) mostly runs in, or null if
+ * the angle is not finite. Drives which axis ports distribute along and which
+ * way an offset pushes an endpoint.
+ */
+export function dominantDirection(angle: number): 'right' | 'up' | 'left' | 'down' | null {
+  // Normalize to (-π, π].
+  const a = ((angle + Math.PI) % (2 * Math.PI)) - Math.PI;
+
+  if (a >= -Math.PI / 4 && a <= Math.PI / 4) {
+    return 'right';
+  } else if (a > Math.PI / 4 && a < 3 * Math.PI / 4) {
+    return 'up';
+  } else if (a >= 3 * Math.PI / 4 || a <= -3 * Math.PI / 4) {
+    return 'left';
+  } else if (a > -3 * Math.PI / 4 && a < -Math.PI / 4) {
+    return 'down';
+  }
+
+  return null;
+}
+
+/**
+ * Inserts "tangent guide" points near each endpoint of a multi-point route so
+ * that d3.curveBasis leaves and enters along the actual first/final segment.
+ * Without them, interior control points pull the endpoint tangent off-axis and
+ * arrowhead markers (orient="auto") render at odd angles.
+ *
+ * TWO collinear guides go in at each end (far + near) so the spline's last two
+ * or three control points all sit on the desired tangent line; a single guide
+ * left enough slack for interior bends to still skew the tangent. Straight
+ * 2-point routes already have the right tangent and are returned as-is.
+ */
+export function addTangentGuides(route: Point[]): Point[] {
+  if (route.length <= 2) return route;
+
+  // The far guide steers the cubic block's far control; the near guide locks
+  // the immediate tangent. Both must be collinear with their segment.
+  const FAR_MAX = 8;   // px
+  const NEAR_MAX = 2;  // px
+  const result = [...route];
+
+  // ── End: guides along the final segment direction ──
+  const last = result.length - 1;
+  const dxE = result[last].x - result[last - 1].x;
+  const dyE = result[last].y - result[last - 1].y;
+  const lenE = Math.sqrt(dxE * dxE + dyE * dyE);
+  if (lenE > 0.5) {
+    const ux = dxE / lenE;
+    const uy = dyE / lenE;
+    // Cap each guide at a fraction of the segment so very short final segments
+    // still get guides — those are exactly the cases where the arrow looks
+    // worst, and the legacy 6px cutoff dropped them.
+    const farDist = Math.min(FAR_MAX, lenE * 0.5);
+    const nearDist = Math.min(NEAR_MAX, lenE * 0.2);
+    if (farDist > nearDist + 0.1) {
+      // Order: ..., farGuide, nearGuide, last
+      result.splice(last, 0,
+        { x: result[last].x - ux * farDist, y: result[last].y - uy * farDist },
+        { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
+      );
+    } else {
+      // Segment too short for two distinct guides — emit just the near one.
+      result.splice(last, 0,
+        { x: result[last].x - ux * nearDist, y: result[last].y - uy * nearDist }
+      );
+    }
+  }
+
+  // ── Start: guides along the first segment direction ──
+  const dx0 = result[1].x - result[0].x;
+  const dy0 = result[1].y - result[0].y;
+  const len0 = Math.sqrt(dx0 * dx0 + dy0 * dy0);
+  if (len0 > 0.5) {
+    const ux = dx0 / len0;
+    const uy = dy0 / len0;
+    const farDist = Math.min(FAR_MAX, len0 * 0.5);
+    const nearDist = Math.min(NEAR_MAX, len0 * 0.2);
+    if (farDist > nearDist + 0.1) {
+      // Order: 0, nearGuide, farGuide, ...
+      result.splice(1, 0,
+        { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist },
+        { x: result[0].x + ux * farDist, y: result[0].y + uy * farDist }
+      );
+    } else {
+      result.splice(1, 0,
+        { x: result[0].x + ux * nearDist, y: result[0].y + uy * nearDist }
+      );
+    }
+  }
+
+  return result;
+}

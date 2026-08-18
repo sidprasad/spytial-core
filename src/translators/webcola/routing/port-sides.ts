@@ -1,4 +1,4 @@
-import type { ObstacleRect, Point } from './types';
+import type { ObstacleRect, Point, RectSide } from './types';
 import { anyObstacleBlocks, clipLineToRectExit, getRouteLength, simplifyCollinear } from './geometry';
 import {
   EDGE_CLEARANCE_PX,
@@ -26,7 +26,7 @@ import {
  * beat natural by a small bias so marginal cases keep today's behavior.
  */
 
-export type RectSide = 'top' | 'bottom' | 'left' | 'right';
+export type { RectSide };
 
 /** Visible (uninflated) rectangle in min/max form. */
 export interface SideRect {

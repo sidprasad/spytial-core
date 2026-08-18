@@ -1,5 +1,5 @@
 import { AvoidLib } from 'libavoid-js';
-import type { EdgeRouter, Point, PortAttachment, RouterHost } from './types';
+import type { EdgeRouter, Point, PortAttachment, RoutedEdge, RouterHost } from './types';
 import { registerRoutingMode } from './registry';
 import { EDGE_CLEARANCE_PX } from './taut-router';
 
@@ -127,7 +127,7 @@ export class LibavoidRouter implements EdgeRouter {
     }
   }
 
-  routeEdge(edge: any, host: RouterHost): Point[] {
+  routeEdge(edge: RoutedEdge, host: RouterHost): Point[] {
     const cached = this.batch.get(edge.id);
     if (cached) return cached;
     // Defensive fallback (edge missed by the batch): straight port-to-port.

@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import {
+  applyPortBasedEndpointsOrthogonal,
+  visibleBounds,
+} from '../src/translators/webcola/routing';
 
 describe('Edge routing port distribution', () => {
+  // sortEdgePortsByAngle still reads the component's edge caches, so it is
+  // still reached through the prototype. Everything else here is a plain
+  // function in routing/ and is imported directly.
   const proto = WebColaCnDGraph.prototype as any;
 
   describe('sortEdgePortsByAngle — parallel edges get distinct ports', () => {
@@ -54,10 +61,10 @@ describe('Edge routing port distribution', () => {
     });
   });
 
-  describe('getVisibleBounds — clips to rendered rectangle', () => {
+  describe('visibleBounds — clips to rendered rectangle', () => {
     it('uses visualWidth/visualHeight when present (plain node)', () => {
       const node = { x: 100, y: 50, visualWidth: 80, visualHeight: 40, width: 120, height: 60 };
-      const bounds = proto.getVisibleBounds.call({}, node);
+      const bounds = visibleBounds(node);
       expect(bounds).not.toBeNull();
       expect(bounds!.x).toBe(60);   // 100 - 40
       expect(bounds!.X).toBe(140);  // 100 + 40
@@ -77,7 +84,7 @@ describe('Edge routing port distribution', () => {
           width: () => 100, height: () => 80
         }
       };
-      const bounds = proto.getVisibleBounds.call({}, group);
+      const bounds = visibleBounds(group);
       expect(bounds).not.toBeNull();
       // Expected inset: hw = 50 - 10 = 40; hh = 40 - 10 = 30
       expect(bounds!.width()).toBe(80);
@@ -89,7 +96,7 @@ describe('Edge routing port distribution', () => {
     });
 
     it('returns null when no visible dimensions can be derived', () => {
-      const result = proto.getVisibleBounds.call({}, { x: 0, y: 0 });
+      const result = visibleBounds({ x: 0, y: 0 });
       expect(result).toBeNull();
     });
   });
@@ -119,12 +126,7 @@ describe('Edge routing port distribution', () => {
         { x: 200, y: 150 }
       ];
 
-      const fakeThis: any = {
-        getVisibleBounds: proto.getVisibleBounds,
-        computePortMargin: proto.computePortMargin,
-        shiftRouteEndpointToPort: proto.shiftRouteEndpointToPort
-      };
-      const result = proto.applyPortBasedEndpointsOrthogonal.call(fakeThis, edgeData, route);
+      const result = applyPortBasedEndpointsOrthogonal(edgeData, route);
 
       // First and last endpoints must lie on the visible boundary
       // and every consecutive pair must share x or y (orthogonal).
@@ -146,12 +148,7 @@ describe('Edge routing port distribution', () => {
         _sourcePortCount: 1
       };
       const route = [{ x: 5, y: 0 }, { x: 95, y: 0 }];
-      const fakeThis: any = {
-        getVisibleBounds: proto.getVisibleBounds,
-        computePortMargin: proto.computePortMargin,
-        shiftRouteEndpointToPort: proto.shiftRouteEndpointToPort
-      };
-      const result = proto.applyPortBasedEndpointsOrthogonal.call(fakeThis, edgeData, route);
+      const result = applyPortBasedEndpointsOrthogonal(edgeData, route);
       expect(result).toEqual(route);
     });
   });
