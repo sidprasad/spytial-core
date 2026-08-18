@@ -1,9 +1,8 @@
 /**
  * Property-based tests for the qualitative constraint validator.
  *
- * Tests standalone correctness properties — does NOT compare against
- * the Kiwi validator. Each property should hold for any valid constraint
- * system, regardless of implementation.
+ * Tests standalone correctness properties. Each property should hold for
+ * any valid constraint system, regardless of implementation.
  */
 
 import { describe, it } from 'vitest';

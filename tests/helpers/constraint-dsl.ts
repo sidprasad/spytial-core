@@ -256,18 +256,6 @@ export function solve(spec: string, dims: NodeDims = {}): SolveResult {
 }
 
 /**
- * Run the Kiwi constraint validator on a DSL spec string.
- * Useful for comparison testing.
- */
-export function solveKiwi(spec: string, dims: NodeDims = {}): SolveResult {
-    const layout = parseConstraintSpec(spec, dims);
-    const layoutCopy = cloneLayout(layout);
-    const validator = new QualitativeConstraintValidator(layoutCopy);
-    const error = validator.validateConstraints();
-    return { sat: error === null, error, validator, layout };
-}
-
-/**
  * Assert that a constraint spec is satisfiable.
  */
 export function sat(spec: string, dims: NodeDims = {}): SolveResult {

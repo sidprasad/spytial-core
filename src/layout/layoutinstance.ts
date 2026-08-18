@@ -1921,7 +1921,8 @@ export class LayoutInstance {
 
         // The qualitative validator enforces the MFS on layout.constraints
         // before returning the error. Use the layout as-is in that case.
-        // For the Kiwi validator (no MFS), fall back to removing the IIS.
+        // `maximalFeasibleSubset` is optional on the error type, so a validator
+        // that does not compute one falls back to removing the IIS.
         const constraints = error.maximalFeasibleSubset
             ? layout.constraints
             : layout.constraints.filter(c =>
