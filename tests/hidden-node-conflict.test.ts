@@ -13,7 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parseLayoutSpec, LayoutInstance } from '../src/layout';
-import { isHiddenNodeConflictError, HiddenNodeConflictError } from '../src/layout/constraint-validator';
+import { isHiddenNodeConflictError, HiddenNodeConflictError } from '../src/layout/constraint-types';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 

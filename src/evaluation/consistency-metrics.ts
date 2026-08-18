@@ -897,7 +897,7 @@ export function stableQuietRatio(
  * constraints from `newConstraints`, solves, sums per-node displacement.
  *
  * Constraint types handled (matching the WebCola translator's Kiwi
- * coverage in `constraint-validator.ts`): `LeftConstraint`,
+ * coverage): `LeftConstraint`,
  * `TopConstraint`, `AlignmentConstraint`. `BoundingBoxConstraint` and
  * `GroupBoundaryConstraint` are not Kiwi-translated today — they are
  * silently skipped. New nodes referenced by constraints but absent

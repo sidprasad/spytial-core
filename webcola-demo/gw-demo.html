@@ -161,10 +161,9 @@
                 await createEvaluator();
             }
 
-            const validatorChoice = 'kiwi';
             const layoutInstance = new CndCore.LayoutInstance(
                 cachedLayoutSpec, cachedEvaluator, currentInstanceIndex,
-                true, undefined, validatorChoice
+                true, undefined
             );
 
             const layoutResult = layoutInstance.generateLayout(alloyDataInstance);

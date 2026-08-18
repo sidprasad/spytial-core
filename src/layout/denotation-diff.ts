@@ -21,7 +21,7 @@ import {
 } from './layoutspec';
 import { InstanceLayout } from './interfaces';
 import { LayoutInstance } from './layoutinstance';
-import { isPositionalConstraintError } from './constraint-validator';
+import { isPositionalConstraintError } from './constraint-types';
 import IEvaluator from '../evaluator-contracts';
 import { IDataInstance } from '../data-instance/interfaces';
 

@@ -162,7 +162,7 @@ export function runCase(testCase: ConformanceCase): CaseResult {
             name, ok: false, warnings, assertions: [], note: testCase.note,
             errors: [error(
                 'layout/no-validator',
-                'No qualitative validator was produced, so spatial queries cannot be answered. This happens with the deprecated Kiwi validator strategy.',
+                'No qualitative validator was produced, so spatial queries cannot be answered.',
             )],
         };
     }

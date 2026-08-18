@@ -21,7 +21,6 @@
 
 import { expect } from 'vitest';
 import { QualitativeConstraintValidator } from '../../src/layout/qualitative-constraint-validator';
-import { ConstraintValidator } from '../../src/layout/constraint-validator';
 import {
     DisjunctiveConstraint,
     InstanceLayout,
@@ -252,18 +251,6 @@ export function solve(spec: string, dims: NodeDims = {}): SolveResult {
     const layout = parseConstraintSpec(spec, dims);
     const layoutCopy = cloneLayout(layout);
     const validator = new QualitativeConstraintValidator(layoutCopy);
-    const error = validator.validateConstraints();
-    return { sat: error === null, error, validator, layout };
-}
-
-/**
- * Run the Kiwi constraint validator on a DSL spec string.
- * Useful for comparison testing.
- */
-export function solveKiwi(spec: string, dims: NodeDims = {}): SolveResult {
-    const layout = parseConstraintSpec(spec, dims);
-    const layoutCopy = cloneLayout(layout);
-    const validator = new ConstraintValidator(layoutCopy);
     const error = validator.validateConstraints();
     return { sat: error === null, error, validator, layout };
 }
