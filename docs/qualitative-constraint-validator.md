@@ -209,13 +209,19 @@ Early phases handle the cheap, deterministic checks. CDCL search (phase 5) only 
 
 ---
 
-## 9. Relationship to the Kiwi Constraint Validator
+## 9. What it replaced
 
-The original `ConstraintValidator` (in `constraint-validator.ts`) uses the Kiwi/Cassowary linear programming solver directly for both feasibility checking and coordinate assignment. It handles disjunctions by **cloning the entire solver state** at each branch point — effectively a depth-first backtracking search over LP snapshots.
+Until 6.0.0 the library also shipped a `ConstraintValidator` built directly on
+the Kiwi/Cassowary linear programming solver, which did both feasibility
+checking and coordinate assignment. It handled disjunctions by **cloning the
+entire solver state** at each branch point — a depth-first backtracking search
+over LP snapshots. It was removed in 6.0.0; the qualitative validator had been
+the only one reachable in production for several releases.
 
-The qualitative validator replaces only the **search and feasibility** portion:
+The qualitative validator took over the **search and feasibility** half of that
+job and left the numbers to the layout engine:
 
-| Concern | Kiwi Validator | Qualitative Validator |
+| Concern | Old Kiwi validator | Qualitative validator |
 |---|---|---|
 | Feasibility check | LP solve per branch | DAG cycle check + chain span |
 | Disjunction search | Clone-and-backtrack LP | CDCL with clause learning |
@@ -223,7 +229,10 @@ The qualitative validator replaces only the **search and feasibility** portion:
 | Group encoding | Per-member constraints | Virtual group nodes (O(1) per group edge) |
 | Conflict diagnosis | Last failing LP constraint | Learned clauses + minimal conflict set |
 
-The qualitative approach is faster when the problem has many disjunctions (group exclusion, non-overlap) because graph operations (BFS reachability, union-find) are much cheaper than LP cloning, and CDCL avoids redundant exploration through clause learning.
+The qualitative approach wins when the problem has many disjunctions (group
+exclusion, non-overlap): graph operations (BFS reachability, union-find) are
+much cheaper than LP cloning, and CDCL avoids redundant exploration through
+clause learning.
 
 ---
 

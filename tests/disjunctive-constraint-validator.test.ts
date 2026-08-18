@@ -1,6 +1,7 @@
-// Tests for deprecated ConstraintValidator (Kiwi). See qualitative-constraint-validator*.test.ts for current validator.
+// Tests for QualitativeConstraintValidator (migrated off the removed Kiwi validator in 6.0.0).
 import { describe, it, expect } from 'vitest';
-import { ConstraintValidator, PositionalConstraintError } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
+import { PositionalConstraintError } from '../src/layout/constraint-types';
 import { 
     DisjunctiveConstraint, 
     InstanceLayout, 
@@ -89,7 +90,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             // Should succeed
@@ -132,7 +133,7 @@ describe('DisjunctiveConstraintValidator', () => {
             };
 
             const initialConstraintCount = layout.constraints.length;
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -176,7 +177,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction1, disjunction2],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -223,7 +224,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -267,7 +268,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             // Should fail because alternative conflicts with conjunctive constraint
@@ -287,7 +288,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -303,7 +304,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 // disjunctiveConstraints is undefined
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -326,7 +327,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             expect(error).toBeNull();
@@ -375,7 +376,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             // Should fail because no alternative is satisfiable
@@ -441,7 +442,7 @@ describe('DisjunctiveConstraintValidator', () => {
                 disjunctiveConstraints: [disjunction],
             };
 
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
 
             // Should fail

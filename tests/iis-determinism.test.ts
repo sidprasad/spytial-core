@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { QualitativeConstraintValidator, isPositionalConstraintError, type PositionalConstraintError } from '../src/layout/qualitative-constraint-validator';
-import { ConstraintValidator } from '../src/layout/constraint-validator';
 import {
     InstanceLayout,
     LayoutNode,
@@ -65,15 +64,11 @@ describe('IIS Determinism', () => {
         return parts.sort();
     }
 
-    function runNTimes(
-        buildLayout: () => InstanceLayout,
-        n: number,
-        Validator: typeof QualitativeConstraintValidator | typeof ConstraintValidator,
-    ): string[][] {
+    function runNTimes(buildLayout: () => InstanceLayout, n: number): string[][] {
         const results: string[][] = [];
         for (let i = 0; i < n; i++) {
             const layout = buildLayout();
-            const validator = new Validator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             expect(error).not.toBeNull();
             expect(isPositionalConstraintError(error)).toBe(true);
@@ -107,7 +102,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);
@@ -136,7 +131,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);
@@ -160,7 +155,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);
@@ -188,7 +183,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);
@@ -223,38 +218,7 @@ describe('IIS Determinism', () => {
                 } as InstanceLayout;
             };
 
-            const results = runNTimes(buildLayout, RUNS, QualitativeConstraintValidator);
-            const first = JSON.stringify(results[0]);
-            for (let i = 1; i < results.length; i++) {
-                expect(JSON.stringify(results[i])).toBe(first);
-            }
-        });
-    });
-
-    describe('Kiwi Validator', () => {
-
-        it('should produce the same IIS for a simple ordering cycle across repeated runs', () => {
-            const buildLayout = () => {
-                const nodes = ['A', 'B', 'C', 'D'].map(createNode);
-                const [A, B, C, D] = nodes;
-                const s1 = new RelativeOrientationConstraint(['left'], 'A->B');
-                const s2 = new RelativeOrientationConstraint(['left'], 'B->C');
-                const s3 = new RelativeOrientationConstraint(['left'], 'C->D');
-                const s4 = new RelativeOrientationConstraint(['left'], 'D->A');
-                return {
-                    nodes,
-                    edges: [],
-                    constraints: [
-                        createLeftConstraint(A, B, s1),
-                        createLeftConstraint(B, C, s2),
-                        createLeftConstraint(C, D, s3),
-                        createLeftConstraint(D, A, s4),
-                    ],
-                    groups: [],
-                } as InstanceLayout;
-            };
-
-            const results = runNTimes(buildLayout, RUNS, ConstraintValidator);
+            const results = runNTimes(buildLayout, RUNS);
             const first = JSON.stringify(results[0]);
             for (let i = 1; i < results.length; i++) {
                 expect(JSON.stringify(results[i])).toBe(first);

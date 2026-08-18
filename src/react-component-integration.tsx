@@ -13,7 +13,7 @@ import { generateLayoutSpecYaml, parseLayoutSpecToData } from './components/NoCo
 import { createEmptyAlloyDataInstance } from './data-instance/alloy-data-instance';
 import { IInputDataInstance } from './data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from './components/ErrorMessageModal/index'
-import { ErrorMessages } from './layout/constraint-validator';
+import { ErrorMessages } from './layout/constraint-types';
 import { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 import { EvaluatorRepl } from './components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from './evaluators';

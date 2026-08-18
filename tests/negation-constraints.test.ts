@@ -1,10 +1,10 @@
-// Some tests in this file use the deprecated ConstraintValidator (Kiwi). See qualitative-constraint-validator*.test.ts for current validator.
+// Migrated off the removed Kiwi validator in 6.0.0; these exercise QualitativeConstraintValidator.
 import { describe, it, expect } from 'vitest';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { parseLayoutSpec, RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint } from '../src/layout/layoutspec';
 import { LayoutInstance, ConstraintValidatorStrategy } from '../src/layout/layoutinstance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
-import { ConstraintValidator } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
 import {
     isTopConstraint, isLeftConstraint, isAlignmentConstraint,
     TopConstraint, LeftConstraint, AlignmentConstraint,
@@ -606,7 +606,7 @@ describe('negateDisjunction (De Morgan)', () => {
 
 // ─── Validator-Level Tests ──────────────────────────────────────────────────
 
-describe('Negated constraints in ConstraintValidator', () => {
+describe('Negated constraints in QualitativeConstraintValidator', () => {
     it('negated orientation (flipped with 0 gap) is satisfiable', () => {
         const a = createNode('A');
         const b = createNode('B');
@@ -616,7 +616,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         const constraint: TopConstraint = { top: b, bottom: a, minDistance: 0, sourceConstraint: source };
         const layout = createLayout([a, b], [constraint]);
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         expect(error).toBeNull();
     });
@@ -633,7 +633,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         const negConstraint: TopConstraint = { top: a, bottom: b, minDistance: 0, sourceConstraint: negSource };
 
         const layout = createLayout([a, b], [posConstraint, negConstraint]);
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         expect(error).toBeNull();
     });
@@ -650,7 +650,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         const negConstraint: TopConstraint = { top: b, bottom: a, minDistance: 0, sourceConstraint: negSource };
 
         const layout = createLayout([a, b], [posConstraint, negConstraint]);
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         // This may or may not be detected as a conflict depending on min distances.
         // With minDistance: 15 on positive and 0 on negated, we need A.y+15 ≤ B.y AND B.y ≤ A.y
@@ -669,7 +669,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         const disj = new DisjunctiveConstraint(source, [[alt1], [alt2]]);
 
         const layout = createLayout([a, b], [], [disj]);
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         expect(error).toBeNull();
     });
@@ -689,7 +689,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         const disj = new DisjunctiveConstraint(negSource, [[alt1], [alt2]]);
 
         const layout = createLayout([a, b], [alignConstraint], [disj]);
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         // Same Y AND (A above B OR B above A) — contradictory
         expect(error).not.toBeNull();
@@ -713,7 +713,7 @@ describe('Negated constraints in ConstraintValidator', () => {
         ]);
 
         const layout = createLayout([a, b, c], [], [disj1, disj2]);
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
         expect(error).toBeNull();
     });

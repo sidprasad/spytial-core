@@ -7,7 +7,7 @@ import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
-import { ConstraintError } from '../../layout/constraint-validator';
+import { ConstraintError } from '../../layout/constraint-types';
 
 /**
  * Structured Input Graph Custom Element

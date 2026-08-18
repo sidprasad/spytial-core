@@ -390,7 +390,7 @@ function negateConstraint(
  * Try to find a constraint from system B that conflicts with system A.
  *
  * Constructs a merged InstanceLayout with A's constraints first, then B's,
- * and runs the standard ConstraintValidator.  If a positional conflict is
+ * and runs the standard QualitativeConstraintValidator.  If a positional conflict is
  * found the error already carries the IIS extracted by the validator.
  */
 function findDirectionalConflict(

@@ -30,7 +30,7 @@ import IEvaluator from '../evaluator-contracts';
 import { SelectorArityError } from '../evaluator-contracts';
 import type { IEvaluatorResult } from '../evaluator-contracts';
 import { ColorPicker } from './colorpicker';
-import { type ConstraintError, type ErrorMessages, ConstraintValidator } from './constraint-validator';
+import { type ConstraintError, type ErrorMessages } from './constraint-types';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
 import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
 
@@ -168,12 +168,11 @@ export enum AlignmentEdgeStrategy {
  *   assignment. Faster on large/group-heavy instances with geometry-aware
  *   pruning and clause learning.
  *
- * - `kiwi` (deprecated): The original Kiwi-based backtracking validator.
- *   Retained for backward compatibility and equivalence testing.
+ * The deprecated `kiwi` strategy was removed in 6.0.0 along with the validator
+ * it selected. One member remains so the constructor parameter keeps its
+ * meaning for callers that pass it.
  */
 export enum ConstraintValidatorStrategy {
-    /** @deprecated Use QUALITATIVE instead. Will be removed in a future release. */
-    KIWI = 'kiwi',
     /** CDCL-based qualitative validator (default) */
     QUALITATIVE = 'qualitative'
 }
@@ -706,7 +705,7 @@ export class LayoutInstance {
      * @param instNum - The instance number (default is 0), used to differentiate between multiple instances of the same layout.
      * @param addAlignmentEdges - Deprecated. Use alignmentEdgeStrategy instead. A boolean flag indicating whether alignment edges should be added (default is `true`, equivalent to 'connected' strategy).
      * @param alignmentEdgeStrategy - Strategy for adding alignment edges (default is `AlignmentEdgeStrategy.CONNECTED`). Takes precedence over addAlignmentEdges if provided.
-     * @param validatorStrategy - Which constraint validator to use (default is `ConstraintValidatorStrategy.QUALITATIVE`). Set to `KIWI` to use the deprecated Cassowary-based validator.
+     * @param validatorStrategy - Which constraint validator to use. `QUALITATIVE` is the only strategy and the default; the parameter is kept so existing positional callers still compile.
      *
      * The `LayoutInstance` class is responsible for generating a layout for a given data instance based on the provided layout specification.
      * It applies constraints, directives, and projections to produce a structured layout that can be rendered using a graph visualization library.
@@ -1760,9 +1759,7 @@ export class LayoutInstance {
         }
 
         // Validate all constraints (conjunctive + disjunctive) in one pass
-        const validator: IConstraintValidator = this.validatorStrategy === ConstraintValidatorStrategy.QUALITATIVE
-            ? new QualitativeConstraintValidator(layout)
-            : new ConstraintValidator(layout);
+        const validator: IConstraintValidator = new QualitativeConstraintValidator(layout);
         const constraintError = validator.validateConstraints();
 
         if (constraintError) {
@@ -1924,7 +1921,8 @@ export class LayoutInstance {
 
         // The qualitative validator enforces the MFS on layout.constraints
         // before returning the error. Use the layout as-is in that case.
-        // For the Kiwi validator (no MFS), fall back to removing the IIS.
+        // `maximalFeasibleSubset` is optional on the error type, so a validator
+        // that does not compute one falls back to removing the IIS.
         const constraints = error.maximalFeasibleSubset
             ? layout.constraints
             : layout.constraints.filter(c =>

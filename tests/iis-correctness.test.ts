@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { ConstraintValidator, PositionalConstraintError } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
+import { PositionalConstraintError } from '../src/layout/constraint-types';
 import { 
     InstanceLayout, 
     LayoutNode, 
@@ -77,7 +78,7 @@ describe('IIS Correctness', () => {
             groups: [],
         };
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
 
         // Should fail due to cycle
@@ -126,7 +127,7 @@ describe('IIS Correctness', () => {
                     groups: [],
                 };
                 
-                const testValidator = new ConstraintValidator(testLayout);
+                const testValidator = new QualitativeConstraintValidator(testLayout);
                 const testError = testValidator.validateConstraints();
                 
                 // If we can remove this constraint and still have a conflict,
@@ -166,7 +167,7 @@ describe('IIS Correctness', () => {
             groups: [],
         };
 
-        const validator = new ConstraintValidator(layout);
+        const validator = new QualitativeConstraintValidator(layout);
         const error = validator.validateConstraints();
 
         expect(error).not.toBeNull();
@@ -179,14 +180,15 @@ describe('IIS Correctness', () => {
                 minimalConstraints.push(...layoutConstraints as LeftConstraint[]);
             }
 
-            // For a simple 3-cycle, the FULL IIS should be exactly 3 constraints
-            // But the minimalConflictingSet only contains the "existing" constraints
-            // The conflicting constraint is reported separately
-            
-            // Count total: minimalConflictingSet + conflictingConstraint
-            const totalIISSize = minimalConstraints.length + 1; // +1 for conflictingConstraint
-            console.log('Total IIS size (including conflicting constraint):', totalIISSize);
+            // For a simple 3-cycle the full IIS is exactly the 3 constraints.
+            // QualitativeConstraintValidator reports the conflicting constraint
+            // as a member of minimalConflictingSet (the removed Kiwi validator
+            // held it out and reported it only alongside), so the set is the
+            // whole IIS and must not have the conflicting one added back.
+            const totalIISSize = minimalConstraints.length;
+            console.log('Total IIS size:', totalIISSize);
             expect(totalIISSize).toBe(3);
+            expect(minimalConstraints).toContain(positionalError.conflictingConstraint);
             
             console.log('Simple cycle IIS:');
             minimalConstraints.forEach(c => {

@@ -1,6 +1,6 @@
-// Tests for deprecated ConstraintValidator (Kiwi). See qualitative-constraint-validator*.test.ts for current validator.
+// Tests for QualitativeConstraintValidator (migrated off the removed Kiwi validator in 6.0.0).
 import { describe, it, expect } from 'vitest';
-import { ConstraintValidator } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
 import { 
     DisjunctiveConstraint, 
     InstanceLayout, 
@@ -88,7 +88,7 @@ describe('Constraint Validation Performance', () => {
             };
 
             const startTime = performance.now();
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const endTime = performance.now();
             
@@ -132,7 +132,7 @@ describe('Constraint Validation Performance', () => {
             };
 
             const startTime = performance.now();
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const endTime = performance.now();
 
@@ -182,7 +182,7 @@ describe('Constraint Validation Performance', () => {
             };
 
             const startTime = performance.now();
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const endTime = performance.now();
 
@@ -238,7 +238,7 @@ describe('Constraint Validation Performance', () => {
             };
 
             const startTime = performance.now();
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const endTime = performance.now();
 
@@ -285,7 +285,7 @@ describe('Constraint Validation Performance', () => {
             };
 
             const startTime = performance.now();
-            const validator = new ConstraintValidator(layout);
+            const validator = new QualitativeConstraintValidator(layout);
             const error = validator.validateConstraints();
             const endTime = performance.now();
 

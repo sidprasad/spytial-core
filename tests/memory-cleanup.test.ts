@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
-import { ConstraintValidator } from '../src/layout/constraint-validator';
+import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import { ForgeEvaluator } from '../src/evaluators/data/forge-evaluator';
 import type { InstanceLayout, LayoutNode } from '../src/layout/interfaces';
@@ -99,7 +99,7 @@ describe('Memory Cleanup', () => {
         });
     });
 
-    describe('ConstraintValidator', () => {
+    describe('QualitativeConstraintValidator', () => {
         it('should clear caches on dispose', () => {
             const mockLayout = {
                 nodes: [createMockNode('A', 'A', 'red')],
@@ -108,20 +108,20 @@ describe('Memory Cleanup', () => {
                 groups: []
             };
 
-            const validator = new ConstraintValidator(mockLayout);
-            
+            const validator = new QualitativeConstraintValidator(mockLayout);
+
             // Get initial stats
-            const statsBefore = validator.getMemoryStats();
+            const statsBefore = validator.getStats();
             expect(statsBefore).toBeDefined();
-            
+
             // Dispose
             validator.dispose();
-            
-            // After disposal, caches should be cleared
-            const statsAfter = validator.getMemoryStats();
-            expect(statsAfter.cachedConstraints).toBe(0);
-            expect(statsAfter.variables).toBe(0);
-            expect(statsAfter.groupBoundingBoxes).toBe(0);
+
+            // After disposal the constraint graphs and learned clauses are gone
+            const statsAfter = validator.getStats();
+            expect(statsAfter.hEdges).toBe(0);
+            expect(statsAfter.vEdges).toBe(0);
+            expect(statsAfter.learnedClauses).toBe(0);
         });
 
         it('should report accurate memory stats', () => {
@@ -132,12 +132,12 @@ describe('Memory Cleanup', () => {
                 groups: []
             };
 
-            const validator = new ConstraintValidator(mockLayout);
-            const stats = validator.getMemoryStats();
+            const validator = new QualitativeConstraintValidator(mockLayout);
+            const stats = validator.getStats();
 
-            expect(stats.cachedConstraints).toBeGreaterThanOrEqual(0);
-            expect(stats.variables).toBeGreaterThanOrEqual(0);
-            expect(stats.groupBoundingBoxes).toBeGreaterThanOrEqual(0);
+            expect(stats.hEdges).toBeGreaterThanOrEqual(0);
+            expect(stats.vEdges).toBeGreaterThanOrEqual(0);
+            expect(stats.learnedClauses).toBeGreaterThanOrEqual(0);
             expect(stats.addedConstraints).toBeGreaterThanOrEqual(0);
         });
     });
@@ -206,14 +206,14 @@ describe('Memory Cleanup', () => {
 
             // Create all components
             const webcolaLayout = new WebColaLayout(mockLayout, 800, 800);
-            const validator = new ConstraintValidator(mockLayout);
+            const validator = new QualitativeConstraintValidator(mockLayout);
             const sgqEvaluator = new SGraphQueryEvaluator();
             const forgeEvaluator = new ForgeEvaluator();
 
             // Collect all stats
             const allStats = {
                 webcolaLayout: webcolaLayout.getMemoryStats(),
-                validator: validator.getMemoryStats(),
+                validator: validator.getStats(),
                 sgqEvaluator: sgqEvaluator.getMemoryStats(),
                 forgeEvaluator: forgeEvaluator.getMemoryStats()
             };
@@ -221,7 +221,7 @@ describe('Memory Cleanup', () => {
             // Verify all stats are present
             expect(allStats.webcolaLayout.nodeCount).toBe(2);
             expect(allStats.webcolaLayout.edgeCount).toBe(1);
-            expect(allStats.validator.cachedConstraints).toBeGreaterThanOrEqual(0);
+            expect(allStats.validator.addedConstraints).toBeGreaterThanOrEqual(0);
             expect(allStats.sgqEvaluator.cacheSize).toBeGreaterThanOrEqual(0);
             expect(allStats.forgeEvaluator.cacheSize).toBeGreaterThanOrEqual(0);
 
@@ -233,12 +233,12 @@ describe('Memory Cleanup', () => {
 
             // Verify cleanup
             const statsAfterDisposal = {
-                validator: validator.getMemoryStats(),
+                validator: validator.getStats(),
                 sgqEvaluator: sgqEvaluator.getMemoryStats(),
                 forgeEvaluator: forgeEvaluator.getMemoryStats()
             };
 
-            expect(statsAfterDisposal.validator.cachedConstraints).toBe(0);
+            expect(statsAfterDisposal.validator.learnedClauses).toBe(0);
             expect(statsAfterDisposal.sgqEvaluator.cacheSize).toBe(0);
             expect(statsAfterDisposal.forgeEvaluator.cacheSize).toBe(0);
         });
