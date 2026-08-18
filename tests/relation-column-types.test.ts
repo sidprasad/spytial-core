@@ -182,6 +182,22 @@ describe('JSONDataInstance.addRelationTuple — positional column types', () => 
     warn.mockRestore();
   });
 
+  it('stays unsigned once ragged, however later writes line up', () => {
+    const instance = new JSONDataInstance(personStudentCity());
+
+    // Widths 2 (already there), 3, then 2 again. That last write matches the
+    // width of the tuples the relation started with, and used to hand the
+    // relation a two-column signature back while it still held a 3-tuple.
+    instance.addRelationTuple('lives_in', { atoms: ['P1', 'S1', 'C1'] } as unknown as ITuple);
+    expect(relationNamed(instance, 'lives_in').types).toEqual([]);
+
+    instance.addRelationTuple('lives_in', { atoms: ['S1', 'C1'] } as unknown as ITuple);
+
+    const relation = relationNamed(instance, 'lives_in');
+    expect(relation.tuples.map(t => t.atoms.length)).toEqual([2, 3, 2]);
+    expect(relation.types).toEqual([]);
+  });
+
   it('keeps every tuple when a write makes the relation ragged', () => {
     const instance = new JSONDataInstance(personStudentCity());
     instance.addRelationTuple('lives_in', { atoms: ['P1', 'S1', 'C1'], types: [] } as unknown as ITuple);
