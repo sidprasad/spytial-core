@@ -131,7 +131,6 @@ export type DiagnosticCode =
     | 'datum/tuple-empty'
     | 'datum/dangling-tuple-atom'
     | 'datum/tuple-type-arity-mismatch'
-    | 'datum/ragged-relation'
     // Spec + layout problems
     | 'spec/parse-failed'
     | 'layout/generation-failed'

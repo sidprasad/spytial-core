@@ -18,6 +18,27 @@ Each type object includes:
 - `atoms`: The atoms belonging to this type (same shape as the top-level `atoms`).
 - `isBuiltin`: Whether the type should be treated as built-in.
 
+## Relation names, ids and arity
+
+- The **name** is what selectors resolve against. The **id** is provenance only —
+  where the relation came from in the host language. Alloy uses a qualified id
+  (`A<:foo`); other integrations often just repeat the name.
+- Two relations may share a name. They are one relation: their tuples are
+  merged under that name.
+- A relation may be **ragged** — its tuples need not all be the same width. Two
+  unrelated Python classes can both have a `foo` field, one holding pairs and
+  one holding triples. Both are the relation `foo`, and `foo` selects all of
+  them. Drawing, selectors and constraints all work tuple by tuple.
+- `types` is a **summary**, one entry per column. It only exists when every
+  tuple has the same width; on a ragged relation it is `[]`. Never read
+  `types.length` as the relation's arity — arity lives on the tuple, as
+  `tuple.atoms.length`.
+- The SQL evaluator gives each relation **name** one table. A ragged relation's
+  table is as wide as its widest tuple, with `arity` (how many atoms that row
+  has), `src`/`tgt` (first and last), and `elem_0..elem_n` holding the whole
+  tuple, NULL past the row's own width. Uniform relations keep the columns they
+  always had (`atom`, or `src`/`tgt`, or `elem_*`).
+
 ## Notes
 
 - Atom IDs should be unique strings. Relation tuples reference atoms by ID.

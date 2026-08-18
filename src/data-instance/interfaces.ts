@@ -32,10 +32,18 @@ export interface IAtom  {
 }
 
 
+/**
+ * One tuple in a relation.
+ *
+ * A tuple owns its own arity: `atoms.length` is the truth, and `types` is
+ * this tuple's signature, one entry per atom. A relation may hold tuples of
+ * different arity (see {@link IRelation}), so nothing may read one tuple's
+ * arity as the arity of the relation around it.
+ */
 export interface ITuple {
   // ordered array of atom ids that comprise the tuple
   atoms: string[];
-  // ordered array of types that comprise the tuple
+  // ordered array of types that comprise the tuple — one per atom
   types: string[];
 }
 
@@ -48,14 +56,38 @@ export interface IType {
     isBuiltin: boolean; // Flag indicating if the type is a built-in type
 }
 
+/**
+ * A named set of tuples.
+ *
+ * Relations are RAGGED-TOLERANT: the tuples need not all have the same arity.
+ * Host languages hand us this routinely — two unrelated Python classes can both
+ * have a `foo` field, one holding pairs and one holding triples, and both are
+ * the relation `foo`. Alloy reaches the same place from the other side: two
+ * sigs may each declare a field `foo`, and their ids differ (`A<:foo`,
+ * `B<:foo`) while the name does not.
+ *
+ * The name is what selectors see; `id` is provenance only. Rendering, the
+ * evaluators and the constraint layer all work tuple by tuple, so a ragged
+ * relation draws and queries correctly.
+ */
 export interface IRelation {
-  // the relation's unique identifier
+  // the relation's unique identifier — provenance, not the queryable name
   id: string;
-  // the relation's name
+  // the relation's name — what selectors resolve against
   name: string;
-  // the types that are allowed in the relation's tuples
+  /**
+   * A SUMMARY of the tuples' column types, one entry per column, positional.
+   *
+   * It is only meaningful when every tuple has the same arity. When the tuples
+   * disagree — a ragged relation — no positional list can describe them, and
+   * this is `[]`.
+   *
+   * So `types.length` is NOT the relation's arity, and must never be read as
+   * one: on a ragged relation it is 0 no matter how wide the tuples are. Arity
+   * lives on the tuple (`ITuple.atoms.length`).
+   */
   types: string[];
-  // the relation's tuples
+  // the relation's tuples — may differ in arity from one another
   tuples: ITuple[];
 }
 

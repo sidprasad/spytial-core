@@ -178,8 +178,6 @@ export function checkDatum(datum: unknown): Diagnostic[] {
             ));
         }
 
-        const arities = new Set<number>();
-
         tuples.forEach((tuple, j) => {
             const tupleWhere = `${where}.tuples[${j}]`;
             if (!isObject(tuple)) {
@@ -200,8 +198,6 @@ export function checkDatum(datum: unknown): Diagnostic[] {
                 diagnostics.push(error('datum/tuple-empty', `Tuple in "${label}" has no atoms.`, tupleWhere));
                 return;
             }
-            arities.add(tupleAtoms.length);
-
             tupleAtoms.forEach((atomId, k) => {
                 if (!isNonEmptyString(atomId)) {
                     diagnostics.push(error(
@@ -219,9 +215,10 @@ export function checkDatum(datum: unknown): Diagnostic[] {
             });
 
             // A tuple's own types must line up with its own atoms. This is
-            // checked per tuple, not against the relation's declared `types`:
-            // that list is positional and gets appended to as columns settle,
-            // so comparing lengths against it produces false alarms.
+            // checked per tuple, never against the relation's `types`: that
+            // list is only a summary of the columns when the tuples agree on a
+            // width, and it is empty on a ragged relation, so comparing tuple
+            // lengths against it produces false alarms.
             if (Array.isArray(tuple.types) && tuple.types.length !== tupleAtoms.length) {
                 diagnostics.push(warning(
                     'datum/tuple-type-arity-mismatch',
@@ -231,13 +228,10 @@ export function checkDatum(datum: unknown): Diagnostic[] {
             }
         });
 
-        if (arities.size > 1) {
-            diagnostics.push(warning(
-                'datum/ragged-relation',
-                `Relation "${label}" mixes tuple arities (${[...arities].sort((a, b) => a - b).join(', ')}). Selectors assume a relation has one arity.`,
-                `${where}.tuples`,
-            ));
-        }
+        // A relation whose tuples have different arities is NOT reported.
+        // Ragged relations are legal: one name may hold tuples of different
+        // width (see IRelation). Rendering, the evaluators and the constraint
+        // layer all work tuple by tuple, so nothing downstream needs one arity.
     });
 
     return diagnostics;
