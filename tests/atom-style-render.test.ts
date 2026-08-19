@@ -14,6 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { WebColaLayout } from '../src/translators/webcola/webcolatranslator';
 import { FALLBACK_ICON, resolveIconPath } from '../src/layout/icon-registry';
+import { lightTheme } from './helpers/renderer-stubs';
 
 const proto = WebColaCnDGraph.prototype as any;
 
@@ -23,7 +24,7 @@ describe('webcola-cnd-graph — node fill color', () => {
     // so stubbing it would test the stub rather than the precedence.
     const base = {
         isHiddenNode: () => false,
-        getCanvasBackground: () => '#fafafa',
+        themeController: lightTheme({ background: '#fafafa' }),
         isBadgeIcon: proto.isBadgeIcon,
     };
     const fill = (thisArg: any, d: any) => proto.nodeFillColor.call(thisArg, d);
