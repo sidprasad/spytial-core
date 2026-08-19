@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 
 /**
  * Regression tests for the teardown bugs in issue #474:
@@ -12,6 +13,9 @@ import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
  */
 
 const proto = WebColaCnDGraph.prototype as any;
+// The endpoint handles are editing machinery, so they moved down to the
+// editing subclass (#571). The behaviour under test is unchanged.
+const editProto = StructuredInputGraph.prototype as any;
 
 /**
  * Chainable d3-selection stub that records resolved attr values. Accessors are
@@ -46,7 +50,7 @@ describe('WebColaCnDGraph teardown (#474)', () => {
         svgLinkGroups: { select },
       };
 
-      expect(() => proto.updateEdgeEndpointMarkers.call(fakeThis)).not.toThrow();
+      expect(() => editProto.updateEdgeEndpointMarkers.call(fakeThis)).not.toThrow();
       expect(select).not.toHaveBeenCalled();
     });
 
@@ -62,10 +66,10 @@ describe('WebColaCnDGraph teardown (#474)', () => {
             selector === '.target-marker' ? target.sel : source.sel,
         },
         getLinkPathElement: () => throwingPath,
-        getEdgePathPoint: proto.getEdgePathPoint,
+        getEdgePathPoint: editProto.getEdgePathPoint,
       };
 
-      expect(() => proto.updateEdgeEndpointMarkers.call(fakeThis)).not.toThrow();
+      expect(() => editProto.updateEdgeEndpointMarkers.call(fakeThis)).not.toThrow();
       // Handles are positioned via a translate transform on the group, falling
       // back to the edge's layout coordinates when the path geometry is unreadable.
       expect(target.applied.transform).toBe('translate(30, 40)');
@@ -85,17 +89,17 @@ describe('WebColaCnDGraph teardown (#474)', () => {
         }),
       };
 
-      expect(proto.getEdgePathPoint.call(fakeThis, marker, 'end')).toEqual({ x: 10, y: 5 });
-      expect(proto.getEdgePathPoint.call(fakeThis, marker, 'start')).toEqual({ x: 0, y: 5 });
+      expect(editProto.getEdgePathPoint.call(fakeThis, marker, 'end')).toEqual({ x: 10, y: 5 });
+      expect(editProto.getEdgePathPoint.call(fakeThis, marker, 'start')).toEqual({ x: 0, y: 5 });
     });
 
     it('returns null when the path is missing or not rendered', () => {
       const missing: any = { getLinkPathElement: () => null };
-      expect(proto.getEdgePathPoint.call(missing, marker, 'end')).toBeNull();
+      expect(editProto.getEdgePathPoint.call(missing, marker, 'end')).toBeNull();
 
       const detached: any = { getLinkPathElement: () => throwingPath };
-      expect(proto.getEdgePathPoint.call(detached, marker, 'end')).toBeNull();
-      expect(proto.getEdgePathPoint.call(detached, marker, 'start')).toBeNull();
+      expect(editProto.getEdgePathPoint.call(detached, marker, 'end')).toBeNull();
+      expect(editProto.getEdgePathPoint.call(detached, marker, 'start')).toBeNull();
     });
   });
 

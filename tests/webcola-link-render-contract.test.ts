@@ -24,6 +24,11 @@ import { lightTheme } from './helpers/renderer-stubs';
 (window as any).d3 = d3;
 const { WebColaCnDGraph } = await import('../src/translators/webcola/webcola-cnd-graph');
 const proto = WebColaCnDGraph.prototype as any;
+// Endpoint markers are editing machinery and live on the editing subclass
+// (#571). setupLinks reaches them through the onLinksRendered hook, so the
+// fixture below wires the real hook rather than the old direct call.
+const { StructuredInputGraph } = await import('../src/translators/webcola/structured-input-graph');
+const editProto = StructuredInputGraph.prototype as any;
 
 // Real ids from the reported sample: Alloy subtyping relations carry quotes,
 // which is what used to make an id-built selector throw.
@@ -51,7 +56,9 @@ function renderLinks(links: any[]) {
     setupLinks: proto.setupLinks,
     setupLinkPaths: proto.setupLinkPaths,
     setupLinkLabels: proto.setupLinkLabels,
-    setupEdgeEndpointMarkers: proto.setupEdgeEndpointMarkers,
+    onLinksRendered: editProto.onLinksRendered,
+    onLinkPathsRendered: editProto.onLinkPathsRendered,
+    setupEdgeEndpointMarkers: editProto.setupEdgeEndpointMarkers,
     getLinkPathElement: proto.getLinkPathElement,
     // Pure helpers: real implementations, so their output is the renderer's.
     getEdgeDasharray: proto.getEdgeDasharray,

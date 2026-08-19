@@ -258,7 +258,7 @@ describe('tick paths keep the icon on its node', () => {
             svgGroupLabels: empty,
             svgGroupLabelBgs: undefined,
             // The real one: it returns early on a detached element.
-            updateEdgeEndpointMarkers: proto.updateEdgeEndpointMarkers,
+            onPositionsUpdated: () => {},
         });
 
         expect(icon().getAttribute('x')).toBe('280');
@@ -276,7 +276,7 @@ describe('tick paths keep the icon on its node', () => {
             container: d3.select(svg),
             ensureNodeBounds: () => undefined,
             // The real one, as above: it returns early on a detached element.
-            updateEdgeEndpointMarkers: proto.updateEdgeEndpointMarkers,
+            onPositionsUpdated: () => {},
         });
 
         expect(icon().getAttribute('x')).toBe('12');
