@@ -1,7 +1,7 @@
 ---
 name: integrate-language
 description: Use this skill when the user wants to integrate a new host language with Spytial — phrases like "integrate <X> with Spytial", "make Spytial work with <X>", "build a Spytial frontend/binding/adapter for <X>", "port spytial/caraspace to <X>", "Spytial bindings for <X>". Walks the user through the four subproblems (recover structure, attach specs, present diagrams, handle gaps) and produces a concrete integration design before any code is written. Fetches canonical recipe and contract from the spytial-core docs over HTTP.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Integrate a host language with Spytial
@@ -17,7 +17,7 @@ You are guiding a developer through designing and building an integration of a n
 **Does:**
 - Walks the user through a phased design for a new Spytial host integration.
 - Produces a written design document covering all four subproblems before any code.
-- Optionally scaffolds a minimum-viable JSON-emitting integration (Phase 4).
+- Optionally scaffolds a minimum-viable JSON-emitting integration and its first conformance cases (Phase 4).
 
 **Doesn't:**
 - Modify `spytial-core` itself. The integration is a *new* repo or package that consumes `spytial-core` from npm or via the CDN bundle.
@@ -31,11 +31,11 @@ You are guiding a developer through designing and building an integration of a n
 
 Before asking the user any questions, `WebFetch` these three load-bearing sources. Read them so your guidance reflects what the docs actually say, not what training data remembers.
 
-- `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/integration.md` — the four subproblems, contract rules, pre-flight checklist
+- `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/new-language-integration.md` — the four subproblems, contract rules, pre-flight checklist
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/case-studies.md` — Python/Rust/Pyret/Lean worked examples
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/src/data-instance/interfaces.ts` — `IDataInstance`, `IAtom`, `ITuple`, `IType`, `IRelation`
 
-The other three sources (listed at the bottom) are reference material for specific Phase 2 subsections. The rule: **fetch each one before entering the subsection it serves, never from memory.** Mid-subsection fetches are fine — pause, fetch, resume. Citing what training data remembers about YAML or the README in place of fetching is a defect.
+The remaining sources (listed at the bottom) are reference material for specific later sections. The rule: **fetch each one before entering the section it serves, never from memory.** Mid-section fetches are fine — pause, fetch, resume. Citing what training data remembers about YAML, the README, or the test harness in place of fetching is a defect.
 
 **The implementations are the ground truth, not the case studies.** `case-studies.md` flattens the surface — load-bearing patterns (Caraspace's singleton dedup, sPyTial's `identity_resolver`, Spyret's `_cndspec` runtime evaluation, Lean's elaborator hooks) live in the code, not the summary tables. When the host you're integrating is adjacent to one of the existing four, browse the actual repo:
 
@@ -139,7 +139,7 @@ Fetch (before deciding) for the exact pipeline code and CDN URL:
 The surface and trigger choices are already locked from Q4 / Q5. Here, decide the technical platform.
 
 Decide:
-- **Bundle source.** NPM (`spytial-core`) or CDN? **If CDN, pin a version** — `spytial-core@2.5.2` over bare `spytial-core`. Papers, locked notebooks, and reproducibility-sensitive workflows depend on this; bare CDN URLs silently shift under users. The README has the canonical pinned URL.
+- **Bundle source.** NPM (`spytial-core`) or CDN? **If CDN, pin a version** — `spytial-core@<version>` over bare `spytial-core`. Papers, locked notebooks, and reproducibility-sensitive workflows depend on this; bare CDN URLs silently shift under users. Take the version from the README you just fetched, not from memory.
 - **Renderer element.** `<webcola-cnd-graph>` is the visual default. `<spytial-explorer>` wraps it and adds an a11y / spatial-REPL surface — pick it when accessibility is a first-class requirement for your host's audience (academic tooling, classroom use, IDE plugins). Both expose the same `renderLayout(layout)` method, so swapping is a one-line change.
 - **Core pipeline.** The browser-side payload is identical across hosts and runs in **five stages**: `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator.initialize` → `LayoutInstance.generateLayout` → element `renderLayout`. (The README markets this as a "five-line integration"; the actual snippet is six or seven physical lines depending on import style — same five stages either way. Quote stages, not lines.) Confirm you understand each stage and what it produces.
 
@@ -149,7 +149,7 @@ For the classical example from Q6, decide:
 - **Ordering.** How is the order of children/elements expressed? Three layered options, in order of preference:
   1. **Insertion order from the relationalizer** — preserve field declaration order (Rust), constructor argument position (Lean), dictionary insertion order (Python 3.7+).
   2. **`orderBy` directive** on a relation — when there's a "next" pointer or similar.
-  3. **`evaluateOrderBy` callback** — when the `orderBy` relation has a cycle and lexicographic tiebreak isn't good enough. Pyret uses source position. Hosts with richer position data (line/column, time of evaluation) can supply something more meaningful here. See `integration.md` §4 for the hook.
+  3. **`evaluateOrderBy` callback** — when the `orderBy` relation has a cycle and lexicographic tiebreak isn't good enough. Pyret uses source position. Hosts with richer position data (line/column, time of evaluation) can supply something more meaningful here. See `new-language-integration.md` §4 for the hook.
 - **One derived metric.** Pick something not in the data (BST height, linked-list length, DAG topological depth, RB-tree black-height). Compute it in the relationalizer and emit as extra atoms/tuples (e.g. a `height: Node → Int` relation), OR compute in JS via a `tag` directive. State which and why.
 - **Sharing/cycles.** What's the default? "Faithful (one atom referenced twice)" is the right default; "duplicate-on-share" is opt-in for diagrams where the visual blow-up is too painful.
 
@@ -157,7 +157,9 @@ For the classical example from Q6, decide:
 
 ## Phase 3 — Pre-flight checklist
 
-Open `integration.md` (already fetched) and walk the user through the four-checkbox pre-flight list at the bottom of the page. Do not skip — each item is load-bearing. If any answer is "no" or "not yet," return to the relevant Phase 2 section.
+Open `new-language-integration.md` (already fetched) and walk the user through every checkbox in the pre-flight list at the bottom of the page. Walk what the page actually lists — don't work from a remembered count; the list grows. Do not skip — each item is load-bearing. If any answer is "no" or "not yet," return to the relevant Phase 2 section.
+
+The **Test** checkbox is the one Phase 2 didn't design for, because it isn't a design decision — it's a harness the user runs. Take it as read here and discharge it in Phase 4.4.
 
 ---
 
@@ -167,11 +169,24 @@ Only after Phases 1–3 are signed off.
 
 1. **Emit JSON.** Implement the relationalizer to produce JSON matching the `JSONDataInstance` shape (atoms + relations). Do not implement `IDataInstance` directly unless Phase 1 surfaced a measured reason (huge data, existing graph structure, fine-grained control over `applyProjections`/`generateGraph`).
 
-2. **Wire to a minimal HTML harness.** Use the core pipeline from `README.md` (the five-stage `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator` → `LayoutInstance` → `renderLayout` flow). Load the bundle from a *pinned* CDN version (e.g. `spytial-core@2.5.2`) for the prototype.
+2. **Wire to a minimal HTML harness.** Use the core pipeline from `README.md` (the five-stage `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator` → `LayoutInstance` → `renderLayout` flow). Load the bundle from a *pinned* CDN version — the one in the README, not a remembered one.
 
-3. **Round-trip the classical example from Q6.** Confirm the diagram renders. Confirm the derived metric from §2.4 appears. Confirm shared references render as one atom.
+3. **Round-trip the classical example from Q6.** Confirm the diagram renders, and that the derived metric from §2.4 appears.
 
-4. **Stop.** The user has a working integration. Polish, packaging, and host-idiomatic ergonomics come next, but those are the user's design space, not this skill's.
+4. **Pin it down with conformance cases.** Fetch before writing any:
+   - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/testing-integrations.md`
+
+   Looking at the picture is not a test. `spytial-core` ships a harness — the `spytial-check` CLI (JSON in, JSON out, so any host can run it as a subprocess) and the `spytial-core/conformance` entry point for JavaScript hosts. It answers the only two questions the integration is actually responsible for: **is the datum the relationalizer produced well-formed**, and **does the emitted spec entail the spatial facts its author meant it to**. Both without a browser.
+
+   Steer the user away from the tempting wrong test. A spec constrains *relationships*, not a drawing — a list that runs left to right is satisfied by infinitely many layouts. Asserting on coordinates or diffing rendered images tests spytial-core's renderer, not the integration, and those tests fail when nothing is wrong. Assert on entailment instead: `must` / `cannot` / `can` are facts about the spec, stable across machines and releases.
+
+   Write at least these, adapting the seed cases in `tests/conformance/cases/`:
+   - **The classical example from Q6** — its spec's intended facts as `must` assertions, plus at least one `empty: true` assertion pinning what the spec deliberately does *not* say. Specs meaning less than their author thought is the failure this catches; the docs' BST case is the worked example.
+   - **A sharing case** — the identity strategy from Q2 is the #1 source of broken integrations, and the datum check cannot catch a lost share (both a DAG and its wrongly-duplicated tree are well-formed). A `nodes()` count assertion over a value reachable by two paths is what catches it. Write this one even if you write nothing else.
+
+   The datum check runs on the raw JSON, before it becomes a data instance — which is the point. The data instance repairs duplicate ids and dangling references on the way in, so bugs the check would name (`datum/duplicate-atom-id`, `datum/dangling-tuple-atom`) otherwise show up only as a quietly missing box. Read the warnings too: a selector naming something absent evaluates to the empty relation rather than raising, so a typo'd spec lays out fine and constrains nothing.
+
+5. **Stop.** The user has a working, tested integration. Polish, packaging, and host-idiomatic ergonomics come next, but those are the user's design space, not this skill's.
 
 ---
 
@@ -181,7 +196,7 @@ From the "patterns across all" section of `case-studies.md` — three things eve
 
 - **Don't fake order.** Sets are unordered. If your relationalizer invents an order, downstream `orderBy` directives lie. Preserve insertion order or attach an explicit `orderBy`.
 - **Don't silently dedupe shared references.** If `(a, b)` and `(c, b)` both point to the same `b`, render it as one atom referenced twice. Two independent atoms is a different graph.
-- **Don't skip identity-aware reflection.** Without it, sharing and cycles produce wrong diagrams or infinite loops. This is the most common bug in new integrations.
+- **Don't skip identity-aware reflection.** Without it, sharing and cycles produce wrong diagrams or infinite loops. This is the most common bug in new integrations. Nothing structural catches it — a duplicated share is still a well-formed graph — so it has to be pinned by a conformance assertion (Phase 4.4).
 
 ---
 
@@ -189,9 +204,10 @@ From the "patterns across all" section of `case-studies.md` — three things eve
 
 The skill fetches these from spytial-core. The recipe and contract live in those files, not here — update the docs and the skill picks up the change. (The Anti-patterns section above is a deliberate exception: it's a short, load-bearing safety reminder repeated verbatim from `case-studies.md` so an agent can't skip it.)
 
-- `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/integration.md` — the four subproblems and pre-flight checklist
+- `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/new-language-integration.md` — the four subproblems and pre-flight checklist
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/case-studies.md` — Python, Rust, Pyret, Lean worked examples
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/custom-data-instance.md` — JSON-vs-`IDataInstance` decision
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/src/data-instance/interfaces.ts` — `IDataInstance`/`IAtom`/`ITuple`/`IType`/`IRelation` contract
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/yaml-reference.md` — YAML spec language reference (Phase 2.2 only)
 - `https://raw.githubusercontent.com/sidprasad/spytial-core/main/README.md` — core pipeline + pinned CDN URL (Phase 2.3, Phase 4)
+- `https://raw.githubusercontent.com/sidprasad/spytial-core/main/site/testing-integrations.md` — conformance harness: `spytial-check` CLI, `spytial-core/conformance`, query and assertion forms (Phase 4.4)
