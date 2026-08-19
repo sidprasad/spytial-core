@@ -8,14 +8,16 @@
  * were placed once when input mode opened and then stayed behind as the layout
  * moved: measured 72–110px adrift after a single grid tick.
  *
- * The handles themselves are positioned by `updateEdgeEndpointMarkers`, which
- * is already covered where it is called from. What was missing was the call,
- * so that is what this pins: whichever updater runs, the handles get updated.
+ * Both updaters now end in the `onPositionsUpdated` hook, and the editing
+ * subclass moves the handles from there. That is a two-link chain, so this
+ * pins both links: each updater calls the hook, and the hook moves the handles.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 
 const proto = WebColaCnDGraph.prototype as any;
+const editProto = StructuredInputGraph.prototype as any;
 
 /**
  * A d3 selection that answers every call with itself and never invokes the
@@ -42,12 +44,10 @@ function tickHost(overrides: Record<string, unknown> = {}): Record<string, unkno
     svgLinkGroups: sel,
     parentNode: null,
     isConnected: true,
-    isInputModeActive: true,
     lineFunction: () => '',
     gridLineFunction: () => '',
     ensureNodeBounds: () => {},
     getLinkPathElement: () => null,
-    getEdgePathPoint: () => null,
     getCurrentZoomScale: () => 1,
     calculateNewPosition: () => ({ x: 0, y: 0 }),
     createGridSelfLoopRoute: () => [],
@@ -57,21 +57,27 @@ function tickHost(overrides: Record<string, unknown> = {}): Record<string, unkno
     isAlignmentEdge: () => false,
     iconX: () => 0,
     iconY: () => 0,
-    updateEdgeEndpointMarkers: vi.fn(),
+    onPositionsUpdated: vi.fn(),
     ...overrides
   };
 }
 
 describe('tick paths keep the edge endpoint handles on the edge', () => {
-  it('the standard updater moves the handles', () => {
+  it('the standard updater calls the hook', () => {
     const host = tickHost();
     proto.updatePositions.call(host);
-    expect(host.updateEdgeEndpointMarkers).toHaveBeenCalledOnce();
+    expect(host.onPositionsUpdated).toHaveBeenCalledOnce();
   });
 
-  it('the grid updater moves the handles too', () => {
+  it('the grid updater calls the hook too', () => {
     const host = tickHost();
     proto.gridUpdatePositions.call(host);
+    expect(host.onPositionsUpdated).toHaveBeenCalledOnce();
+  });
+
+  it('the editing subclass moves the handles from the hook', () => {
+    const host = { updateEdgeEndpointMarkers: vi.fn() };
+    editProto.onPositionsUpdated.call(host);
     expect(host.updateEdgeEndpointMarkers).toHaveBeenCalledOnce();
   });
 });
