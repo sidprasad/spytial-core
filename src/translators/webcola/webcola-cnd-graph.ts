@@ -4808,6 +4808,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
             return (sourceY + targetY) / 2;
         })
         .raise();
+
+    // Update edge endpoint markers for input mode. The standard updater does
+    // this too — both tick paths redraw the edge geometry the handles sit on,
+    // so both have to move the handles with it.
+    this.updateEdgeEndpointMarkers();
   }
 
   /**
