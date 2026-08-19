@@ -1,16 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { perpendicularRoute, touchDirection } from '../src/translators/webcola/routing';
 
 describe('Edge routing near-touching nodes', () => {
+  // adjustGridRouteForArrowPositioning still needs the component's line
+  // function, so it is still reached through the prototype. The geometry it
+  // calls now lives in routing/ and is imported directly.
   const proto = (WebColaCnDGraph.prototype as any);
 
-  describe('getTouchDirection', () => {
+  describe('touchDirection', () => {
     it('detects horizontal touch (left-right adjacency)', () => {
       // Node A on left, Node B on right, touching horizontally
       const boundsA = { x: 0, y: 0, width: () => 50, height: () => 30 };
       const boundsB = { x: 52, y: 5, width: () => 50, height: () => 30 }; // 2px gap, overlapping vertically
 
-      const direction = proto.getTouchDirection(boundsA, boundsB, 5);
+      const direction = touchDirection(boundsA, boundsB, 5);
       expect(direction).toBe('horizontal');
     });
 
@@ -19,7 +23,7 @@ describe('Edge routing near-touching nodes', () => {
       const boundsA = { x: 10, y: 0, width: () => 50, height: () => 30 };
       const boundsB = { x: 15, y: 33, width: () => 50, height: () => 30 }; // 3px gap, overlapping horizontally
 
-      const direction = proto.getTouchDirection(boundsA, boundsB, 5);
+      const direction = touchDirection(boundsA, boundsB, 5);
       expect(direction).toBe('vertical');
     });
 
@@ -27,18 +31,18 @@ describe('Edge routing near-touching nodes', () => {
       const boundsA = { x: 0, y: 0, width: () => 50, height: () => 30 };
       const boundsB = { x: 100, y: 100, width: () => 50, height: () => 30 };
 
-      const direction = proto.getTouchDirection(boundsA, boundsB, 5);
+      const direction = touchDirection(boundsA, boundsB, 5);
       expect(direction).toBe('none');
     });
   });
 
-  describe('computePerpendicularRoute', () => {
+  describe('perpendicularRoute', () => {
     it('routes horizontally-touching nodes via top/bottom', () => {
       // Two nodes side by side
       const sourceBounds = { x: 0, y: 0, width: () => 50, height: () => 30 };
       const targetBounds = { x: 52, y: 0, width: () => 50, height: () => 30 };
 
-      const result = proto.computePerpendicularRoute(sourceBounds, targetBounds, 'horizontal');
+      const result = perpendicularRoute(sourceBounds, targetBounds, 'horizontal');
 
       // Source point should be at top of source (y = 0)
       expect(result.sourcePoint.y).toBe(0);
@@ -53,7 +57,7 @@ describe('Edge routing near-touching nodes', () => {
       const sourceBounds = { x: 0, y: 0, width: () => 50, height: () => 30 };
       const targetBounds = { x: 0, y: 33, width: () => 50, height: () => 30 };
 
-      const result = proto.computePerpendicularRoute(sourceBounds, targetBounds, 'vertical');
+      const result = perpendicularRoute(sourceBounds, targetBounds, 'vertical');
 
       // Source point should be at left of source (x = 0)
       expect(result.sourcePoint.x).toBe(0);
@@ -77,10 +81,6 @@ describe('Edge routing near-touching nodes', () => {
       ];
 
       const fakeThis: any = {
-        getRectangleIntersection: proto.getRectangleIntersection,
-        getTouchDirection: proto.getTouchDirection,
-        computePerpendicularRoute: proto.computePerpendicularRoute,
-        getVisibleBounds: proto.getVisibleBounds,
         gridLineFunction: (pts: any[]) => `M${pts.map(p => `${p.x},${p.y}`).join(' L ')}`
       };
 

@@ -15,7 +15,13 @@ import { TautRouter } from './taut-router';
 
 export * from './types';
 export * from './registry';
+export * from './cola-runtime';
 export * from './geometry';
+export * from './bounds';
+export * from './anchors';
+export * from './ports';
+export * from './parallel-edges';
+export * from './label-placement';
 export * from './taut-router';
 export * from './grid-helpers';
 export * from './port-sides';

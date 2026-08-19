@@ -13,6 +13,9 @@ export interface Point {
   y: number;
 }
 
+/** One side of an axis-aligned rectangle. */
+export type RectSide = 'top' | 'bottom' | 'left' | 'right';
+
 /** Axis-aligned obstacle rectangle, already inflated by the router clearance. */
 export interface ObstacleRect {
   minX: number;
@@ -27,6 +30,79 @@ export interface BoundsRect {
   y: number;
   width: () => number;
   height: () => number;
+}
+
+/**
+ * A rectangle in WebCola's `Rectangle` shape: corner fields AND the accessor
+ * methods. Both forms circulate through the renderer — WebCola hands back
+ * `Rectangle` instances, while the visible-rectangle helpers build plain
+ * objects — so one type covers both and satisfies {@link BoundsRect} too.
+ */
+export interface VisibleRect extends BoundsRect {
+  cx: () => number;
+  cy: () => number;
+  /** Right edge (WebCola's name for it). */
+  X: number;
+  /** Bottom edge (WebCola's name for it). */
+  Y: number;
+}
+
+/**
+ * The parts of a node or group that rectangle derivation reads. Plain nodes
+ * carry visualWidth/visualHeight; group containers carry leaves/groups and a
+ * bounds rectangle. Everything is optional because both shapes flow through
+ * the same helpers, and because bounds only exist after the first tick.
+ */
+export interface RoutableNode {
+  id?: string;
+  name?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  /** Rendered width, before WebCola's collision padding. */
+  visualWidth?: number;
+  /** Rendered height, before WebCola's collision padding. */
+  visualHeight?: number;
+  bounds?: Partial<VisibleRect>;
+  /** {@link bounds} inflated by -1 — WebCola's inner rectangle. */
+  innerBounds?: VisibleRect;
+  leaves?: unknown[];
+  groups?: unknown[];
+}
+
+/**
+ * The side and port slot the component stamps on an edge before a routing
+ * pass. Absent outside a pass (grid pipeline, direct unit-test calls), in which
+ * case endpoints fall back to the centre-to-centre direction.
+ */
+export interface PortStamps {
+  _exitSide?: RectSide;
+  _entrySide?: RectSide;
+  _sourcePortIndex?: number;
+  _sourcePortCount?: number;
+  _targetPortIndex?: number;
+  _targetPortCount?: number;
+}
+
+/**
+ * An edge endpoint inside a routing pass. The id is required here, unlike on
+ * {@link RoutableNode} generally: routers only ever see node-to-node edges —
+ * self-loops and group-attached edges are routed by the component — and every
+ * plain node is keyed by id in the obstacle set.
+ */
+export type RoutedEndpoint = RoutableNode & { id: string };
+
+/**
+ * An edge as the routing layer sees it: an id, two endpoints, and whatever
+ * port stamps this pass has put on it. The renderer's own edge type carries a
+ * great deal more (labels, colours, group provenance) — none of it reaches a
+ * router, and a router must not depend on it.
+ */
+export interface RoutedEdge extends PortStamps {
+  id: string;
+  source: RoutedEndpoint;
+  target: RoutedEndpoint;
 }
 
 /**
@@ -45,9 +121,9 @@ export interface PortAttachment {
  */
 export interface RouterHost {
   /** Port-distributed endpoint for one end of an edge. */
-  portAttachment(edge: any, end: 'source' | 'target'): PortAttachment;
+  portAttachment(edge: RoutedEdge, end: 'source' | 'target'): PortAttachment;
   /** Obstacle set for an edge: every node's inflated visible rect except the edge's own endpoints. */
-  obstaclesFor(edge: any): ObstacleRect[];
+  obstaclesFor(edge: RoutedEdge): ObstacleRect[];
   /** Full obstacle set: every node's inflated visible rect, with node ids. */
   obstacles(): Array<ObstacleRect & { id: string }>;
   /**
@@ -55,13 +131,13 @@ export interface RouterHost {
    * No-op for edges without parallel siblings. Obstacle-blind — routers must
    * validate the result against the obstacle set themselves.
    */
-  fanParallel(edge: any, route: Point[], scale: number): Point[];
+  fanParallel(edge: RoutedEdge, route: Point[], scale: number): Point[];
   /**
    * The edges the router owns: every current link except the special cases
    * the component routes itself (alignment edges, self-loops, group-attached
    * edges). Exactly these edges reach routeEdge during a pass.
    */
-  routerEdges(): any[];
+  routerEdges(): RoutedEdge[];
   /** Live map of computed routes by edge id; finalize passes may rewrite entries. */
   routes: Map<string, Point[]>;
 }
@@ -84,7 +160,7 @@ export interface EdgeRouter {
    */
   beginPass?(host: RouterHost): void;
   /** Route one edge. Returns a polyline from source port to target port. */
-  routeEdge(edge: any, host: RouterHost): Point[];
+  routeEdge(edge: RoutedEdge, host: RouterHost): Point[];
   /** Optional post-pass over all routes (e.g. corridor separation). */
   finalize?(host: RouterHost): void;
 }
