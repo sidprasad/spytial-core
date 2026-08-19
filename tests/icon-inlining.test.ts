@@ -275,6 +275,8 @@ describe('tick paths keep the icon on its node', () => {
             ...geometry,
             container: d3.select(svg),
             ensureNodeBounds: () => undefined,
+            // The real one, as above: it returns early on a detached element.
+            updateEdgeEndpointMarkers: proto.updateEdgeEndpointMarkers,
         });
 
         expect(icon().getAttribute('x')).toBe('12');
