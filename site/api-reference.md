@@ -277,7 +277,7 @@ Types: `HeadlessLayoutOptions`, `HeadlessLayoutResult`, `EdgeKey`, `ChangeEmphas
 | `spytial-core/evaluator`                                            | Self-contained headless evaluator (bundles SGQ). |
 | `spytial-core/conformance`                                          | The conformance harness for integration tests. |
 | `spytial-check` (bin)                                               | CLI wrapper around the harness: case documents in, JSON verdict on stdout, exit 0/1/2. Self-contained, so it can be vendored beside a non-JavaScript package. |
-| `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle (engine + custom elements; no React components or SQL since 4.0.0). |
+| `dist/browser/spytial-core-complete.global.js` (CDN)                | Self-contained browser bundle (engine + custom elements; no React components or SQL since 4.0.0). Carries its own d3 v4 and WebCola, so it needs no other script tag; it publishes both on `window` only if the page has not already set them. Set `window.d3v4` before loading to make it use your own d3 v4 build instead. |
 | `dist/browser/spytial-core-sql.global.js` (CDN, opt-in)             | Adds `SQLEvaluator` back onto the `spytialcore` global for pages using SQL selectors. Load after the main bundle. |
 | `dist/browser/spytial-core-explorer.global.js` (CDN, opt-in)        | Registers `<spytial-explorer>` and adds `SpytialExplorer` onto the `spytialcore` global. Load after the main bundle. |
 | `dist/components/react-component-integration.global.js` + `.css` (CDN) | React component bundle + `window.mount*` API (`mountErrorMessageModal`, `mountCndLayoutInterface`, …). |

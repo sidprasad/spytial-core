@@ -7,10 +7,11 @@
  *    the module registers <spytial-explorer> when a DOM is present (same
  *    behavior the core barrel had before 4.0.0). data-navigator is an optional
  *    peer dependency.
- *  - CDN: dist/browser/spytial-core-explorer.global.js — load AFTER the main
- *    bundle (the element extends WebColaCnDGraph and shares its d3/cola page
- *    globals); it registers the element and merges SpytialExplorer onto
- *    window.spytialcore and its legacy aliases:
+ *  - CDN: dist/browser/spytial-core-explorer.global.js — registers the element
+ *    and merges SpytialExplorer onto window.spytialcore and its legacy aliases.
+ *    It carries its own d3/cola (the element modules import them since #574),
+ *    so it no longer depends on the main bundle having installed page globals;
+ *    load it after the main bundle anyway, so the merge finds the namespace:
  *
  *      <script src=".../spytial-core-complete.global.js"></script>
  *      <script src=".../spytial-core-explorer.global.js"></script>
