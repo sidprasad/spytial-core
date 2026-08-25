@@ -1,13 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// Guarded for headless import — see webcola-cnd-graph.ts.
-const d3: any = typeof window !== 'undefined' ? ((window as any).d3v4 || (window as any).d3) : undefined;
 import { WebColaCnDGraph } from './webcola-cnd-graph';
+import * as d3VendorModule from '../../vendor/d3.v4.min.js';
 import { IInputDataInstance, IAtom, ITuple } from '../../data-instance/interfaces';
 import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
 import { ConstraintError } from '../../layout/constraint-types';
+
+// Same vendored d3 the base class owns — see the note in webcola-cnd-graph.ts.
+// Read off `window` this was undefined whenever the element was constructed
+// before index.ts had installed the globals (#574).
+const d3Vendor: any = (d3VendorModule as any).default ?? d3VendorModule;
+const d3: any = (typeof window !== 'undefined' && (window as any).d3v4) || d3Vendor;
 
 /**
  * Structured Input Graph Custom Element

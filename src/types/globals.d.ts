@@ -1,8 +1,13 @@
 // Ambient globals for the vendored browser runtimes.
 //
-// `index.ts` dynamically imports `vendor/cola.js` and `vendor/d3.v4.min.js` and
-// stashes each on `window`; `webcola-cnd-graph.ts` reads them back off `window`.
-// Neither vendored bundle ships types, so declare the globals here.
+// The element modules import `vendor/d3.v4.min.js` and `vendor/cola.js`
+// directly, so nothing internal reads these back off `window` any more (#574).
+// `index.ts` still publishes both for consumers that do — but only when the
+// host page has not already set its own. Neither vendored bundle ships types,
+// so declare the globals here.
+//
+// `window.d3v4` is the one global still honoured internally: it lets a host
+// deliberately supply its own d3 v4 build in place of the vendored one.
 //
 // cola.js is the same WebCola build as the `webcola` npm package, so it is typed
 // as that package. That keeps `window.cola.Rectangle` and the

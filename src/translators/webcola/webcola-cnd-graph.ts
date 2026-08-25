@@ -3,6 +3,7 @@ import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, T
 import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutWarning } from '../../layout/error-state';
 import type { Layout, ID3StyleLayoutAdaptor } from 'webcola';
+import * as d3VendorModule from '../../vendor/d3.v4.min.js';
 
 /**
  * What `cola.d3adaptor()` actually hands back: a Layout plus the D3 shims.
@@ -54,11 +55,32 @@ import {
   gridRouteMidpoint,
 } from './routing';
 
-// Guarded: this module is reachable from the npm entries' static import graph
-// (via SpytialExplorer / StructuredInputGraph), so it must be LOADABLE in Node
-// (SSR, tests, headless evaluation) even though the element itself needs a DOM.
-// In the browser these evaluate exactly as before.
-let d3 = typeof window !== 'undefined' ? (window.d3v4 || window.d3) : undefined; // Use d3 v4 if available, otherwise fallback to the default window.d3
+// The vendored d3 v4 is imported here, NOT read off `window`.
+//
+// This module registers <webcola-cnd-graph> at module scope (bottom of file),
+// and `customElements.define` synchronously upgrades any matching element
+// already in the document — which runs the constructor, which needs d3. While
+// d3 came off `window`, that registration silently depended on index.ts having
+// installed the global first, which it does asynchronously. A page holding the
+// element before the bundle evaluated lost that race, and the constructor died
+// on `d3.select`. Owning d3 here makes the registration valid at the moment it
+// happens. See #574.
+//
+// It also settles which d3 wins: this file uses the v4-only `d3.event` and
+// `d3.mouse` API, so a host page carrying d3 v7 on `window.d3` would break it.
+// `window.d3v4` stays honoured as the deliberate opt-out for a host that wants
+// to supply its own v4 build.
+//
+// The vendored bundle is UMD and loads without a DOM, so this module stays
+// LOADABLE in Node (SSR, tests, headless evaluation) — it is reachable from the
+// npm entries' static import graph via SpytialExplorer / StructuredInputGraph.
+//
+// Bundlers disagree on what a UMD file becomes, so normalise the shape: esbuild
+// hands back a namespace carrying the named exports and NO `default`, while a
+// plain CJS interop puts everything under `default`. Take whichever arrived.
+const d3Vendor: any = (d3VendorModule as any).default ?? d3VendorModule;
+
+const d3: any = (typeof window !== 'undefined' && window.d3v4) || d3Vendor;
 
 
 /**
@@ -1493,11 +1515,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Initialize D3 selections and zoom behavior
    */
   private initializeD3(): void {
-    
-    if (!d3) {
-      d3 = window.d3;
-    }
-
     this.svg = d3.select(this.root.querySelector('#svg'));
     this.container = this.svg.select('.zoomable');
 
@@ -2350,12 +2367,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
     }
 
     try {
-
-      // Check if D3 and WebCola are available
-      if (!d3) {
-        throw new Error('D3 library not available. Please ensure D3 v4 is loaded from CDN.');
-      }
-      requireCola();
 
       // Ensure D3 and container are properly initialized
       if (!this.container || !this.svg) {

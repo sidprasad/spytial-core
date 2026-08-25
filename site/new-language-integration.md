@@ -74,6 +74,8 @@ Most integrations load the browser bundle from a CDN:
 </script>
 ```
 
+That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has.
+
 (`spytial-core` also exports a `setupLayout(spec, instance, evaluator)` helper that collapses the `parseLayoutSpec` / `LayoutInstance.generateLayout` lines into one. Use it when it makes the integration code clearer.)
 
 For reproducibility (papers, locked notebooks), keep the version pinned in the script `src` as above. Bare `spytial-core` URLs silently shift.

@@ -1,26 +1,38 @@
 /**
  * Access to the vendored WebCola runtime.
  *
- * WebCola arrives as a global from `vendor/cola.js`, which may load AFTER this
- * module is evaluated. Both accessors therefore read `window.cola` at CALL
- * time — a module-level snapshot taken at import would pin `undefined` forever
- * for anyone who loads the script late.
+ * This used to read `window.cola` at CALL time, because the runtime arrived as
+ * a page global that index.ts installed asynchronously and could land after
+ * this module was evaluated. That is the same race #574 fixed for d3, so the
+ * runtime is imported here instead and the accessors are plain lookups.
+ *
+ * Reading the global would now be actively wrong: index.ts no longer overwrites
+ * a host page's `window.cola`, so a host that has its own WebCola would
+ * otherwise have it picked up in place of the build this code is written
+ * against.
+ *
+ * Bundlers disagree on what a UMD file becomes — esbuild hands back a namespace
+ * carrying the named exports and NO `default`, while a plain CJS interop puts
+ * everything under `default`. Take whichever arrived.
  */
+import * as colaVendorModule from '../../../vendor/cola.js';
+import type * as WebCola from 'webcola';
 
-type ColaRuntime = NonNullable<typeof window.cola>;
+type ColaRuntime = typeof WebCola;
 
-/** The WebCola runtime, or undefined if the script has not loaded yet. */
+const colaVendor = ((colaVendorModule as { default?: unknown }).default
+  ?? colaVendorModule) as unknown as ColaRuntime;
+
+/** The WebCola runtime. */
 export function getCola(): ColaRuntime | undefined {
-  return typeof window !== 'undefined' ? window.cola : undefined;
+  return colaVendor;
 }
 
 /**
  * The WebCola runtime, asserted present.
  *
- * Code that only runs inside a live render (routing, bounds) necessarily has
- * the library loaded — `renderLayout` throws long before those paths are
- * reached otherwise. This keeps that invariant in one place instead of a null
- * check per use.
+ * It always is, now that the module imports it. Kept as the single place that
+ * states the invariant, instead of a null check per use site.
  */
 export function requireCola(): ColaRuntime {
   const cola = getCola();

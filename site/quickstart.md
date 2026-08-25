@@ -65,6 +65,8 @@ Save the following as `demo.html`, then open it in a browser:
 </html>
 ```
 
+That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has. Element order does not matter either: put `<webcola-cnd-graph>` in the initial HTML or create it later, before or after the script.
+
 The four numbered comments map directly to the [pipeline stages](pipeline.md). In a real integration:
 
 - Step 1 comes from your **relationalizer** (Python reflection, Rust derive macro, Pyret skeleton, …).

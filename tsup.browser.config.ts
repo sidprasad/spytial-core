@@ -49,9 +49,11 @@ export default defineConfig([{
 },
 {
   // Opt-in a11y explorer: registers <spytial-explorer> and merges
-  // SpytialExplorer onto window.spytialcore. Load AFTER the main bundle
-  // (shares its d3/cola page globals). Inlines data-navigator; kept out of
-  // the main bundle while the explorer matures as a proof of concept.
+  // SpytialExplorer onto window.spytialcore, so load it after the main bundle
+  // for that merge to find the namespace. It carries its own copy of the
+  // vendored d3/cola rather than borrowing page globals (#574), which is why
+  // it is larger than it used to be. Inlines data-navigator; kept out of the
+  // main bundle while the explorer matures as a proof of concept.
   entry: { 'spytial-core-explorer': 'src/explorer.ts' },
   format: ['iife'],
   globalName: 'spytialExplorerBundle',

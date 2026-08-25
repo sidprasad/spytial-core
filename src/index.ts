@@ -2,6 +2,15 @@
  * Main entry point for the spytial-core library
  */
 
+// Vendored browser runtimes, published on the page below. The element modules
+// import these themselves, so this entry no longer has to install them before
+// the elements can register (#574).
+import * as d3VendorModule from './vendor/d3.v4.min.js';
+import * as colaVendorModule from './vendor/cola.js';
+// UMD interop differs by bundler — see the note in webcola-cnd-graph.ts.
+const d3Vendor = (d3VendorModule as { default?: unknown }).default ?? d3VendorModule;
+const colaVendor = (colaVendorModule as { default?: unknown }).default ?? colaVendorModule;
+
 // Export sub-modules
 export * as AlloyGraph from './data-instance/alloy/alloy-graph';
 export * as AlloyInstance from './data-instance/alloy/alloy-instance';
@@ -126,33 +135,37 @@ export type { SynthesisWhy } from 'simple-graph-query';
 
 // Browser-specific exports and initialization
 if (typeof window !== 'undefined') {
-  // Import and register WebCola custom element for browser environments
+  // Publish the vendored runtimes for consumers that read them back off the
+  // page — the explorer bundle documents itself as sharing these globals.
+  //
+  // Two changes from how this used to work, both from #574. It happens
+  // SYNCHRONOUSLY, because the element modules no longer wait on it: they own
+  // their own d3/cola, so element registration is valid whenever it runs. And
+  // it no longer OVERWRITES a host page's d3/cola. Replacing a global the host
+  // put there is not ours to do, and nothing here reads these back any more.
+  const globalWindow = window as any;
+  if (!globalWindow.d3) {
+    globalWindow.d3 = d3Vendor;
+  }
+  if (!globalWindow.cola) {
+    globalWindow.cola = colaVendor;
+  }
+
+  // webcola-cnd-graph registers itself at module scope, so importing it is what
+  // registers it and the define below is an idempotent backstop.
+  // structured-input-graph does not, so its define is the real registration.
   import('./translators/webcola/webcola-cnd-graph').then(({ WebColaCnDGraph }) => {
-    // Make d3 and webcola available globally for WebCola d3adaptor
-    Promise.all([
-      import('./vendor/d3.v4.min.js'),
-      import('./vendor/cola.js')
-    ]).then(([d3Module, colaModule]) => {
-      (window as any).d3 = d3Module;
-      (window as any).cola = colaModule;
-      
-      // Register the custom element
-      if (typeof customElements !== 'undefined' && !customElements.get('webcola-cnd-graph')) {
-        customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
-        //console.log('✅ WebCola CnD Graph custom element registered');
+    if (typeof customElements !== 'undefined' && !customElements.get('webcola-cnd-graph')) {
+      customElements.define('webcola-cnd-graph', WebColaCnDGraph as any);
+    }
+
+    // <spytial-explorer> registration moved to the spytial-core/explorer
+    // entry (spytial-core-explorer.global.js on CDN) in 4.0.0.
+    return import('./translators/webcola/structured-input-graph').then(({ StructuredInputGraph }) => {
+      if (typeof customElements !== 'undefined' && !customElements.get('structured-input-graph')) {
+        customElements.define('structured-input-graph', StructuredInputGraph as any);
       }
-
-      // Register structured input graph
-      import('./translators/webcola/structured-input-graph').then(({ StructuredInputGraph }) => {
-        if (typeof customElements !== 'undefined' && !customElements.get('structured-input-graph')) {
-          customElements.define('structured-input-graph', StructuredInputGraph as any);
-          //console.log('✅ Structured Input Graph custom element registered');
-        }
-      }).catch(console.error);
-
-      // <spytial-explorer> registration moved to the spytial-core/explorer
-      // entry (spytial-core-explorer.global.js on CDN) in 4.0.0.
-    }).catch(console.error);
+    });
   }).catch(console.error);
 }
 

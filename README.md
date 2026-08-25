@@ -48,6 +48,8 @@ CDN:
 <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
 ```
 
+That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has.
+
 For reproducibility, pin a version (e.g. `spytial-core@5.2.0`).
 
 ---
