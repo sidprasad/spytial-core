@@ -50,7 +50,7 @@ CDN:
 
 That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has.
 
-For reproducibility, pin a version (e.g. `spytial-core@5.2.0`).
+For reproducibility, pin a version (e.g. `spytial-core@5.2.1`).
 
 ---
 
