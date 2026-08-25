@@ -1,5 +1,11 @@
 import { defineConfig } from 'tsup'
 
+import { readFileSync } from 'node:fs'
+
+// The single source of truth for the shipped `spytialcore.version`: stamped in
+// below so a release only ever has to move package.json.
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8'))
+
 export default defineConfig([{
   entry: {
     // CDN bundle: barrel exports + custom-element registration + the published
@@ -41,6 +47,7 @@ export default defineConfig([{
   ],
   // Define global variables for browser environment
   define: {
+    __SPYTIAL_CORE_VERSION__: JSON.stringify(version),
     'process.env.NODE_ENV': '"production"',
     'global': 'globalThis'
   },
@@ -77,6 +84,7 @@ export default defineConfig([{
     '@xmldom/xmldom',
   ],
   define: {
+    __SPYTIAL_CORE_VERSION__: JSON.stringify(version),
     'process.env.NODE_ENV': '"production"',
     'global': 'globalThis',
   },

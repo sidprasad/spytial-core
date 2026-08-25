@@ -12,7 +12,7 @@ This document describes the YAML structure for defining layout constraints and d
 > Both are pinnable per tag over jsDelivr, attached to each GitHub release, and included in the npm package:
 >
 > ```js
-> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json';
+> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v5.3.0/docs/spytial-language.json';
 > const manifest = await fetch(url).then(r => r.json());
 > manifest.languageVersion;   // e.g. "2026-07-28" — the date the language last changed
 > ```

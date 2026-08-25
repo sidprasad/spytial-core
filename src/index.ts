@@ -169,6 +169,14 @@ if (typeof window !== 'undefined') {
   }).catch(console.error);
 }
 
+// Stamped from package.json at build time by every tsup config that ships this
+// barrel (see tsup.browser/esm/config.ts `define`). It was a hand-written
+// '1.0.0' literal from 1.0.0 through 5.2.x — wrong for four major releases, and
+// silently so. Running from source (tests, tsx) nothing stamps it, so it reads
+// 'unknown' rather than a number that could go stale again.
+export const version: string =
+  typeof __SPYTIAL_CORE_VERSION__ === 'string' ? __SPYTIAL_CORE_VERSION__ : 'unknown';
+
 export interface CoreConfig {
   debug?: boolean;
   version?: string;
@@ -180,7 +188,7 @@ export class CndCore {
   constructor(config: CoreConfig = {}) {
     this.config = {
       debug: false,
-      version: '1.0.0',
+      version,
       ...config,
     };
   }
@@ -213,8 +221,6 @@ export class CndCore {
 export const createCndCore = (config?: CoreConfig): CndCore => {
   return new CndCore(config);
 };
-
-export const version = '1.0.0';
 
 // Error state (shared with the separately-bundled error modal UI).
 // The React components themselves (ErrorMessageContainer, CndLayoutInterface)
