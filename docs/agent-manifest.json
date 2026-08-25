@@ -8,21 +8,21 @@
       "file": "docs/spytial-language.json",
       "content_type": "application/json",
       "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-language.json",
-      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-language.json"
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v5.3.0/docs/spytial-language.json"
     },
     "json_schema": {
       "description": "JSON Schema (draft 2020-12) for validating a spec document. Stricter than the parser, which ignores what it does not recognize.",
       "file": "docs/spytial-spec.schema.json",
       "content_type": "application/schema+json",
       "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/spytial-spec.schema.json",
-      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/spytial-spec.schema.json"
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v5.3.0/docs/spytial-spec.schema.json"
     },
     "prose_reference": {
       "description": "Human-readable reference with examples and rationale.",
       "file": "docs/YAML_SPECIFICATION.md",
       "content_type": "text/markdown",
       "cdn_url": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@main/docs/YAML_SPECIFICATION.md",
-      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v4.2.0/docs/YAML_SPECIFICATION.md"
+      "pinned_example": "https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v5.3.0/docs/YAML_SPECIFICATION.md"
     }
   },
   "versioning": {

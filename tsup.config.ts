@@ -1,5 +1,11 @@
 import { defineConfig } from 'tsup'
 
+import { readFileSync } from 'node:fs'
+
+// The single source of truth for the shipped `spytialcore.version`: stamped in
+// below so a release only ever has to move package.json.
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8'))
+
 export default defineConfig({
   entry: {
     // Main entry point
@@ -22,6 +28,9 @@ export default defineConfig({
   bundle: true,
   treeshake: true,
     // Ensure DOM types are available
+  define: {
+    __SPYTIAL_CORE_VERSION__: JSON.stringify(version),
+  },
   platform: 'browser',
   // Ensure all dependencies are bundled for client-side use
   noExternal: [

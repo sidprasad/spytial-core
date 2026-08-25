@@ -19,6 +19,15 @@
 import type * as WebCola from 'webcola';
 
 declare global {
+  /**
+   * The package.json version, stamped in by esbuild `define` in every tsup
+   * config that bundles src/index.ts. Typed as possibly-undefined because
+   * nothing defines it when the barrel runs straight from source (vitest,
+   * tsx) — read it only behind a `typeof` guard, which is safe on an
+   * undeclared identifier.
+   */
+  const __SPYTIAL_CORE_VERSION__: string | undefined;
+
   interface Window {
     /** Vendored WebCola runtime, same build as the `webcola` package. */
     cola?: typeof WebCola;

@@ -1,5 +1,11 @@
 import { defineConfig } from 'tsup'
 
+import { readFileSync } from 'node:fs'
+
+// The single source of truth for the shipped `spytialcore.version`: stamped in
+// below so a release only ever has to move package.json.
+const { version } = JSON.parse(readFileSync('./package.json', 'utf8'))
+
 // Real ES module for the npm `.` *import* condition.
 //
 // ADDITIVE + ZERO-RISK: this build does NOT touch the browser IIFE global
@@ -39,5 +45,8 @@ export default defineConfig({
   minify: false, // ship readable ESM; the consumer minifies + tree-shakes
   treeshake: true,
   target: 'es2020',
+  define: {
+    __SPYTIAL_CORE_VERSION__: JSON.stringify(version),
+  },
   platform: 'browser',
 })
