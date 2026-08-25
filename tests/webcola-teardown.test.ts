@@ -131,39 +131,6 @@ describe('WebColaCnDGraph teardown (#474)', () => {
     });
   });
 
-  describe('connectedCallback', () => {
-    function rebuildHarness(disposed: boolean) {
-      const fakeThis: any = {
-        disposed,
-        initializeDOM: vi.fn(),
-        initializeD3: vi.fn(),
-        setupLayoutWarningsToggle: vi.fn(),
-        initializeInputModeHandlers: vi.fn(),
-      };
-      return fakeThis;
-    }
-
-    it('rebuilds the shadow DOM when re-attached after a teardown', () => {
-      const fakeThis = rebuildHarness(true);
-
-      proto.connectedCallback.call(fakeThis);
-
-      expect(fakeThis.initializeDOM).toHaveBeenCalled();
-      expect(fakeThis.initializeD3).toHaveBeenCalled();
-      expect(fakeThis.setupLayoutWarningsToggle).toHaveBeenCalled();
-      expect(fakeThis.initializeInputModeHandlers).toHaveBeenCalled();
-      expect(fakeThis.disposed).toBe(false);
-    });
-
-    it('leaves a live element alone — the constructor already built it', () => {
-      const fakeThis = rebuildHarness(false);
-
-      proto.connectedCallback.call(fakeThis);
-
-      expect(fakeThis.initializeDOM).not.toHaveBeenCalled();
-    });
-  });
-
   describe('clear', () => {
     function clearableThis(colaLayout: any) {
       return {

@@ -755,8 +755,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private isGridifyingInProgress: boolean = false;
 
   // We use these to store state and references.
-  /** True between dispose() and the next re-attach. See connectedCallback. */
-  private disposed = false;
   private svgNodes : any;
   private svgLinkGroups : any;
   private svgGroups : any;
@@ -2654,16 +2652,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
           false
         );
       } catch (layoutError) {
-        // The retry below runs zero iterations of every phase, so the diagram
-        // gets drawn at its seed positions and never actually solved. That
-        // looks like a layout rather than like a failure, so say so — this was
-        // a console.warn the host had no way to see.
-        this.emitLayoutError({
-          message: 'The layout solver could not start. The diagram is drawn, but its positions are unsolved.',
-          phase: 'solver',
-          fatal: false,
-          cause: layoutError,
-        });
         try {
           layout.start(0, 0, 0, 0, false);
         } catch (fallbackError) {
@@ -2671,6 +2659,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
           // render failure — one message, on screen and on the event.
           throw new Error(`WebCola layout failed to start: ${(fallbackError as Error).message}`);
         }
+        // Reported only now that the retry has succeeded, because only now is
+        // it true that a diagram gets drawn. The retry runs zero iterations of
+        // every phase, so it is drawn at its seed positions and never actually
+        // solved — which looks like a layout rather than like a failure. This
+        // was a console.warn the host had no way to see.
+        this.emitLayoutError({
+          message: 'The layout solver could not start. The diagram is drawn, but its positions are unsolved.',
+          phase: 'solver',
+          fatal: false,
+          cause: layoutError,
+        });
       }
 
       // Drive the remaining ticks to convergence synchronously. Each tick()
@@ -2720,17 +2719,28 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // A superseded morph can leave the container hidden; nothing would ever
     // unhide it on this path.
     this.container.attr('opacity', 1);
-    this.svgNodes = null as any;
-    this.svgLinkGroups = null as any;
-    this.svgGroups = null as any;
-    this.svgGroupLabels = null as any;
-    this.svgGroupLabelBgs = null as any;
+
+    // Bind empty selections rather than nulling. Public methods read these
+    // between renders — highlightRelation and clearHighlightRelation guard on
+    // `currentLayout.links`, which is a truthy empty array here, and then use
+    // the selection — so null is a crash where an empty selection is a no-op.
+    // The container was just emptied, so each of these selects nothing.
+    this.svgNodes = this.container.selectAll('.node');
+    this.svgLinkGroups = this.container.selectAll('.link-group');
+    this.svgGroups = this.container.selectAll('.group');
+    this.svgGroupLabels = this.container.selectAll('.groupLabel');
+    this.svgGroupLabelBgs = this.container.selectAll('.groupLabelBg');
 
     this.hideLoading();
+    // Only the hideAtom case can be named with confidence: `hiddenAtoms`
+    // records atoms removed by a hideAtom *selector* and nothing else, so the
+    // legacy hideDisconnected / hideDisconnectedBuiltIns flags leave it empty.
+    // Blaming the datum there would be the same misdirection this note exists
+    // to replace, so the general message names both possibilities instead.
     this.showEmptyState(
       instanceLayout.hiddenAtoms && instanceLayout.hiddenAtoms.length > 0
         ? 'Nothing to draw: every atom in this instance is hidden.'
-        : 'Nothing to draw: this instance has no atoms.'
+        : 'Nothing to draw: no atoms reached this diagram — the instance is empty, or the spec hides them all.'
     );
 
     // Hosts wait on these to know the render finished. An empty diagram is a
@@ -5184,7 +5194,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Auto-fit viewport to content
       this.fitViewportToContent();
     } catch (error) {
-      this.showError(`Edge routing failed: ${(error as Error).message}`, { phase: 'routing', cause: error });
+      // Routing runs from the solver's 'end' handler, after updatePositions has
+      // already painted the nodes — so the diagram is on screen with bad edges,
+      // which is the degraded case, not the total one.
+      this.showError(
+        `Edge routing failed: ${(error as Error).message}`,
+        { phase: 'routing', cause: error, fatal: false }
+      );
     } finally {
       // Drop the per-pass obstacle cache so it can't go stale across renders.
       this.routerObstacleCache = null;
@@ -7042,12 +7058,20 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Show error message
    */
-  private showError(message: string, detail?: { phase: LayoutErrorDetail['phase']; cause?: unknown }): void {
+  private showError(
+    message: string,
+    detail?: { phase: LayoutErrorDetail['phase']; cause?: unknown; fatal?: boolean }
+  ): void {
     const error = this.root.querySelector('#error') as HTMLElement;
     this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
-    this.emitLayoutError({ message, fatal: true, phase: detail?.phase ?? 'render', cause: detail?.cause });
+    this.emitLayoutError({
+      message,
+      phase: detail?.phase ?? 'render',
+      fatal: detail?.fatal ?? true,
+      cause: detail?.cause,
+    });
   }
 
   /**
@@ -7660,6 +7684,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * graph the host considered untouched, and every later renderLayout drew
    * nothing — silently, with no error to go on. The re-insert happens in the
    * same task, so by the time this runs a move is already reconnected.
+   *
+   * A genuine removal still disposes, and the element stays disposed if it is
+   * added back later — as it always has. Rebuilding on re-attach needs the
+   * subclasses to re-append their own chrome, which is a bigger change than
+   * this one.
    */
   disconnectedCallback(): void {
     queueMicrotask(() => {
@@ -7676,24 +7705,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   /**
-   * Called when the custom element is connected to the DOM.
-   *
-   * Rebuilds what dispose() removed. A host that removes the element and adds
-   * it back later — far enough apart that the deferred teardown above already
-   * ran — otherwise gets an element whose shadow DOM has no SVG left in it.
-   * The constructor's sequence is repeated here; the host's next renderLayout
-   * fills the rebuilt canvas.
-   */
-  connectedCallback(): void {
-    if (!this.disposed) return; // First attach, or a move: nothing was torn down.
-    this.disposed = false;
-    this.initializeDOM();
-    this.initializeD3();
-    this.setupLayoutWarningsToggle();
-    this.initializeInputModeHandlers();
-  }
-
-  /**
    * Disposes of resources to prevent memory leaks.
    * Should be called when the component is no longer needed.
    * 
@@ -7704,10 +7715,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * - Temporary UI elements (modals, overlays)
    */
   public dispose(): void {
-    // Read by connectedCallback: a re-attach after this has to rebuild the DOM
-    // and the d3 selections torn down below.
-    this.disposed = true;
-
     // Stop the solver and morph timers, detach stale tick/end handlers, and
     // remove any morph snapshot layer — before tearing down the selections
     // those handlers would otherwise touch.

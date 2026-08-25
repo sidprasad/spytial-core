@@ -69,7 +69,9 @@ describe('rendering a layout with no nodes', () => {
 
         const note = root.querySelector('#empty-state') as HTMLElement;
         expect(note.hidden).toBe(false);
-        expect(note.textContent).toBe('Nothing to draw: this instance has no atoms.');
+        expect(note.textContent).toBe(
+            'Nothing to draw: no atoms reached this diagram — the instance is empty, or the spec hides them all.'
+        );
         // The red error box is for failures. An empty instance is not one.
         expect((root.querySelector('#error') as HTMLElement).style.display).not.toBe('block');
     });
@@ -92,9 +94,11 @@ describe('rendering a layout with no nodes', () => {
         // A superseded morph can leave the container hidden; nothing else on
         // this path would ever unhide it.
         expect(container.calls).toContain('attr(opacity,1)');
-        expect(fakeThis.svgNodes).toBeNull();
-        expect(fakeThis.svgGroups).toBeNull();
-        expect(fakeThis.svgLinkGroups).toBeNull();
+        // Bound to empty selections, NOT nulled: public methods read these
+        // between renders, and null is a crash where empty is a no-op.
+        expect(fakeThis.svgNodes).not.toBeNull();
+        expect(fakeThis.svgGroups).not.toBeNull();
+        expect(fakeThis.svgLinkGroups).not.toBeNull();
         // No solver is created, so WebCola never reads _nodes[0].
         expect(fakeThis.colaLayout).toBeNull();
     });
@@ -250,5 +254,59 @@ describe('surfacing a render failure to the host', () => {
         } finally {
             error.mockRestore();
         }
+    });
+});
+
+
+/**
+ * The tests above drive `renderEmptyLayout` directly, which cannot catch the
+ * guard in `renderLayout` going missing. These mount the real element and go in
+ * through the front door — they fail against a build with that guard removed.
+ */
+describe('an empty layout through the real element', () => {
+    const emptyInstanceLayout = () =>
+        ({ nodes: [], edges: [], constraints: [], groups: [] }) as any;
+
+    function mount() {
+        const el = new WebColaCnDGraph();
+        document.body.appendChild(el);
+        return el;
+    }
+
+    it('draws the empty canvas instead of throwing', async () => {
+        const el = mount();
+
+        await el.renderLayout(emptyInstanceLayout());
+
+        const note = el.shadowRoot!.querySelector('#empty-state') as HTMLElement;
+        expect(note.hidden).toBe(false);
+        expect(note.textContent).toContain('Nothing to draw');
+        // The failure being pinned: WebCola threw on the empty node set, the
+        // fallback solve fired 'end', and the paint dereferenced svgGroups.
+        const box = el.shadowRoot!.querySelector('#error') as HTMLElement;
+        expect(box.style.display).not.toBe('block');
+    });
+
+    it('leaves the relation-highlight methods safe to call afterwards', async () => {
+        const el = mount();
+        await el.renderLayout(emptyInstanceLayout());
+
+        // `currentLayout.links` is a truthy empty array, so the guard in these
+        // methods passes and they go straight to the selection. RelationHighlighter
+        // calls clearHighlightRelation on every mouse-leave.
+        expect(() => el.highlightRelation('addresses')).not.toThrow();
+        expect(() => el.clearHighlightRelation('addresses')).not.toThrow();
+    });
+
+    it('reports the render as complete so a host does not wait forever', async () => {
+        const el = mount();
+        const seen: string[] = [];
+        el.addEventListener('layout-complete', () => seen.push('layout-complete'));
+        el.addEventListener('layout-error', () => seen.push('layout-error'));
+
+        await el.renderLayout(emptyInstanceLayout());
+
+        expect(seen).toContain('layout-complete');
+        expect(seen).not.toContain('layout-error');
     });
 });

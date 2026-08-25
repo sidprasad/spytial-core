@@ -189,7 +189,8 @@ These register themselves automatically when the bundle loads in a browser.
 
 The element draws into its own shadow root, so anything it shows about a render
 — the spec-warnings badge, an error — is only visible to someone looking at the
-diagram. These events are how a host learns the same things. All bubble.
+diagram. These events are how a host learns the same things. All bubble except
+`layout-complete`, which must be listened for on the element itself.
 
 | Event | Detail | When |
 |-------|--------|------|
