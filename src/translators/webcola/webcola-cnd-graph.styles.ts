@@ -82,6 +82,25 @@ export function getGraphCSS({
         transition: opacity 120ms ease, transform 120ms ease, visibility 0s linear 120ms;
       }
 
+      /* The "nothing to draw" note. Muted, centred, and non-interactive: an
+         empty diagram is a result, not an error. */
+      #empty-state {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        max-width: 80%;
+        padding: 8px 12px;
+        text-align: center;
+        color: var(--cnd-loading-text, #6b7280);
+        font-size: 13px;
+        pointer-events: none;
+      }
+
+      #empty-state[hidden] {
+        display: none;
+      }
+
       #loading.visible {
         opacity: 1;
         visibility: visible;

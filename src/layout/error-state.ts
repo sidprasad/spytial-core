@@ -86,6 +86,31 @@ export interface LayoutWarning {
 /**
  * Represents different types of errors that can occur in the system
  */
+/**
+ * What the diagram element reports when a render goes wrong, carried on its
+ * `layout-error` event.
+ *
+ * Same reasoning as {@link LayoutWarning}: the console is not somewhere a
+ * diagram's author looks, and the element's own error box lives inside a shadow
+ * root — inside whatever panel or iframe the host embedded it in. Neither
+ * reaches a host that could do something about it. This is the channel that
+ * does.
+ */
+export interface LayoutErrorDetail {
+  /** Human-readable explanation, the same text the element puts on screen. */
+  message: string;
+  /** Which part of the render failed. */
+  phase: 'render' | 'routing' | 'solver';
+  /**
+   * False when the diagram is on screen but degraded — a solver that could not
+   * run leaves nodes drawn at unsolved positions, which looks like a layout
+   * rather than like a failure. True when nothing usable was drawn.
+   */
+  fatal: boolean;
+  /** The underlying error, when there was one. */
+  cause?: unknown;
+}
+
 export type SystemError = {
   type: 'parse-error';
   message: string;

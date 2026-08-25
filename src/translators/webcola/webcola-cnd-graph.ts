@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
-import type { LayoutWarning } from '../../layout/error-state';
+import type { LayoutErrorDetail, LayoutWarning } from '../../layout/error-state';
 import type { Layout, ID3StyleLayoutAdaptor } from 'webcola';
 import * as d3VendorModule from '../../vendor/d3.v4.min.js';
 
@@ -755,6 +755,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private isGridifyingInProgress: boolean = false;
 
   // We use these to store state and references.
+  /** True between dispose() and the next re-attach. See connectedCallback. */
+  private disposed = false;
   private svgNodes : any;
   private svgLinkGroups : any;
   private svgGroups : any;
@@ -1483,6 +1485,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         <span class="loading-dot" aria-hidden="true"></span>
         <span id="loading-progress">Computing layout...</span>
       </div>
+      <div id="empty-state" hidden></div>
       <div id="layout-warnings" hidden>
         <div id="layout-warnings-bar">
           <button id="layout-warnings-badge" type="button" aria-expanded="false" aria-controls="layout-warnings-panel">
@@ -2401,6 +2404,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // element now — abandon before creating a solver it can't tear down.
       if (generation !== this.renderGeneration) return;
 
+      // Nothing to draw. Handled here, before a solver exists, because WebCola
+      // cannot be handed an empty node set at all — see renderEmptyLayout.
+      if (webcolaLayout.nodes.length === 0) {
+        this.renderEmptyLayout(instanceLayout, webcolaLayout);
+        return;
+      }
+
       if (shouldShowLoadingOverlay) {
         this.updateLoadingProgress(`Computing layout for ${webcolaLayout.nodes.length} nodes...`);
       }
@@ -2644,12 +2654,21 @@ export class WebColaCnDGraph extends HTMLElementBase {
           false
         );
       } catch (layoutError) {
-        console.warn('WebCola layout start encountered an error, trying alternative approach:', layoutError);
-        // Try starting with default parameters as fallback
+        // The retry below runs zero iterations of every phase, so the diagram
+        // gets drawn at its seed positions and never actually solved. That
+        // looks like a layout rather than like a failure, so say so — this was
+        // a console.warn the host had no way to see.
+        this.emitLayoutError({
+          message: 'The layout solver could not start. The diagram is drawn, but its positions are unsolved.',
+          phase: 'solver',
+          fatal: false,
+          cause: layoutError,
+        });
         try {
           layout.start(0, 0, 0, 0, false);
         } catch (fallbackError) {
-          console.error('Both WebCola start methods failed:', fallbackError);
+          // Rethrown so the outer catch reports it the same way as any other
+          // render failure — one message, on screen and on the event.
           throw new Error(`WebCola layout failed to start: ${(fallbackError as Error).message}`);
         }
       }
@@ -2670,9 +2689,57 @@ export class WebColaCnDGraph extends HTMLElementBase {
       }
 
     } catch (error) {
-      console.error('Error rendering layout:', error);
-      this.showError(`Layout rendering failed: ${(error as Error).message}`);
+      this.showError(
+        `Layout rendering failed: ${(error as Error).message}`,
+        { phase: 'render', cause: error }
+      );
     }
+  }
+
+  /**
+   * Draw a layout that has no nodes: clear the canvas and say why it is empty.
+   *
+   * An empty layout is ordinary input, not a failure. The instance may have no
+   * atoms (an empty or unsatisfiable model, or a datum the host failed to
+   * parse), or every atom may be hidden. Either way there is nothing to solve.
+   *
+   * It has to be caught before the solver, because WebCola cannot take an empty
+   * node set: `Layout.start` reads `this._nodes[0].width` to size its grid-snap
+   * phase and throws. The catch there retried with `start(0, 0, 0, 0, false)`,
+   * which converged and fired `end`, and the paint that followed reached for
+   * selections this render never created. Integrators saw that cascade as three
+   * console messages ending in "Layout rendering failed: this.svgGroups is
+   * undefined" — which says nothing about the empty instance behind it.
+   */
+  private renderEmptyLayout(instanceLayout: InstanceLayout, webcolaLayout: WebColaLayout): void {
+    this.currentLayout = webcolaLayout;
+    this.colaLayout = null as any;
+    this.morphOldPositions = null;
+
+    this.container.selectAll('*').remove();
+    // A superseded morph can leave the container hidden; nothing would ever
+    // unhide it on this path.
+    this.container.attr('opacity', 1);
+    this.svgNodes = null as any;
+    this.svgLinkGroups = null as any;
+    this.svgGroups = null as any;
+    this.svgGroupLabels = null as any;
+    this.svgGroupLabelBgs = null as any;
+
+    this.hideLoading();
+    this.showEmptyState(
+      instanceLayout.hiddenAtoms && instanceLayout.hiddenAtoms.length > 0
+        ? 'Nothing to draw: every atom in this instance is hidden.'
+        : 'Nothing to draw: this instance has no atoms.'
+    );
+
+    // Hosts wait on these to know the render finished. An empty diagram is a
+    // finished render, so they still fire.
+    this.dispatchRelationsAvailableEvent();
+    this.dispatchEvent(new CustomEvent('layout-complete', {
+      detail: { nodePositions: [] }
+    }));
+    this.updateRoutingModeDropdown();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -3176,6 +3243,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // render that supersedes it never touches the overlay. Without this the
     // overlay wedges at its last message ("Finalizing…") forever.
     this.hideLoading();
+
+    // Same reasoning for the empty-diagram note and the error box: the render
+    // that raised them is over, so neither may sit on top of what is drawn next.
+    this.hideEmptyState();
+    this.hideError();
   }
 
   /**
@@ -3320,12 +3392,19 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Render groups using D3 data binding
    */
   private renderGroups(groups: any[], layout: D3Layout): void {
-    if (!this.currentLayout.nodes || this.currentLayout.nodes.length === 0) {
+    const nodes = this.currentLayout?.nodes ?? [];
+
+    // A group draws around its member nodes, so groups without nodes cannot be
+    // drawn. Drop them — but still bind, because every later paint reads
+    // this.svgGroups and returning early would leave it undefined. That was the
+    // first step of the "this.svgGroups is undefined" failure integrators saw
+    // on an empty instance.
+    if (nodes.length === 0 && groups.length > 0) {
       console.warn("Cannot render groups: nodes not available");
-      return;
+      groups = [];
     }
 
-    this.svgGroups = this.setupGroups(groups, this.currentLayout.nodes, layout);
+    this.svgGroups = this.setupGroups(groups, nodes, layout);
   }
 
   /**
@@ -5105,8 +5184,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Auto-fit viewport to content
       this.fitViewportToContent();
     } catch (error) {
-      console.error('Error in edge routing:', error);
-      this.showError(`Edge routing failed: ${(error as Error).message}`);
+      this.showError(`Edge routing failed: ${(error as Error).message}`, { phase: 'routing', cause: error });
     } finally {
       // Drop the per-pass obstacle cache so it can't go stale across renders.
       this.routerObstacleCache = null;
@@ -6922,7 +7000,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private showLoading(): void {
     const loading = this.root.querySelector('#loading') as HTMLElement;
-    const error = this.root.querySelector('#error') as HTMLElement;
     if (this.loadingShowTimer !== null) {
       window.clearTimeout(this.loadingShowTimer);
       this.loadingShowTimer = null;
@@ -6933,7 +7010,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         this.loadingShowTimer = null;
       }, WebColaCnDGraph.LOADING_INDICATOR_DELAY_MS);
     }
-    error.style.display = 'none';
+    this.hideError();
   }
 
   /**
@@ -6965,11 +7042,65 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Show error message
    */
-  private showError(message: string): void {
+  private showError(message: string, detail?: { phase: LayoutErrorDetail['phase']; cause?: unknown }): void {
     const error = this.root.querySelector('#error') as HTMLElement;
     this.hideLoading();
     error.style.display = 'block';
     error.textContent = message;
+    this.emitLayoutError({ message, fatal: true, phase: detail?.phase ?? 'render', cause: detail?.cause });
+  }
+
+  /**
+   * Clear the error box.
+   *
+   * Called from teardownInflightRender, so every render starts from a clean
+   * canvas. This used to happen only inside showLoading — which a morph render
+   * never calls — so a failed render could leave its red box sitting on top of
+   * the diagram that replaced it.
+   */
+  private hideError(): void {
+    const error = this.root?.querySelector('#error') as HTMLElement | null;
+    if (!error) return;
+    error.style.display = 'none';
+    error.textContent = '';
+  }
+
+  /**
+   * Report a render failure to the host, and log it once.
+   *
+   * The single place this element says "something went wrong", so a host wires
+   * up one listener rather than watching the console. Both other channels are
+   * dead ends on their own: the console is not somewhere a diagram's author
+   * looks, and the error box lives in this element's shadow root, inside
+   * whatever panel or iframe the host embedded it in.
+   */
+  private emitLayoutError(detail: LayoutErrorDetail): void {
+    // One line, named, with the original error attached — rather than the
+    // several unattributed messages a failing render used to scatter.
+    console.error(`[spytial] ${detail.message}`, detail.cause ?? '');
+    this.dispatchEvent(new CustomEvent<LayoutErrorDetail>('layout-error', {
+      detail,
+      bubbles: true,
+    }));
+  }
+
+  /**
+   * Note that the diagram is empty on purpose. Deliberately not showError: an
+   * empty instance is a normal result, and red text reads as a crash.
+   */
+  private showEmptyState(message: string): void {
+    const empty = this.root?.querySelector('#empty-state') as HTMLElement | null;
+    if (!empty) return;
+    empty.textContent = message;
+    empty.hidden = false;
+  }
+
+  /** Remove the empty-diagram note. Safe before the first render. */
+  private hideEmptyState(): void {
+    const empty = this.root?.querySelector('#empty-state') as HTMLElement | null;
+    if (!empty) return;
+    empty.hidden = true;
+    empty.textContent = '';
   }
 
   /**
@@ -7521,16 +7652,45 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Called when the custom element is disconnected from the DOM.
    * Performs cleanup to prevent memory leaks.
+   *
+   * The teardown is deferred by a microtask because a *move* fires this
+   * callback too: `appendChild` of an element that already has a parent
+   * removes it and re-inserts it, which is what host frameworks do whenever
+   * they re-render around the graph. Disposing there wiped the shadow SVG of a
+   * graph the host considered untouched, and every later renderLayout drew
+   * nothing — silently, with no error to go on. The re-insert happens in the
+   * same task, so by the time this runs a move is already reconnected.
    */
   disconnectedCallback(): void {
-    // Never let cleanup throw into the host's removeChild — an exception
-    // here propagates into the caller's unmount (e.g. React's commit
-    // phase) and can break the entire teardown.
-    try {
-      this.dispose();
-    } catch (e) {
-      console.warn('WebColaCnDGraph: error during disconnect cleanup', e);
-    }
+    queueMicrotask(() => {
+      if (this.isConnected) return;
+      // Never let cleanup throw into the host's removeChild — an exception
+      // here propagates into the caller's unmount (e.g. React's commit
+      // phase) and can break the entire teardown.
+      try {
+        this.dispose();
+      } catch (e) {
+        console.warn('WebColaCnDGraph: error during disconnect cleanup', e);
+      }
+    });
+  }
+
+  /**
+   * Called when the custom element is connected to the DOM.
+   *
+   * Rebuilds what dispose() removed. A host that removes the element and adds
+   * it back later — far enough apart that the deferred teardown above already
+   * ran — otherwise gets an element whose shadow DOM has no SVG left in it.
+   * The constructor's sequence is repeated here; the host's next renderLayout
+   * fills the rebuilt canvas.
+   */
+  connectedCallback(): void {
+    if (!this.disposed) return; // First attach, or a move: nothing was torn down.
+    this.disposed = false;
+    this.initializeDOM();
+    this.initializeD3();
+    this.setupLayoutWarningsToggle();
+    this.initializeInputModeHandlers();
   }
 
   /**
@@ -7544,6 +7704,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * - Temporary UI elements (modals, overlays)
    */
   public dispose(): void {
+    // Read by connectedCallback: a re-attach after this has to rebuild the DOM
+    // and the d3 selections torn down below.
+    this.disposed = true;
+
     // Stop the solver and morph timers, detach stale tick/end handlers, and
     // remove any morph snapshot layer — before tearing down the selections
     // those handlers would otherwise touch.

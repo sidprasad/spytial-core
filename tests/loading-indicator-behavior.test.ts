@@ -24,6 +24,8 @@ describe('Loading indicator behavior', () => {
       loadingShowTimer: null,
     };
     fakeThis.hideLoading = proto.hideLoading;
+    // showLoading clears the error box through this, so use the real one.
+    fakeThis.hideError = proto.hideError;
 
     return { fakeThis, loading, progress, error };
   }
