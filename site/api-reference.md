@@ -185,6 +185,25 @@ These register themselves automatically when the bundle loads in a browser.
 | `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
 | `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
 
+### Events from `<webcola-cnd-graph>`
+
+The element draws into its own shadow root, so anything it shows about a render
+— the spec-warnings badge, an error — is only visible to someone looking at the
+diagram. These events are how a host learns the same things. All bubble except
+`layout-complete`, which must be listened for on the element itself.
+
+| Event | Detail | When |
+|-------|--------|------|
+| `layout-complete`      | `{ nodePositions }`                        | A render finished, including one that drew nothing. |
+| `layout-warnings`      | `{ warnings: LayoutWarning[] }`            | The layout carried advisory warnings — a selector that matched nothing, a deprecated spec form. |
+| `layout-error`         | `LayoutErrorDetail`                        | A render failed. `fatal: false` means the diagram is on screen but degraded (e.g. the solver could not run, so positions are unsolved). |
+| `relations-available`  | `{ relations, count }`                     | The relation names in the rendered layout, for highlighting UI. |
+
+A layout with no nodes is not an error: the element draws an empty canvas, says
+so on it, and still fires `layout-complete`. If that is unexpected, the datum
+reaching `generateLayout` had no atoms — check the `layout-warnings` detail,
+where a selector matching nothing is the usual tell.
+
 ---
 
 ## React components
@@ -287,7 +306,7 @@ CDN URLs:
 - jsDelivr: `https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`
 - unpkg:    `https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`
 
-For reproducibility, pin a version (`spytial-core@5.2.1`).
+For reproducibility, pin a version (`spytial-core@5.3.0`).
 
 ---
 

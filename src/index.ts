@@ -227,7 +227,7 @@ export { ErrorStateManager } from './layout/error-state';
 // there was no name to import for it. The exports map blocks a deep import of
 // the declaration, so the only way to annotate one was an indexed access into
 // InstanceLayout.
-export type { SystemError, SelectorErrorDetail, LayoutWarning } from './layout/error-state';
+export type { SystemError, SelectorErrorDetail, LayoutWarning, LayoutErrorDetail } from './layout/error-state';
 
 
 // Evaluation API — headless layout + visual-consistency metrics from

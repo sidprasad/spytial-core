@@ -100,18 +100,34 @@ describe('WebColaCnDGraph teardown (#474)', () => {
   });
 
   describe('disconnectedCallback', () => {
-    it('never lets dispose() errors escape into the host', () => {
+    it('never lets dispose() errors escape into the host', async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       try {
         const fakeThis: any = {
+          isConnected: false,
           dispose: () => { throw new DOMException('detached', 'InvalidStateError'); },
         };
 
         expect(() => proto.disconnectedCallback.call(fakeThis)).not.toThrow();
+        // The teardown runs a microtask later, so a move can cancel it.
+        await Promise.resolve();
         expect(warn).toHaveBeenCalled();
       } finally {
         warn.mockRestore();
       }
+    });
+
+    it('does not tear down a graph that was only moved', async () => {
+      // appendChild of an already-parented element disconnects and reconnects
+      // it in the same task. The graph is live throughout; disposing it there
+      // left the host with a canvas that never drew again.
+      const dispose = vi.fn();
+      const fakeThis: any = { isConnected: true, dispose };
+
+      proto.disconnectedCallback.call(fakeThis);
+      await Promise.resolve();
+
+      expect(dispose).not.toHaveBeenCalled();
     });
   });
 
@@ -132,6 +148,8 @@ describe('WebColaCnDGraph teardown (#474)', () => {
         edgeRoutingCache: { edgesBetweenNodes: new Map(), alignmentEdges: new Map() },
         dragStartPositions: new Map(),
         hideLoading: vi.fn(),
+        hideEmptyState: vi.fn(),
+        hideError: vi.fn(),
         teardownInflightRender: proto.teardownInflightRender,
       } as any;
     }
@@ -185,6 +203,8 @@ describe('WebColaCnDGraph overlapping renders', () => {
       morphEnteringEdgeIds: new Set(['e1']),
       teardownInflightRender: proto.teardownInflightRender,
       hideLoading,
+      hideEmptyState: vi.fn(),
+      hideError: vi.fn(),
       ...overrides,
     };
     return { fakeThis, stop, on, slideStop, exitLayerRemove, hideLoading };
@@ -230,6 +250,8 @@ describe('WebColaCnDGraph overlapping renders', () => {
         morphEnteringNodeIds: new Set(),
         morphEnteringEdgeIds: new Set(),
         hideLoading: vi.fn(),
+        hideEmptyState: vi.fn(),
+        hideError: vi.fn(),
       };
       expect(() => proto.teardownInflightRender.call(fakeThis)).not.toThrow();
     });
