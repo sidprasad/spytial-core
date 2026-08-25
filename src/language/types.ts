@@ -283,6 +283,23 @@ export interface HoldRules {
   note: string;
 }
 
+/**
+ * Author provenance: `source` on any constraint or directive. A generator
+ * embedding Spytial in a host language can attach the rule exactly as its
+ * author wrote it (a Python decorator, a Rust attribute, …); conflict reports
+ * and warnings then cite that text instead of the engine's own rendering.
+ */
+export interface SourceRules {
+  field: string;
+  /** The block's leaves (`text`, `location`). */
+  fields: readonly LanguageField[];
+  /** Item ids that accept the key — every item whose value is a block. */
+  supportedBy: readonly string[];
+  /** Item ids whose provided source the engine actually displays today. */
+  displayedBy: readonly string[];
+  note: string;
+}
+
 /** The complete machine-readable description of the spec language. */
 export interface LanguageManifest {
   /** Stable identifier for this artifact's own shape. */
@@ -297,6 +314,7 @@ export interface LanguageManifest {
   versioning: Readonly<Record<'note' | 'deprecations', string>>;
   document: DocumentRules;
   hold: HoldRules;
+  source: SourceRules;
   blocks: readonly LanguageBlock[];
   items: readonly LanguageItem[];
   /**

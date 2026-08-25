@@ -45,6 +45,19 @@ Spytial does not prescribe an annotation system. Use the one your host's users a
 
 Whatever mechanism you choose, the output is a string of YAML matching the [spec language](yaml-reference.md).
 
+When you generate that YAML, stamp each item with a `source` block carrying the annotation exactly as the author wrote it (and, if you have it, where):
+
+```yaml
+- orientation:
+    selector: next
+    directions: [left]
+    source:
+      text: "@spytial.orientation(selector='next', directions=['left'])"
+      location: "tree.py:12"
+```
+
+If the layout turns out unsatisfiable, the conflict report then cites `@spytial.orientation(...)` — the author's own line — rather than Spytial's internal description of the rule. See [author provenance](constraints.md#author-provenance-source).
+
 ---
 
 ## 3. Presenting diagrams

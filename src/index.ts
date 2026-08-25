@@ -59,6 +59,12 @@ export { parseLayoutSpec } from './layout/layoutspec';
 // `translators` used to re-export — that name had already been deleted, so the
 // re-export was dangling and shipped a broken line into dist/types.
 export type { LayoutSpec } from './layout/layoutspec';
+// Author provenance: the rule as its author wrote it in an embedding, cited
+// by conflict reports. The type is what integrations emit in a spec's
+// `source` blocks; the parse/render helpers are exported for hosts that build
+// their own error surfaces.
+export { parseProvidedSource, providedSourceHTML } from './layout/layoutspec';
+export type { ProvidedSource } from './layout/layoutspec';
 export { setupLayout } from './layout';
 export { type default as IEvaluator, SelectorArityError } from './evaluator-contracts';
 export { ForgeEvaluator, WrappedForgeEvaluator } from './evaluators/data/forge-evaluator';

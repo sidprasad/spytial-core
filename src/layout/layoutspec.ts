@@ -18,10 +18,68 @@ export type AlignDirection = "horizontal" | "vertical";
 
 export interface Operation {}
 
+/**
+ * The rule as its author wrote it, provided by the embedding. A spec generated
+ * from another surface (a Python decorator, a Rust attribute, …) can attach the
+ * author's own text to each item via its `source` field; error reports and
+ * warnings then cite the rule in the form the author wrote instead of the
+ * engine's own rendering. Absent on hand-written YAML — there the YAML *is*
+ * the author's text.
+ */
+export interface ProvidedSource {
+    /** The rule exactly as the author wrote it in the host language. */
+    text: string;
+    /** Where it was written, e.g. `tree.py:12`. Display only. */
+    location?: string;
+}
+
+/**
+ * Read a `source` field off a spec item. Returns undefined for anything that
+ * is not a block with a non-empty string `text` — the parser's convention is
+ * to ignore what it does not recognize, and a malformed `source` only affects
+ * error display, never the diagram.
+ */
+export function parseProvidedSource(raw: unknown): ProvidedSource | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const r = raw as Record<string, unknown>;
+    if (typeof r.text !== 'string' || r.text.trim() === '') return undefined;
+    const source: ProvidedSource = { text: r.text };
+    if (typeof r.location === 'string' && r.location.trim() !== '') {
+        source.location = r.location;
+    }
+    return source;
+}
+
+// Escapes author-provided source text before it is injected into error-report
+// HTML. Local copy: constraint-types.ts has one too, but importing it here
+// would be circular (it imports this module).
+function escapeSourceHtml(str: string): string {
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+/**
+ * Render a {@link ProvidedSource} for an error report or warning label. The
+ * text is author-written code, so it is escaped and shown as code — never
+ * trusted as markup.
+ */
+export function providedSourceHTML(source: ProvidedSource): string {
+    const location = source.location
+        ? ` (${escapeSourceHtml(source.location)})`
+        : '';
+    return `<code>${escapeSourceHtml(source.text)}</code>${location}`;
+}
+
 
 class ConstraintOperation implements Operation {
     selector: string;
     negated: boolean;
+    /** The rule as its author wrote it, when the embedding provided it. */
+    source?: ProvidedSource;
     constructor(selector: string, negated: boolean = false) {
         this.selector = selector;
         this.negated = negated;
@@ -35,7 +93,19 @@ class ConstraintOperation implements Operation {
         return `Inconsistent Constraint Operation: ${this.selector}`;
     }
 
+    /**
+     * The author-provided rendering of this rule, or null when the spec did
+     * not carry one. Every `toHTML()` defers to it, so a rule shows up in
+     * conflict reports the way its author wrote it, falling back to the
+     * engine's own description.
+     */
+    protected providedHTML(): string | null {
+        return this.source ? providedSourceHTML(this.source) : null;
+    }
+
     toHTML(): string {
+        const provided = this.providedHTML();
+        if (provided) return provided;
         const prefix = this.negated ? 'NOT ' : '';
         return `${prefix}ConstraintOperation with selector <code>${this.selector} </code>.`;
     }
@@ -106,6 +176,8 @@ export class RelativeOrientationConstraint extends ConstraintOperation {
     }
 
     override toHTML(): string {
+        const provided = this.providedHTML();
+        if (provided) return provided;
         const prefix = this.negated ? 'NOT ' : '';
         let directions = this.directions.join(", ");
         return `${prefix}OrientationConstraint with directions [${directions}] and selector <code>${this.selector}</code>`;
@@ -130,6 +202,8 @@ export class AlignConstraint extends ConstraintOperation {
     }
 
     override toHTML(): string {
+        const provided = this.providedHTML();
+        if (provided) return provided;
         const prefix = this.negated ? 'NOT ' : '';
         return `${prefix}AlignConstraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
@@ -191,6 +265,8 @@ export class GroupBySelector extends ConstraintOperation{
     }
 
     override toHTML(): string {
+        const provided = this.providedHTML();
+        if (provided) return provided;
         if (this.negated) {
             return `Members selected by <code>${this.selector}</code> cannot form a group`;
         }
@@ -222,6 +298,8 @@ export class CyclicOrientationConstraint extends ConstraintOperation {
     }
 
     override toHTML(): string {
+        const provided = this.providedHTML();
+        if (provided) return provided;
         const prefix = this.negated ? 'NOT ' : '';
         return `${prefix}Cyclic constraint with direction [${this.direction}] and selector <code>${this.selector}</code>`;
     }
@@ -301,6 +379,8 @@ export function parseInferredEdgeDraw(raw: unknown): { source: string | null, ta
 
 export interface AtomHidingDirective extends VisualManipulation {
     // Uses selector to determine which atoms to hide
+    /** The rule as its author wrote it, when the embedding provided it. */
+    source?: ProvidedSource;
 }
 
 
@@ -560,7 +640,8 @@ export function parseLayoutSpec(s: string): LayoutSpec {
           
           hiddenAtomsFromConstraints = typedConstraints.filter(c => c.hideAtom)
             .map(c => ({
-                selector: c.hideAtom.selector
+                selector: c.hideAtom.selector,
+                source: parseProvidedSource(c.hideAtom.source)
             }));
         }
         catch (e) {
@@ -647,10 +728,23 @@ function removeDuplicateCyclicConstraints(constraints: CyclicOrientationConstrai
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
+        } else {
+            keepProvidedSource(seen.get(key)!, constraint);
         }
     }
 
     return result;
+}
+
+/**
+ * When a duplicate constraint is dropped, keep its author-provided source on
+ * the survivor if the survivor has none — otherwise deduping two identical
+ * rules would silently lose the one author text between them.
+ */
+function keepProvidedSource(survivor: { source?: ProvidedSource }, dropped: { source?: ProvidedSource }): void {
+    if (!survivor.source && dropped.source) {
+        survivor.source = dropped.source;
+    }
 }
 
 /**
@@ -667,6 +761,8 @@ function removeDuplicateRelativeOrientationConstraints(constraints: RelativeOrie
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
+        } else {
+            keepProvidedSource(seen.get(key)!, constraint);
         }
     }
     
@@ -687,6 +783,8 @@ function removeDuplicateAlignConstraints(constraints: AlignConstraint[]): AlignC
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
+        } else {
+            keepProvidedSource(seen.get(key)!, constraint);
         }
     }
 
@@ -707,6 +805,8 @@ function removeDuplicateGroupBySelectorConstraints(constraints: GroupBySelector[
         if (!seen.has(key)) {
             seen.set(key, constraint);
             result.push(constraint);
+        } else {
+            keepProvidedSource(seen.get(key)!, constraint);
         }
     }
     
@@ -741,11 +841,13 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
                 throw new Error("Cyclic constraint must have a selector");
             }
 
-            return new CyclicOrientationConstraint(
+            const coc = new CyclicOrientationConstraint(
                 c.cyclic.direction || "clockwise",
                 c.cyclic.selector,
                 c._negated
             );
+            coc.source = parseProvidedSource(c.cyclic.source);
+            return coc;
         });
 
         // Remove duplicate cyclic constraints
@@ -788,6 +890,7 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
                 constr.selector,
                 c._negated
             );
+            roc.source = parseProvidedSource(c.orientation.source);
             isInternallyConsistent = roc.isInternallyConsistent();
             if(!isInternallyConsistent) {
                 throw new Error(roc.inconsistencyMessage());
@@ -840,6 +943,7 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
             // Auto-generate name for negated groups without one
             const name = c.group.name || `_not_group_${c.group.selector}`;
             const gbs = new GroupBySelector(c.group.selector, name, c.group.addEdge, c._negated);
+            gbs.source = parseProvidedSource(c.group.source);
             // Block-form `addEdge: { points, lineStyle, textStyle }` styles the
             // connector — which is an edge — so parse it as an edge spec (the
             // `points` key is ignored by parseEdgeStyleSpec). A bare string/bool
@@ -872,7 +976,8 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
                 c.align.selector,
                 c._negated
             );
-            
+            alignConstraint.source = parseProvidedSource(c.align.source);
+
             if(!alignConstraint.isInternallyConsistent()) {
                 throw new Error(alignConstraint.inconsistencyMessage());
             }
@@ -1065,7 +1170,8 @@ function parseDirectives(directives: unknown[], warnings: ParseWarning[] = []): 
     }
     let hiddenAtoms : AtomHidingDirective[] = rawHiddenAtoms.map(d => {
         return {
-            selector: d.hideAtom.selector
+            selector: d.hideAtom.selector,
+            source: parseProvidedSource(d.hideAtom.source)
         }
     });
 
