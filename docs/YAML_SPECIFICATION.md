@@ -343,6 +343,36 @@ For groups, `hold: never` asserts that no axis-aligned rectangle can contain exa
 
 ---
 
+### Author provenance (`source`)
+
+Every constraint and directive with a block body accepts an optional `source` block. It carries the rule exactly as its author wrote it in the surface that generated the spec — a Python decorator, a Rust attribute, a Forge annotation. When a layout is unsatisfiable, the conflict report cites that text instead of Spytial's own description of the rule, so the author sees the rule in the form they wrote it.
+
+This field is for spec **generators** (Spytial integrations). Hand-written YAML does not need it: there, the YAML is the author's text.
+
+```yaml
+- orientation:
+    selector: next
+    directions: [left]
+    source:
+      text: "@spytial.orientation(selector='next', directions=['left'])"
+      location: "tree.py:12"
+```
+
+**Fields:**
+
+| Field | Required | Type | Description |
+|-------|----------|------|-------------|
+| `source.text` | Yes | string | The rule as its author wrote it. Shown escaped, as code — never interpreted as markup. A missing or empty `text` makes the whole `source` block ignored. |
+| `source.location` | No | string | Where the rule was written, e.g. `tree.py:12`. Appended to the displayed text. |
+
+**Behavior:**
+- Displayed by the forms that appear in conflict reports: `orientation`, `cyclic`, `align`, `group`, and `hideAtom`. Warnings about a constraint's selector (e.g. an unresolved name) use the same text.
+- Accepted on every other block-bodied item too, so a generator can stamp it uniformly; it parses there and is ignored.
+- Duplicate rules de-duplicate to one entry, which keeps the first provided `source`.
+- Never affects the layout itself — only how the rule is named in reports.
+
+---
+
 ### Size Constraint
 
 Sets the width and height of nodes matching a selector.

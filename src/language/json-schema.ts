@@ -210,7 +210,7 @@ function objectSchema(fields: readonly LanguageField[]): JsonSchemaNode {
 }
 
 /** The body of one item (everything under its YAML key). */
-function itemBodySchema(item: LanguageItem): JsonSchemaNode {
+function itemBodySchema(item: LanguageItem, manifest: LanguageManifest): JsonSchemaNode {
   const body = objectSchema(item.fields);
 
   if (item.supportsHold) {
@@ -219,6 +219,18 @@ function itemBodySchema(item: LanguageItem): JsonSchemaNode {
       enum: ['always', 'never'],
       description:
         'Negation. `never` asserts the constraint must not hold; `always` (the default) is the positive form.',
+    };
+  }
+
+  // Every block-bodied item accepts `source` (author provenance), so a
+  // generator can stamp it on everything it emits without failing validation.
+  // Displayed only by the items the manifest's `source.displayedBy` lists.
+  if (manifest.source.supportedBy.includes(item.id)) {
+    (body.properties as Record<string, JsonSchemaNode>).source = {
+      $ref: '#/$defs/source',
+      description: manifest.source.displayedBy.includes(item.id)
+        ? 'The rule as its author wrote it in the host surface. Cited in conflict reports in place of the engine’s own rendering.'
+        : 'The rule as its author wrote it in the host surface. Accepted here for uniform generation; not displayed for this item today.',
     };
   }
 
@@ -250,9 +262,9 @@ function itemBodySchema(item: LanguageItem): JsonSchemaNode {
 }
 
 /** One list entry: a single-key mapping (or, for `flag`, a scalar-valued key). */
-function itemSchema(item: LanguageItem): JsonSchemaNode {
+function itemSchema(item: LanguageItem, manifest: LanguageManifest): JsonSchemaNode {
   const value =
-    item.valueShape === 'scalar' ? fieldSchema(item.fields[0]) : itemBodySchema(item);
+    item.valueShape === 'scalar' ? fieldSchema(item.fields[0]) : itemBodySchema(item, manifest);
 
   const node: JsonSchemaNode = {
     title: item.label,
@@ -317,8 +329,15 @@ export function buildJsonSchema(manifest: LanguageManifest): JsonSchemaNode {
     defs[block.name] = { description: block.description, ...objectSchema(block.fields) };
   }
 
+  // The shared `source` block (author provenance), referenced from every
+  // block-bodied item the same way the shared style blocks are.
+  defs.source = {
+    description: manifest.source.note,
+    ...objectSchema(manifest.source.fields),
+  };
+
   for (const item of manifest.items) {
-    defs[defName(item)] = itemSchema(item);
+    defs[defName(item)] = itemSchema(item, manifest);
   }
 
   return {

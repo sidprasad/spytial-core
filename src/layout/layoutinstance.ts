@@ -17,7 +17,8 @@ import {
     RelativeOrientationConstraint, CyclicOrientationConstraint,
     RelativeDirection,
     GroupBySelector, AlignConstraint,
-    EdgeColorDirective, InferredEdgeDirective
+    EdgeColorDirective, InferredEdgeDirective,
+    ProvidedSource, providedSourceHTML
 } from './layoutspec';
 import { resolveEdgeStyle } from './style/edge-style-spec';
 import type { EdgeStyleSpec, LineStyle } from './style/edge-style-spec';
@@ -393,6 +394,14 @@ export class LayoutInstance {
      * Reset at the start of each generateLayout() call.
      */
     private hiddenNodeSelectors: Map<string, string> = new Map();
+
+    /**
+     * Map of hideAtom selector to the author-provided source of the directive
+     * that used it, for citing the rule as its author wrote it in conflict
+     * reports. Only selectors whose directive carried a `source` appear here.
+     * Reset at the start of each generateLayout() call.
+     */
+    private hiddenSelectorSources: Map<string, ProvidedSource> = new Map();
 
     /**
      * Tracks constraints that were dropped because they reference hidden nodes.
@@ -1332,6 +1341,11 @@ export class LayoutInstance {
                     selector: directive.selector,
                     hiddenSet: new Set(selectedAtoms),
                 });
+                // Remember the author-provided source per selector, so a
+                // conflict report can cite the rule as its author wrote it.
+                if (directive.source && !this.hiddenSelectorSources.has(directive.selector)) {
+                    this.hiddenSelectorSources.set(directive.selector, directive.source);
+                }
             } catch (error) {
                 this.recordSelectorError(directive.selector, 'hideAtom selector', error);
             }
@@ -1558,6 +1572,7 @@ export class LayoutInstance {
         // Reset hidden-node tracking at the start of each layout generation
         // (exemptFromHiding is intentionally preserved across passes)
         this.hiddenNodeSelectors = new Map();
+        this.hiddenSelectorSources = new Map();
         this.hiddenNodeConflicts = new Map();
         this.conflictedHiddenNodes = new Set();
         this.reintroducedNodes = new Set();
@@ -1875,7 +1890,12 @@ export class LayoutInstance {
         // conflictedNodeIds and were recorded in hiddenSelectors when hidden).
         const conflictedIds = [...conflictedNodeIds];
         for (const hideSelector of involvedHideSelectors) {
-            const hideHTML = `hideAtom with selector <code>${hideSelector}</code>`;
+            // Prefer the rule as its author wrote it, when the embedding
+            // provided it — same fallback the constraint toHTML() path uses.
+            const provided = this.hiddenSelectorSources.get(hideSelector);
+            const hideHTML = provided
+                ? providedSourceHTML(provided)
+                : `hideAtom with selector <code>${hideSelector}</code>`;
             const hiddenNodeDescriptions: string[] = [];
             for (const nodeId of conflictedIds) {
                 if (hiddenSelectors.get(nodeId) === hideSelector) {

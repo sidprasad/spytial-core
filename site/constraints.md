@@ -457,6 +457,23 @@ constraints:
 
 ---
 
+## Author provenance (`source`)
+
+Every constraint (and every block-bodied directive) accepts an optional `source` block: the rule exactly as its author wrote it in the surface that generated the spec — a Python decorator, a Rust attribute, a Forge annotation. When constraints conflict, the error report cites that text instead of Spytial's own description, so the author sees the rule in the form they wrote it.
+
+```yaml
+- orientation:
+    selector: next
+    directions: [left]
+    source:
+      text: "@spytial.orientation(selector='next', directions=['left'])"
+      location: "tree.py:12"     # optional
+```
+
+`text` is required (shown escaped, as code); `location` is optional and appended to the display. This is a channel for [Spytial integrations](new-language-integration.md) — hand-written YAML needs no `source`, because there the YAML *is* the author's text. Without it, reports fall back to Spytial's own rendering of the rule. It never affects the layout, only how the rule is named in reports and warnings.
+
+---
+
 ## Combining Constraints
 
 Constraints compose naturally. Spytial solves all of them simultaneously using a constraint solver. When constraints conflict, Spytial identifies the **minimal set of conflicting constraints** (called an Irreducible Inconsistent Subset, or IIS) so you can fix the issue.

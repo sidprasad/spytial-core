@@ -37,6 +37,7 @@
 import type {
   AcceptedArity,
   HoldRules,
+  SourceRules,
   LanguageBlock,
   LanguageField,
   LanguageItem,
@@ -52,7 +53,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-08-14';
+export const LANGUAGE_VERSION = '2026-08-25';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -1002,6 +1003,36 @@ const ITEMS: readonly LanguageItem[] = [
   EDGE_COLOR,
 ];
 
+const SOURCE: SourceRules = {
+  field: 'source',
+  fields: [
+    {
+      name: 'text',
+      type: 'string',
+      required: true,
+      enforcement: 'value-ignored',
+      description:
+        'The rule exactly as its author wrote it in the host surface — a Python decorator, a Rust ' +
+        'attribute, a Forge annotation. Shown (escaped, as code) in conflict reports and warnings in ' +
+        'place of the engine’s own description of the rule. A missing or empty `text` makes the ' +
+        'whole `source` block ignored.',
+    },
+    {
+      name: 'location',
+      type: 'string',
+      description: 'Where the rule was written, e.g. `tree.py:12`. Appended to the displayed text.',
+    },
+  ],
+  supportedBy: ITEMS.filter((i) => i.valueShape !== 'scalar').map((i) => i.id),
+  displayedBy: ['orientation', 'cyclic', 'align', 'group', 'hideAtom'],
+  note:
+    'For generators only — hand-written YAML needs no `source`, because there the YAML is the ' +
+    'author’s text. Accepted on every block-bodied item so a generator can stamp it uniformly. ' +
+    'The engine carries and displays it for the forms that appear in conflict reports (the ' +
+    '`displayedBy` list: the layout constraints and `hideAtom`); on the rest it parses and is ' +
+    'ignored. Duplicate rules de-duplicate to one entry, which keeps the first provided source.',
+};
+
 const HOLD: HoldRules = {
   field: 'hold',
   values: ['always', 'never'],
@@ -1029,6 +1060,9 @@ const DOCUMENT = {
     'Duplicate constraints (same selector and same parameters) are de-duplicated at parse time.',
     'Parsing returns advisory `warnings` alongside the spec. Each carries a `code` (currently `deprecated`) and ' +
       'a `specType` naming the form, so a consumer can surface them without matching prose.',
+    'Every block-bodied item accepts an optional `source` block carrying the rule as its author wrote it ' +
+      'in the host surface; conflict reports cite that text instead of the engine’s own rendering. ' +
+      'See the top-level `source` entry for the block’s shape and which items display it.',
     'The old group-by-field shape, `group: { field, groupOn, addToGroup }`, is removed. It is a parse error, ' +
       'not a silently ignored key, so an old spec fails loudly instead of losing its grouping. Write a `group` ' +
       'whose binary `selector` has the key in its first column and the members in its second; over ' +
@@ -1096,6 +1130,7 @@ export function getLanguageManifest(spytialCoreVersion: string): LanguageManifes
     versioning: LANGUAGE_VERSIONING,
     document: DOCUMENT,
     hold: HOLD,
+    source: SOURCE,
     blocks: BLOCKS,
     items: ITEMS,
     deprecations: DEPRECATIONS,

@@ -57,6 +57,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const CONSTRAINT_STRUCTURAL_KEYS: readonly string[] = ['hold'];
 
 /**
+ * Keys the engine accepts on ANY block-bodied item that are deliberately not
+ * builder fields: `source` carries the rule as its author wrote it in an
+ * embedding (a Python decorator, …), cited by conflict reports. Generated
+ * specs stamp it; nobody types it into the builder.
+ */
+const UNIVERSAL_STRUCTURAL_KEYS: readonly string[] = ['source'];
+
+/**
  * Per-type keys the engine accepts but the registry does not expose as builder
  * fields, so the unknown-key check must not report them as typos:
  *  - `edgeColor` is the deprecated flat form; `edgeColorToEdgeStyleRule` reads
@@ -175,6 +183,7 @@ function checkUnknownKeys(item: SpecItem, def: ItemDefinition): Diagnostic[] {
   if (item.kind === 'constraint') {
     for (const k of CONSTRAINT_STRUCTURAL_KEYS) allowed.add(k);
   }
+  for (const k of UNIVERSAL_STRUCTURAL_KEYS) allowed.add(k);
   for (const k of EXTRA_ACCEPTED_KEYS_BY_TYPE[item.type] ?? []) allowed.add(k);
   // Not added to `allowed`: the loop below reports them before it consults it.
   const deprecatedKeys = DEPRECATED_KEYS_BY_TYPE.get(item.type);

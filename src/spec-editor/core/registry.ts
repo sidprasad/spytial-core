@@ -30,6 +30,11 @@
  *     - inferredEdge: { name, selector?, draw?, lineStyle?:{color,pattern,weight,highlight}, textStyle?:{size,color} }
  *     - tag:          { toTag, name, value, textStyle?:{size,color} }
  *
+ * Every block-bodied item additionally accepts `source?: { text, location? }` —
+ * the rule as its author wrote it in an embedding, cited by conflict reports.
+ * It is carried through round trips (the default codec copies it with the rest
+ * of the body; the group codec copies it explicitly), never edited.
+ *
  * This module is framework-agnostic — no React.
  */
 
@@ -326,6 +331,10 @@ const groupselector: ItemDefinition = {
     if (params.hold !== undefined) {
       node.hold = params.hold;
     }
+    // Author provenance (`source: { text, location? }`) — carried, not edited.
+    if (isRecord(params.source)) {
+      node.source = { ...params.source };
+    }
     return { group: node };
   },
   fromYamlNode(node) {
@@ -349,6 +358,10 @@ const groupselector: ItemDefinition = {
     }
     if (group.hold !== undefined) {
       params.hold = group.hold;
+    }
+    // Author provenance survives the round trip like `hold` does.
+    if (isRecord(group.source)) {
+      params.source = { ...group.source };
     }
     return params;
   },

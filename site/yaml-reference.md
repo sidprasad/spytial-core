@@ -23,6 +23,8 @@ Both sections are optional. An empty specification is valid.
 
 Each section must be a **list** of single-key entries. The parser ignores anything it does not recognize — an unknown directive, a misspelled field, or a section written as a mapping instead of a list all pass silently and then do nothing. Validate against `spytial-spec.schema.json` if you want a typo to be an error.
 
+Every block-bodied item also accepts an optional `source: { text, location? }` block — the rule as its author wrote it in the surface that generated the spec. Conflict reports cite that text instead of Spytial's own rendering. See [author provenance](constraints.md#author-provenance-source).
+
 ---
 
 ## Constraints at a Glance
