@@ -170,17 +170,16 @@ export interface LanguageField {
   };
   /**
    * Set when the field's value declares a graph-side name that other spec
-   * fields resolve, rather than mere display text. `kind` says what the name
-   * denotes and `arity` how many columns that thing has (a group is a set of
-   * atoms, an inferred edge a pair); `referencedBy` lists the `item.field`
-   * paths whose values resolve names of this kind. A generator renaming one
-   * must rewrite the references with it — and must not expect the name
-   * anywhere else: in particular, selectors evaluate against the data
-   * instance, where spec-introduced names do not exist.
+   * fields resolve, rather than mere display text. `kind` names an entry in
+   * {@link LanguageManifest.introducedKinds}, which carries what the name
+   * denotes and its arity; `referencedBy` lists the `item.field` paths whose
+   * values resolve names of this kind. A generator renaming one must rewrite
+   * the references with it — and must not expect the name anywhere else: in
+   * particular, selectors evaluate against the data instance, where
+   * spec-introduced names do not exist.
    */
   introduces?: {
-    kind: 'group' | 'edge';
-    arity: number;
+    kind: string;
     referencedBy: readonly string[];
   };
   /** Set when the field itself is deprecated (its parent item may not be). */
@@ -343,6 +342,14 @@ export interface LanguageManifest {
   language: 'spytial-layout-spec';
   /** The date the language last changed, as `YYYY-MM-DD`. */
   languageVersion: string;
+  /**
+   * The version of this manifest's own shape, as semver: which members exist
+   * and what they mean, independent of the language they describe. Bumps
+   * minor when a member is added, major when one changes meaning or goes
+   * away — so a consumer can require the members it reads before parsing,
+   * instead of discovering their absence field by field.
+   */
+  manifestVersion: string;
   /** The `spytial-core` release that produced this manifest. */
   spytialCoreVersion: string;
   /** How the language is versioned, and what a deprecation promises. */
@@ -350,6 +357,14 @@ export interface LanguageManifest {
   document: DocumentRules;
   hold: HoldRules;
   source: SourceRules;
+  /**
+   * The kinds of graph-side name a field can introduce (see
+   * {@link LanguageField.introduces}), each with the arity of the thing the
+   * name denotes — a group is a set of atoms (1), an inferred edge a pair
+   * (2). Carried as data so a consumer resolves a kind's arity here rather
+   * than encoding the mapping itself.
+   */
+  introducedKinds: Readonly<Record<string, { arity: number; description: string }>>;
   blocks: readonly LanguageBlock[];
   items: readonly LanguageItem[];
   /**

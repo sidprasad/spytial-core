@@ -55,12 +55,24 @@ import type {
  */
 export const LANGUAGE_VERSION = '2026-08-25';
 
+/**
+ * The version of the manifest's own shape (which members exist), as semver —
+ * independent of {@link LANGUAGE_VERSION}, which dates the language the
+ * manifest describes. 1.0.0 is the shape spytial-core 5.4.0 shipped; 1.1.0
+ * adds `manifestVersion` itself, `introducedKinds`, `introduces`,
+ * `inertWhenBare`, and `middleColumns`. Bump minor on a new member, major
+ * when a member changes meaning or goes away.
+ */
+export const MANIFEST_VERSION = '1.1.0';
+
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
   note:
     '`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since ' +
     'the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` ' +
-    'records which release produced this file.',
+    'records which release produced this file. `manifestVersion` (semver) versions this file\'s own ' +
+    'shape — which members exist and what they mean; a consumer that reads a member should require ' +
+    'the minor that introduced it.',
   deprecations:
     'A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and ' +
     'each entry names its replacement and the rewrite to apply. Removal is signalled by ' +
@@ -432,7 +444,7 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'parse-error',
-      introduces: { kind: 'group', arity: 1, referencedBy: ['inferredEdge.draw', 'edgeStyle.field'] },
+      introduces: { kind: 'group', referencedBy: ['inferredEdge.draw', 'edgeStyle.field'] },
       description:
         'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
         'Required unless the constraint is negated (`hold: never`), where a name is generated.',
@@ -764,7 +776,7 @@ const INFERRED_EDGE: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'unchecked',
-      introduces: { kind: 'edge', arity: 2, referencedBy: ['edgeStyle.field'] },
+      introduces: { kind: 'edge', referencedBy: ['edgeStyle.field'] },
       description: 'The label drawn on the edge.',
       note:
         'An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: ' +
@@ -1015,6 +1027,11 @@ const ITEMS: readonly LanguageItem[] = [
   EDGE_COLOR,
 ];
 
+const INTRODUCED_KINDS = {
+  group: { arity: 1, description: 'A set of atoms under one hull, the handle a `draw` end attaches to.' },
+  edge: { arity: 2, description: 'The (source, target) pairs an inferredEdge draws, labelled with the name.' },
+} as const;
+
 const SOURCE: SourceRules = {
   field: 'source',
   fields: [
@@ -1138,11 +1155,13 @@ export function getLanguageManifest(spytialCoreVersion: string): LanguageManifes
   return {
     language: 'spytial-layout-spec',
     languageVersion: LANGUAGE_VERSION,
+    manifestVersion: MANIFEST_VERSION,
     spytialCoreVersion,
     versioning: LANGUAGE_VERSIONING,
     document: DOCUMENT,
     hold: HOLD,
     source: SOURCE,
+    introducedKinds: INTRODUCED_KINDS,
     blocks: BLOCKS,
     items: ITEMS,
     deprecations: DEPRECATIONS,

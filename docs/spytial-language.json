@@ -1,9 +1,10 @@
 {
   "language": "spytial-layout-spec",
   "languageVersion": "2026-08-25",
+  "manifestVersion": "1.1.0",
   "spytialCoreVersion": "5.4.0",
   "versioning": {
-    "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
+    "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file. `manifestVersion` (semver) versions this file's own shape — which members exist and what they mean; a consumer that reads a member should require the minor that introduced it.",
     "deprecations": "A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and each entry names its replacement and the rewrite to apply. Removal is signalled by `languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this manifest and becomes a parse error, so check `languageVersion` before assuming a spec you generated earlier still parses."
   },
   "document": {
@@ -80,6 +81,16 @@
       "hideAtom"
     ],
     "note": "For generators only — hand-written YAML needs no `source`, because there the YAML is the author’s text. Accepted on every block-bodied item so a generator can stamp it uniformly. The engine carries and displays it for the forms that appear in conflict reports (the `displayedBy` list: the layout constraints and `hideAtom`); on the rest it parses and is ignored. Duplicate rules de-duplicate to one entry, which keeps the first provided source."
+  },
+  "introducedKinds": {
+    "group": {
+      "arity": 1,
+      "description": "A set of atoms under one hull, the handle a `draw` end attaches to."
+    },
+    "edge": {
+      "arity": 2,
+      "description": "The (source, target) pairs an inferredEdge draws, labelled with the name."
+    }
   },
   "blocks": [
     {
@@ -439,7 +450,6 @@
           "enforcement": "parse-error",
           "introduces": {
             "kind": "group",
-            "arity": 1,
             "referencedBy": [
               "inferredEdge.draw",
               "edgeStyle.field"
@@ -981,7 +991,6 @@
           "enforcement": "unchecked",
           "introduces": {
             "kind": "edge",
-            "arity": 2,
             "referencedBy": [
               "edgeStyle.field"
             ]

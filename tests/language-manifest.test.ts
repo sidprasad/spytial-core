@@ -32,7 +32,7 @@ import {
   renderArtifacts,
 } from '../scripts/generate-language-artifacts';
 import { buildJsonSchema } from '../src/language/json-schema';
-import { getLanguageManifest, LANGUAGE_VERSION } from '../src/language/manifest';
+import { getLanguageManifest, LANGUAGE_VERSION, MANIFEST_VERSION } from '../src/language/manifest';
 import type { LanguageField, LanguageItem, LanguageManifest } from '../src/language/types';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import type { IJsonDataInstance } from '../src/data-instance/json-data-instance';
@@ -214,6 +214,8 @@ describe('language manifest — introduced names', () => {
 
   it('every introducing field is a string, and every declared reference site exists', () => {
     expect(introducing.length).toBeGreaterThan(0);
+    const usedKinds = new Set(introducing.map(([, , f]) => f.introduces!.kind));
+    expect([...usedKinds].sort()).toEqual(Object.keys(manifest.introducedKinds).sort());
     for (const [label, , field] of introducing) {
       expect(field.type, `${label} should be a string field`).toBe('string');
       for (const path of field.introduces!.referencedBy) {
@@ -817,5 +819,10 @@ describe('published artifacts', () => {
     expect(LANGUAGE_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // A real calendar date, not just the right shape.
     expect(new Date(`${LANGUAGE_VERSION}T00:00:00Z`).toISOString().slice(0, 10)).toBe(LANGUAGE_VERSION);
+  });
+
+  it('the manifest version is semver', () => {
+    expect(MANIFEST_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(manifest.manifestVersion).toBe(MANIFEST_VERSION);
   });
 });
