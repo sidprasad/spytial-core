@@ -59,9 +59,9 @@ export const LANGUAGE_VERSION = '2026-08-25';
  * The version of the manifest's own shape (which members exist), as semver —
  * independent of {@link LANGUAGE_VERSION}, which dates the language the
  * manifest describes. 1.0.0 is the shape spytial-core 5.4.0 shipped; 1.1.0
- * adds `manifestVersion` itself, `introducedKinds`, `introduces`,
- * `inertWhenBare`, and `middleColumns`. Bump minor on a new member, major
- * when a member changes meaning or goes away.
+ * adds `manifestVersion` itself, `introducedKinds`, `introduces`, and
+ * `inertWhenBare`. Bump minor on a new member, major when a member changes
+ * meaning or goes away.
  */
 export const MANIFEST_VERSION = '1.1.0';
 
