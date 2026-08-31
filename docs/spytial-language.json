@@ -456,7 +456,7 @@
             ]
           },
           "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
-          "note": "An `edgeStyle` whose `field` is this name also styles the `addEdge` connector, though an authored `addEdge` block wins per-property."
+          "note": "An `edgeStyle` whose `field` is this name also styles the `addEdge` connector. An authored `addEdge` block wins per-property for `lineStyle`; a `textStyle` it carries replaces the `edgeStyle`'s whole."
         },
         {
           "name": "addEdge",
@@ -996,7 +996,7 @@
             ]
           },
           "description": "The label drawn on the edge.",
-          "note": "An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: `hideField` and `attribute` run before inferred edges exist, and selectors evaluate against the data instance, where the name does not."
+          "note": "An `edgeStyle` whose `field` is this name styles the inferred edges — except `hidden`, which is consumed before inferred edges exist. `edgeColor` desugars onto `edgeStyle`, so its `field` resolves the name too. Nothing else does: `hideField` and `attribute` also run before inferred edges exist, and selectors evaluate against the data instance, where the name does not."
         },
         {
           "name": "selector",

@@ -58,7 +58,7 @@ export const LANGUAGE_VERSION = '2026-08-25';
 /**
  * The version of the manifest's own shape (which members exist), as semver —
  * independent of {@link LANGUAGE_VERSION}, which dates the language the
- * manifest describes. 1.0.0 is the shape spytial-core 5.4.0 shipped; 1.1.0
+ * manifest describes. 1.0.0 is the shape the 5.4.0 npm tarball shipped; 1.1.0
  * adds `manifestVersion` itself, `introducedKinds`, `introduces`, and
  * `inertWhenBare`. Bump minor on a new member, major when a member changes
  * meaning or goes away.
@@ -449,8 +449,9 @@ const GROUP_BY_SELECTOR: LanguageItem = {
         'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
         'Required unless the constraint is negated (`hold: never`), where a name is generated.',
       note:
-        'An `edgeStyle` whose `field` is this name also styles the `addEdge` connector, though an authored ' +
-        '`addEdge` block wins per-property.',
+        'An `edgeStyle` whose `field` is this name also styles the `addEdge` connector. An authored ' +
+        '`addEdge` block wins per-property for `lineStyle`; a `textStyle` it carries replaces the ' +
+        "`edgeStyle`'s whole.",
     },
     {
       name: 'addEdge',
@@ -779,9 +780,10 @@ const INFERRED_EDGE: LanguageItem = {
       introduces: { kind: 'edge', referencedBy: ['edgeStyle.field'] },
       description: 'The label drawn on the edge.',
       note:
-        'An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: ' +
-        '`hideField` and `attribute` run before inferred edges exist, and selectors evaluate against the ' +
-        'data instance, where the name does not.',
+        'An `edgeStyle` whose `field` is this name styles the inferred edges — except `hidden`, which is ' +
+        'consumed before inferred edges exist. `edgeColor` desugars onto `edgeStyle`, so its `field` ' +
+        'resolves the name too. Nothing else does: `hideField` and `attribute` also run before inferred ' +
+        'edges exist, and selectors evaluate against the data instance, where the name does not.',
     },
     {
       name: 'selector',

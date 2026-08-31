@@ -235,8 +235,8 @@ function itemBodySchema(item: LanguageItem, manifest: LanguageManifest): JsonSch
   }
 
   if (item.discriminator) {
-    // Two items share this YAML key; the discriminating field's presence tells
-    // them apart, and the parser resolves it the same way.
+    // The discriminating field's presence or absence separates forms sharing a
+    // YAML key; today only group uses it, to reject the removed `field` form.
     if (item.discriminator.present) {
       const required = new Set<string>([...((body.required as string[]) ?? []), item.discriminator.field]);
       body.required = [...required];

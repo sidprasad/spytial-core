@@ -173,7 +173,10 @@ export interface LanguageField {
    * fields resolve, rather than mere display text. `kind` names an entry in
    * {@link LanguageManifest.introducedKinds}, which carries what the name
    * denotes and its arity; `referencedBy` lists the `item.field` paths whose
-   * values resolve names of this kind. A generator renaming one must rewrite
+   * values resolve names of this kind — current forms only: a deprecated
+   * field that desugars onto a listed one (see
+   * {@link LanguageManifest.deprecations}) resolves the name through it.
+   * A generator renaming one must rewrite
    * the references with it — and must not expect the name anywhere else: in
    * particular, selectors evaluate against the data instance, where
    * spec-introduced names do not exist.
