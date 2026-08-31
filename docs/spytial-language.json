@@ -1,7 +1,7 @@
 {
   "language": "spytial-layout-spec",
   "languageVersion": "2026-08-25",
-  "spytialCoreVersion": "5.3.0",
+  "spytialCoreVersion": "5.4.0",
   "versioning": {
     "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
     "deprecations": "A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and each entry names its replacement and the rewrite to apply. Removal is signalled by `languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this manifest and becomes a parse error, so check `languageVersion` before assuming a spec you generated earlier still parses."
@@ -430,14 +430,23 @@
           "required": true,
           "enforcement": "unchecked",
           "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group.",
-          "note": "A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op."
+          "note": "A `group` with neither `selector` nor the removed `field` key is silently dropped at parse time, without a warning — the one case where omitting a required field is not an error but a no-op. (With `field` it is the removed group-by-field form, which is a parse error.)"
         },
         {
           "name": "name",
           "type": "string",
           "required": true,
           "enforcement": "parse-error",
-          "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated."
+          "introduces": {
+            "kind": "group",
+            "arity": 1,
+            "referencedBy": [
+              "inferredEdge.draw",
+              "edgeStyle.field"
+            ]
+          },
+          "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
+          "note": "An `edgeStyle` whose `field` is this name also styles the `addEdge` connector, though an authored `addEdge` block wins per-property."
         },
         {
           "name": "addEdge",
@@ -626,6 +635,7 @@
         "directives"
       ],
       "valueShape": "mapping",
+      "inertWhenBare": true,
       "supportsHold": false,
       "fields": [
         {
@@ -690,6 +700,7 @@
         "directives"
       ],
       "valueShape": "mapping",
+      "inertWhenBare": true,
       "supportsHold": false,
       "fields": [
         {
@@ -953,7 +964,15 @@
           "type": "string",
           "required": true,
           "enforcement": "unchecked",
-          "description": "The label drawn on the edge."
+          "introduces": {
+            "kind": "edge",
+            "arity": 2,
+            "referencedBy": [
+              "edgeStyle.field"
+            ]
+          },
+          "description": "The label drawn on the edge.",
+          "note": "An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: `hideField` and `attribute` run before inferred edges exist, and selectors evaluate against the data instance, where the name does not."
         },
         {
           "name": "selector",

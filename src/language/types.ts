@@ -168,6 +168,21 @@ export interface LanguageField {
     fields?: readonly LanguageField[];
     block?: string;
   };
+  /**
+   * Set when the field's value declares a graph-side name that other spec
+   * fields resolve, rather than mere display text. `kind` says what the name
+   * denotes and `arity` how many columns that thing has (a group is a set of
+   * atoms, an inferred edge a pair); `referencedBy` lists the `item.field`
+   * paths whose values resolve names of this kind. A generator renaming one
+   * must rewrite the references with it — and must not expect the name
+   * anywhere else: in particular, selectors evaluate against the data
+   * instance, where spec-introduced names do not exist.
+   */
+  introduces?: {
+    kind: 'group' | 'edge';
+    arity: number;
+    referencedBy: readonly string[];
+  };
   /** Set when the field itself is deprecated (its parent item may not be). */
   deprecated?: FieldDeprecation;
   /** Anything a generator would otherwise get wrong. */
@@ -192,7 +207,7 @@ export interface LanguageBlock {
 export interface LanguageItem {
   /**
    * The YAML key this item is written under (`orientation`, `atomStyle`, …).
-   * Not unique on its own: `group` covers both grouping forms, told apart by
+   * Unique today; if a key ever covers two forms again they are told apart by
    * {@link LanguageItem.discriminator}.
    */
   yamlKey: string;
@@ -223,12 +238,28 @@ export interface LanguageItem {
    * its one entry in {@link LanguageItem.fields}.
    */
   valueShape: 'mapping' | 'scalar';
-  /** How to tell this item apart from another sharing its `yamlKey`. */
+  /**
+   * A field whose presence or absence delimits this item's shape. With
+   * `present: false` the JSON Schema rejects a body carrying the field —
+   * how `group` rejects the removed group-by-field spelling. With
+   * `present: true` it would also tell the item apart from another sharing
+   * its `yamlKey`, though no current pair needs that.
+   */
   discriminator?: {
     /** The field whose presence/absence decides. */
     field: string;
     present: boolean;
   };
+  /**
+   * Set when the item's entire effect is its optional presentation fields: a
+   * body that sets none of them — only scoping fields (selectors, relations)
+   * and required keys — parses without a warning and does nothing at layout
+   * time. Emitting one is therefore a generator bug, and the JSON Schema
+   * rejects the bare body even though the parser accepts it. Which fields
+   * count is derivable: the item's optional fields that are not of type
+   * `selector` or `relation`.
+   */
+  inertWhenBare?: true;
   /** Whether this item supports negation via `hold: never`. */
   supportsHold: boolean;
   fields: readonly LanguageField[];

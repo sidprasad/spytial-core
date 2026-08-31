@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:spytial:layout-spec-schema:2026-08-25",
   "title": "Spytial layout specification",
-  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-25, from spytial-core 5.3.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
+  "description": "A Spytial spec: constraints (structural layout) and directives (presentation). Spec language 2026-08-25, from spytial-core 5.4.0. This schema is stricter than the engine parser, which silently ignores anything it does not recognize — validating here is how a misspelled key or an out-of-range value gets caught at all. Fetch it from https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@<tag>/docs/spytial-spec.schema.json; pin a tag, since the @main path is overwritten each release.",
   "x-spytial-language-version": "2026-08-25",
-  "x-spytial-core-version": "5.3.0",
+  "x-spytial-core-version": "5.4.0",
   "type": "object",
   "properties": {
     "constraints": {
@@ -466,12 +466,12 @@
           "type": "object",
           "properties": {
             "selector": {
-              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary — 2 columns (also accepted: 3+ columns; 1 column). A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op.",
+              "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group. Selector arity: binary — 2 columns (also accepted: 3+ columns; 1 column). A `group` with neither `selector` nor the removed `field` key is silently dropped at parse time, without a warning — the one case where omitting a required field is not an error but a no-op. (With `field` it is the removed group-by-field form, which is a parse error.)",
               "type": "string",
               "minLength": 1
             },
             "name": {
-              "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
+              "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated. An `edgeStyle` whose `field` is this name also styles the `addEdge` connector, though an authored `addEdge` block wins per-property.",
               "type": "string",
               "minLength": 1
             },
@@ -695,7 +695,34 @@
               "description": "The rule as its author wrote it in the host surface. Accepted here for uniform generation; not displayed for this item today."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "fillStyle"
+              ]
+            },
+            {
+              "required": [
+                "borderStyle"
+              ]
+            },
+            {
+              "required": [
+                "iconStyle"
+              ]
+            },
+            {
+              "required": [
+                "textStyle"
+              ]
+            },
+            {
+              "required": [
+                "showLabel"
+              ]
+            }
+          ]
         }
       },
       "required": [
@@ -748,6 +775,28 @@
           "additionalProperties": false,
           "required": [
             "field"
+          ],
+          "anyOf": [
+            {
+              "required": [
+                "lineStyle"
+              ]
+            },
+            {
+              "required": [
+                "textStyle"
+              ]
+            },
+            {
+              "required": [
+                "showLabel"
+              ]
+            },
+            {
+              "required": [
+                "hidden"
+              ]
+            }
           ]
         }
       },
@@ -888,7 +937,7 @@
           "type": "object",
           "properties": {
             "name": {
-              "description": "The label drawn on the edge.",
+              "description": "The label drawn on the edge. An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: `hideField` and `attribute` run before inferred edges exist, and selectors evaluate against the data instance, where the name does not.",
               "type": "string",
               "minLength": 1
             },

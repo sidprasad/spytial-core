@@ -423,17 +423,22 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       description:
         'First column is the group key, second the members. A unary selector builds a single unkeyed group.',
       note:
-        'A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. ' +
-        'That is the one case where omitting this field is not an error but a no-op.',
+        'A `group` with neither `selector` nor the removed `field` key is silently dropped at parse time, ' +
+        'without a warning — the one case where omitting a required field is not an error but a no-op. ' +
+        '(With `field` it is the removed group-by-field form, which is a parse error.)',
     },
     {
       name: 'name',
       type: 'string',
       required: true,
       enforcement: 'parse-error',
+      introduces: { kind: 'group', arity: 1, referencedBy: ['inferredEdge.draw', 'edgeStyle.field'] },
       description:
         'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
         'Required unless the constraint is negated (`hold: never`), where a name is generated.',
+      note:
+        'An `edgeStyle` whose `field` is this name also styles the `addEdge` connector, though an authored ' +
+        '`addEdge` block wins per-property.',
     },
     {
       name: 'addEdge',
@@ -583,6 +588,7 @@ const ATOM_STYLE: LanguageItem = {
     'so each is its own block.',
   sections: ['directives'],
   valueShape: 'mapping',
+  inertWhenBare: true,
   supportsHold: false,
   fields: [
     {
@@ -617,6 +623,7 @@ const EDGE_STYLE: LanguageItem = {
   description: "Style the edges of a relation: the drawn line, the label, and visibility.",
   sections: ['directives'],
   valueShape: 'mapping',
+  inertWhenBare: true,
   supportsHold: false,
   fields: [
     {
@@ -757,7 +764,12 @@ const INFERRED_EDGE: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'unchecked',
+      introduces: { kind: 'edge', arity: 2, referencedBy: ['edgeStyle.field'] },
       description: 'The label drawn on the edge.',
+      note:
+        'An `edgeStyle` whose `field` is this name styles the inferred edges. Nothing else resolves it: ' +
+        '`hideField` and `attribute` run before inferred edges exist, and selectors evaluate against the ' +
+        'data instance, where the name does not.',
     },
     {
       name: 'selector',
@@ -1143,7 +1155,7 @@ export function getLanguageItems(): readonly LanguageItem[] {
   return ITEMS;
 }
 
-/** Look up an item by its manifest id (`group.byField`, `atomStyle`, …). */
+/** Look up an item by its manifest id (`group`, `atomStyle`, …). */
 export function getLanguageItem(id: string): LanguageItem | undefined {
   return ITEMS.find((item) => item.id === id);
 }
