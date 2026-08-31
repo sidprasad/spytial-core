@@ -73,7 +73,7 @@ Whichever surface you use, the browser-side payload is identical: load the spyti
 Most integrations load the browser bundle from a CDN:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/spytial-core@5.3.0/dist/browser/spytial-core-complete.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spytial-core@5.4.0/dist/browser/spytial-core-complete.global.js"></script>
 <script>
   const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
 

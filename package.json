@@ -155,7 +155,8 @@
     "analysis:run": "tsx analysis/runner/run.ts",
     "analysis:aggregate": "tsx analysis/runner/aggregate.ts",
     "analysis:test": "vitest run --config vitest.analysis.config.ts",
-    "build:routers": "tsup --config tsup.routers.config.ts"
+    "build:routers": "tsup --config tsup.routers.config.ts",
+    "version": "npm run sync:versions && npm run build:language && git add README.md docs/YAML_SPECIFICATION.md docs/agent-manifest.json docs/spytial-language.json docs/spytial-spec.schema.json site/api-reference.md site/new-language-integration.md site/index.html .claude/skills/integrate-language/SKILL.md"
   },
   "keywords": [
     "typescript",
