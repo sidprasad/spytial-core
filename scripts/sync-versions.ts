@@ -4,6 +4,10 @@
  *   npm run sync:versions           rewrite the pins in place
  *   npm run sync:versions -- --check  fail if any pin has drifted
  *
+ * Wired into the `version` lifecycle script in package.json, so
+ * `npm version <bump>` runs this (and `build:language`) after the bump and
+ * stages the result — the derived files land in the release commit itself.
+ *
  * A release used to mean editing the same number into a README example, two
  * site pages, a spec doc, an agent manifest and a skill file — which is why
  * those drifted three minors apart (`@2.5.2`, `@v4.2.0`, `@5.3.0` all live at
