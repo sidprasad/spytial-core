@@ -74,6 +74,15 @@ export interface AcceptedArity {
   /** What the engine does with a result in this range. */
   meaning: string;
   /**
+   * For an entry that admits more than two columns: what the engine does with
+   * the columns between a tuple's first and last atom. `ignored` — discarded,
+   * so a generator emitting a wider selector here is throwing information
+   * away; `displayed` — they surface in the rendered output (an edge-label
+   * suffix, a tag's key segments). Absent only on entries capped at two
+   * columns, where there is nothing between.
+   */
+  middleColumns?: 'ignored' | 'displayed';
+  /**
    * The field that must also be present for this shape to be meaningful.
    * Absent means the shape stands on its own.
    */

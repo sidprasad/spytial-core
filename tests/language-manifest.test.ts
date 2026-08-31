@@ -33,7 +33,11 @@ import {
 } from '../scripts/generate-language-artifacts';
 import { buildJsonSchema } from '../src/language/json-schema';
 import { getLanguageManifest, LANGUAGE_VERSION } from '../src/language/manifest';
+import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import type { IJsonDataInstance } from '../src/data-instance/json-data-instance';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import type { LanguageField, LanguageItem, LanguageManifest } from '../src/language/types';
+import { LayoutInstance } from '../src/layout/layoutinstance';
 import { GROUP_EDGE_DIRECTIONS, parseInferredEdgeDraw, parseLayoutSpec } from '../src/layout/layoutspec';
 import type { LayoutSpec } from '../src/layout/layoutspec';
 import { ICON_PLACEMENTS } from '../src/layout/style/atom-style-spec';
@@ -428,6 +432,64 @@ describe('language manifest — selector arities', () => {
     expect(describes('hideAtom', 'hideAtom', 'selector'), 'single-arity fields stay terse').toMatch(
       /Selector arity: unary — 1 column\./,
     );
+  });
+});
+
+describe('language manifest — middle columns', () => {
+  const entries = manifest.items.flatMap((item) =>
+    item.fields.flatMap((f) => (f.accepts ?? []).map((a) => [`${item.id}.${f.name}`, a] as const)),
+  );
+
+  it('declared exactly where an entry admits more than two columns', () => {
+    expect(entries.length).toBeGreaterThan(0);
+    for (const [label, a] of entries) {
+      if ((a.maxColumns ?? Infinity) > 2) {
+        expect(
+          a.middleColumns,
+          `${label} (${a.arity}) admits middle columns and must say what happens to them`,
+        ).toBeDefined();
+      } else {
+        expect(a.middleColumns, `${label} (${a.arity}) is capped at two columns`).toBeUndefined();
+      }
+    }
+  });
+
+  // One ternary tuple (a, m, b): the layout probes below say what actually
+  // becomes of `m`, independently of the manifest's claim.
+  const ternary: IJsonDataInstance = {
+    atoms: [
+      { id: 'a', type: 'A', label: 'a' },
+      { id: 'm', type: 'A', label: 'm' },
+      { id: 'b', type: 'A', label: 'b' },
+    ],
+    relations: [
+      { id: 'r3', name: 'r3', types: ['A', 'A', 'A'], tuples: [{ atoms: ['a', 'm', 'b'], types: ['A', 'A', 'A'] }] },
+    ],
+  };
+
+  function layoutFor(doc: unknown) {
+    const instance = new JSONDataInstance(ternary);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: instance });
+    const spec = quietly(() => parseLayoutSpec(yaml.dump(doc)));
+    return new LayoutInstance(spec, evaluator, 0, true).generateLayout(instance).layout;
+  }
+
+  it("`displayed`: an inferredEdge's middle column surfaces in the edge label", () => {
+    const layout = layoutFor({ directives: [{ inferredEdge: { name: 'e', selector: 'r3' } }] });
+    const inferred = layout.edges.filter((e) => e.relationName === 'e');
+    expect(inferred).toHaveLength(1);
+    expect(inferred[0].label).toBe('e[m]');
+    expect(inferred[0].source.id).toBe('a');
+    expect(inferred[0].target.id).toBe('b');
+  });
+
+  it('`ignored`: a group keys on the first column and holds the last; the middle joins neither', () => {
+    const layout = layoutFor({ constraints: [{ group: { selector: 'r3', name: 'G' } }] });
+    expect(layout.groups).toHaveLength(1);
+    expect(layout.groups[0].name).toBe('G[a]');
+    expect(layout.groups[0].keyNodeId).toBe('a');
+    expect(layout.groups[0].nodeIds).toEqual(['b']);
   });
 });
 
