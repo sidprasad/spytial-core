@@ -268,6 +268,15 @@ describe('language manifest — introduced names', () => {
     // attribute on the introduced name likewise folds nothing.
     const attributed = layoutFor({ directives: [inf, { attribute: { field: 'inf' } }] });
     expect(attributed.edges.filter((e) => e.relationName === 'inf')).toHaveLength(1);
+
+    // `referencedBy` must match the outcomes just executed, both ways — the
+    // path-existence check above would let the member and the engine drift.
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'edge')!.introduces!.referencedBy;
+    expect(declared).toContain('edgeStyle.field');
+    expect(declared).not.toContain('hideField.field');
+    expect(declared).not.toContain('attribute.field');
   });
 
   it("edgeStyle.field also resolves a group's name, styling its addEdge connector", () => {
@@ -281,6 +290,11 @@ describe('language manifest — introduced names', () => {
     const connector = (edges: typeof plain.edges) => edges.find((e) => e.relationName === 'fam');
     expect(connector(plain.edges)?.color).not.toBe('magenta');
     expect(connector(styled.edges)?.color).toBe('magenta');
+
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'group')!.introduces!.referencedBy;
+    expect(declared).toContain('edgeStyle.field');
   });
 
   it('a draw end resolves a defined group name silently, and warns on an undefined one', () => {
@@ -302,6 +316,11 @@ describe('language manifest — introduced names', () => {
     // Skipped at layout, not dropped at parse — a fragment naming a group
     // defined in another fragment must survive.
     expect(dangling.directives.inferredEdges).toHaveLength(1);
+
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'group')!.introduces!.referencedBy;
+    expect(declared).toContain('inferredEdge.draw');
   });
 });
 
@@ -318,6 +337,15 @@ describe('language manifest — inert-when-bare items', () => {
     expect(manifest.items.filter((i) => i.inertWhenBare).map((i) => i.id).sort()).toEqual(
       Object.keys(bare).sort(),
     );
+  });
+
+  it("effectFields is exactly the item's optional non-scoping field inventory", () => {
+    for (const item of manifest.items.filter((i) => i.inertWhenBare)) {
+      const inventory = item.fields
+        .filter((f) => !f.required && f.type !== 'selector' && f.type !== 'relation')
+        .map((f) => f.name);
+      expect([...item.inertWhenBare!.effectFields], item.id).toEqual(inventory);
+    }
   });
 
   it.each(Object.entries(bare))('%s: a bare body parses without warning and styles nothing', (id, [body, effect]) => {

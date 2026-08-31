@@ -252,14 +252,18 @@ export interface LanguageItem {
   };
   /**
    * Set when the item's entire effect is its optional presentation fields: a
-   * body that sets none of them — only scoping fields (selectors, relations)
-   * and required keys — parses without a warning and does nothing at layout
-   * time. Emitting one is therefore a generator bug, and the JSON Schema
-   * rejects the bare body even though the parser accepts it. Which fields
-   * count is derivable: the item's optional fields that are not of type
-   * `selector` or `relation`.
+   * body that sets none of `effectFields` — only scoping fields (selectors,
+   * relations) and required keys — parses without a warning and does nothing
+   * at layout time. Emitting one is therefore a generator bug, and the JSON
+   * Schema rejects the bare body even though the parser accepts it.
+   * `effectFields` is carried as data rather than left as a derivation rule,
+   * so a consumer never re-implements "which fields count" from prose; the
+   * manifest test asserts the list against the item's own field inventory,
+   * so it cannot drift.
    */
-  inertWhenBare?: true;
+  inertWhenBare?: {
+    effectFields: readonly string[];
+  };
   /** Whether this item supports negation via `hold: never`. */
   supportsHold: boolean;
   fields: readonly LanguageField[];

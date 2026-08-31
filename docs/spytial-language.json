@@ -635,7 +635,15 @@
         "directives"
       ],
       "valueShape": "mapping",
-      "inertWhenBare": true,
+      "inertWhenBare": {
+        "effectFields": [
+          "fillStyle",
+          "borderStyle",
+          "iconStyle",
+          "textStyle",
+          "showLabel"
+        ]
+      },
       "supportsHold": false,
       "fields": [
         {
@@ -700,7 +708,14 @@
         "directives"
       ],
       "valueShape": "mapping",
-      "inertWhenBare": true,
+      "inertWhenBare": {
+        "effectFields": [
+          "lineStyle",
+          "textStyle",
+          "showLabel",
+          "hidden"
+        ]
+      },
       "supportsHold": false,
       "fields": [
         {

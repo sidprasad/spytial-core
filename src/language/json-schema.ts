@@ -248,8 +248,7 @@ function itemBodySchema(item: LanguageItem, manifest: LanguageManifest): JsonSch
   if (item.inertWhenBare) {
     // A body carrying only scoping fields parses and then does nothing; reject
     // it here so a generator learns at validation time, not from a blank rule.
-    const effect = item.fields.filter((f) => !f.required && f.type !== 'selector' && f.type !== 'relation');
-    body.anyOf = effect.map((f) => ({ required: [f.name] }));
+    body.anyOf = item.inertWhenBare.effectFields.map((name) => ({ required: [name] }));
   }
 
   if (item.id === 'group') {

@@ -588,7 +588,7 @@ const ATOM_STYLE: LanguageItem = {
     'so each is its own block.',
   sections: ['directives'],
   valueShape: 'mapping',
-  inertWhenBare: true,
+  inertWhenBare: { effectFields: ['fillStyle', 'borderStyle', 'iconStyle', 'textStyle', 'showLabel'] },
   supportsHold: false,
   fields: [
     {
@@ -623,7 +623,7 @@ const EDGE_STYLE: LanguageItem = {
   description: "Style the edges of a relation: the drawn line, the label, and visibility.",
   sections: ['directives'],
   valueShape: 'mapping',
-  inertWhenBare: true,
+  inertWhenBare: { effectFields: ['lineStyle', 'textStyle', 'showLabel', 'hidden'] },
   supportsHold: false,
   fields: [
     {
