@@ -168,6 +168,23 @@ export interface LanguageField {
     fields?: readonly LanguageField[];
     block?: string;
   };
+  /**
+   * Set when the field's value declares a graph-side name that other spec
+   * fields resolve, rather than mere display text. `kind` names an entry in
+   * {@link LanguageManifest.introducedKinds}, which carries what the name
+   * denotes and its arity; `referencedBy` lists the `item.field` paths whose
+   * values resolve names of this kind — current forms only: a deprecated
+   * field that desugars onto a listed one (see
+   * {@link LanguageManifest.deprecations}) resolves the name through it.
+   * A generator renaming one must rewrite
+   * the references with it — and must not expect the name anywhere else: in
+   * particular, selectors evaluate against the data instance, where
+   * spec-introduced names do not exist.
+   */
+  introduces?: {
+    kind: string;
+    referencedBy: readonly string[];
+  };
   /** Set when the field itself is deprecated (its parent item may not be). */
   deprecated?: FieldDeprecation;
   /** Anything a generator would otherwise get wrong. */
@@ -192,7 +209,7 @@ export interface LanguageBlock {
 export interface LanguageItem {
   /**
    * The YAML key this item is written under (`orientation`, `atomStyle`, …).
-   * Not unique on its own: `group` covers both grouping forms, told apart by
+   * Unique today; if a key ever covers two forms again they are told apart by
    * {@link LanguageItem.discriminator}.
    */
   yamlKey: string;
@@ -223,11 +240,31 @@ export interface LanguageItem {
    * its one entry in {@link LanguageItem.fields}.
    */
   valueShape: 'mapping' | 'scalar';
-  /** How to tell this item apart from another sharing its `yamlKey`. */
+  /**
+   * A field whose presence or absence delimits this item's shape. With
+   * `present: false` the JSON Schema rejects a body carrying the field —
+   * how `group` rejects the removed group-by-field spelling. With
+   * `present: true` it would also tell the item apart from another sharing
+   * its `yamlKey`, though no current pair needs that.
+   */
   discriminator?: {
     /** The field whose presence/absence decides. */
     field: string;
     present: boolean;
+  };
+  /**
+   * Set when the item's entire effect is its optional presentation fields: a
+   * body that sets none of `effectFields` — only scoping fields (selectors,
+   * relations) and required keys — parses without a warning and does nothing
+   * at layout time. Emitting one is therefore a generator bug, and the JSON
+   * Schema rejects the bare body even though the parser accepts it.
+   * `effectFields` is carried as data rather than left as a derivation rule,
+   * so a consumer never re-implements "which fields count" from prose; the
+   * manifest test asserts the list against the item's own field inventory,
+   * so it cannot drift.
+   */
+  inertWhenBare?: {
+    effectFields: readonly string[];
   };
   /** Whether this item supports negation via `hold: never`. */
   supportsHold: boolean;
@@ -308,6 +345,14 @@ export interface LanguageManifest {
   language: 'spytial-layout-spec';
   /** The date the language last changed, as `YYYY-MM-DD`. */
   languageVersion: string;
+  /**
+   * The version of this manifest's own shape, as semver: which members exist
+   * and what they mean, independent of the language they describe. Bumps
+   * minor when a member is added, major when one changes meaning or goes
+   * away — so a consumer can require the members it reads before parsing,
+   * instead of discovering their absence field by field.
+   */
+  manifestVersion: string;
   /** The `spytial-core` release that produced this manifest. */
   spytialCoreVersion: string;
   /** How the language is versioned, and what a deprecation promises. */
@@ -315,6 +360,14 @@ export interface LanguageManifest {
   document: DocumentRules;
   hold: HoldRules;
   source: SourceRules;
+  /**
+   * The kinds of graph-side name a field can introduce (see
+   * {@link LanguageField.introduces}), each with the arity of the thing the
+   * name denotes — a group is a set of atoms (1), an inferred edge a pair
+   * (2). Carried as data so a consumer resolves a kind's arity here rather
+   * than encoding the mapping itself.
+   */
+  introducedKinds: Readonly<Record<string, { arity: number; description: string }>>;
   blocks: readonly LanguageBlock[];
   items: readonly LanguageItem[];
   /**

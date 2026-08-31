@@ -1,9 +1,10 @@
 {
   "language": "spytial-layout-spec",
   "languageVersion": "2026-08-25",
+  "manifestVersion": "1.1.0",
   "spytialCoreVersion": "5.4.0",
   "versioning": {
-    "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
+    "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file. `manifestVersion` (semver) versions this file's own shape — which members exist and what they mean; a consumer that reads a member should require the minor that introduced it.",
     "deprecations": "A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and each entry names its replacement and the rewrite to apply. Removal is signalled by `languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this manifest and becomes a parse error, so check `languageVersion` before assuming a spec you generated earlier still parses."
   },
   "document": {
@@ -80,6 +81,16 @@
       "hideAtom"
     ],
     "note": "For generators only — hand-written YAML needs no `source`, because there the YAML is the author’s text. Accepted on every block-bodied item so a generator can stamp it uniformly. The engine carries and displays it for the forms that appear in conflict reports (the `displayedBy` list: the layout constraints and `hideAtom`); on the rest it parses and is ignored. Duplicate rules de-duplicate to one entry, which keeps the first provided source."
+  },
+  "introducedKinds": {
+    "group": {
+      "arity": 1,
+      "description": "A set of atoms under one hull, the handle a `draw` end attaches to."
+    },
+    "edge": {
+      "arity": 2,
+      "description": "The (source, target) pairs an inferredEdge draws, labelled with the name."
+    }
   },
   "blocks": [
     {
@@ -430,14 +441,22 @@
           "required": true,
           "enforcement": "unchecked",
           "description": "First column is the group key, second the members. A unary selector builds a single unkeyed group.",
-          "note": "A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. That is the one case where omitting this field is not an error but a no-op."
+          "note": "A `group` with neither `selector` nor the removed `field` key is silently dropped at parse time, without a warning — the one case where omitting a required field is not an error but a no-op. (With `field` it is the removed group-by-field form, which is a parse error.)"
         },
         {
           "name": "name",
           "type": "string",
           "required": true,
           "enforcement": "parse-error",
-          "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated."
+          "introduces": {
+            "kind": "group",
+            "referencedBy": [
+              "inferredEdge.draw",
+              "edgeStyle.field"
+            ]
+          },
+          "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
+          "note": "An `edgeStyle` whose `field` is this name also styles the `addEdge` connector. An authored `addEdge` block wins per-property for `lineStyle`; a `textStyle` it carries replaces the `edgeStyle`'s whole."
         },
         {
           "name": "addEdge",
@@ -626,6 +645,15 @@
         "directives"
       ],
       "valueShape": "mapping",
+      "inertWhenBare": {
+        "effectFields": [
+          "fillStyle",
+          "borderStyle",
+          "iconStyle",
+          "textStyle",
+          "showLabel"
+        ]
+      },
       "supportsHold": false,
       "fields": [
         {
@@ -690,6 +718,14 @@
         "directives"
       ],
       "valueShape": "mapping",
+      "inertWhenBare": {
+        "effectFields": [
+          "lineStyle",
+          "textStyle",
+          "showLabel",
+          "hidden"
+        ]
+      },
       "supportsHold": false,
       "fields": [
         {
@@ -953,7 +989,14 @@
           "type": "string",
           "required": true,
           "enforcement": "unchecked",
-          "description": "The label drawn on the edge."
+          "introduces": {
+            "kind": "edge",
+            "referencedBy": [
+              "edgeStyle.field"
+            ]
+          },
+          "description": "The label drawn on the edge.",
+          "note": "An `edgeStyle` whose `field` is this name styles the inferred edges — except `hidden`, which is consumed before inferred edges exist. `edgeColor` desugars onto `edgeStyle`, so its `field` resolves the name too. Nothing else does: `hideField` and `attribute` also run before inferred edges exist, and selectors evaluate against the data instance, where the name does not."
         },
         {
           "name": "selector",

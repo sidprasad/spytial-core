@@ -55,12 +55,24 @@ import type {
  */
 export const LANGUAGE_VERSION = '2026-08-25';
 
+/**
+ * The version of the manifest's own shape (which members exist), as semver —
+ * independent of {@link LANGUAGE_VERSION}, which dates the language the
+ * manifest describes. 1.0.0 is the shape the 5.4.0 npm tarball shipped; 1.1.0
+ * adds `manifestVersion` itself, `introducedKinds`, `introduces`, and
+ * `inertWhenBare`. Bump minor on a new member, major when a member changes
+ * meaning or goes away.
+ */
+export const MANIFEST_VERSION = '1.1.0';
+
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
   note:
     '`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since ' +
     'the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` ' +
-    'records which release produced this file.',
+    'records which release produced this file. `manifestVersion` (semver) versions this file\'s own ' +
+    'shape — which members exist and what they mean; a consumer that reads a member should require ' +
+    'the minor that introduced it.',
   deprecations:
     'A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and ' +
     'each entry names its replacement and the rewrite to apply. Removal is signalled by ' +
@@ -423,17 +435,23 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       description:
         'First column is the group key, second the members. A unary selector builds a single unkeyed group.',
       note:
-        'A `group` with neither `selector` nor `field` is silently dropped — it matches neither grouping form. ' +
-        'That is the one case where omitting this field is not an error but a no-op.',
+        'A `group` with neither `selector` nor the removed `field` key is silently dropped at parse time, ' +
+        'without a warning — the one case where omitting a required field is not an error but a no-op. ' +
+        '(With `field` it is the removed group-by-field form, which is a parse error.)',
     },
     {
       name: 'name',
       type: 'string',
       required: true,
       enforcement: 'parse-error',
+      introduces: { kind: 'group', referencedBy: ['inferredEdge.draw', 'edgeStyle.field'] },
       description:
         'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
         'Required unless the constraint is negated (`hold: never`), where a name is generated.',
+      note:
+        'An `edgeStyle` whose `field` is this name also styles the `addEdge` connector. An authored ' +
+        '`addEdge` block wins per-property for `lineStyle`; a `textStyle` it carries replaces the ' +
+        "`edgeStyle`'s whole.",
     },
     {
       name: 'addEdge',
@@ -583,6 +601,7 @@ const ATOM_STYLE: LanguageItem = {
     'so each is its own block.',
   sections: ['directives'],
   valueShape: 'mapping',
+  inertWhenBare: { effectFields: ['fillStyle', 'borderStyle', 'iconStyle', 'textStyle', 'showLabel'] },
   supportsHold: false,
   fields: [
     {
@@ -617,6 +636,7 @@ const EDGE_STYLE: LanguageItem = {
   description: "Style the edges of a relation: the drawn line, the label, and visibility.",
   sections: ['directives'],
   valueShape: 'mapping',
+  inertWhenBare: { effectFields: ['lineStyle', 'textStyle', 'showLabel', 'hidden'] },
   supportsHold: false,
   fields: [
     {
@@ -757,7 +777,13 @@ const INFERRED_EDGE: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'unchecked',
+      introduces: { kind: 'edge', referencedBy: ['edgeStyle.field'] },
       description: 'The label drawn on the edge.',
+      note:
+        'An `edgeStyle` whose `field` is this name styles the inferred edges — except `hidden`, which is ' +
+        'consumed before inferred edges exist. `edgeColor` desugars onto `edgeStyle`, so its `field` ' +
+        'resolves the name too. Nothing else does: `hideField` and `attribute` also run before inferred ' +
+        'edges exist, and selectors evaluate against the data instance, where the name does not.',
     },
     {
       name: 'selector',
@@ -1003,6 +1029,11 @@ const ITEMS: readonly LanguageItem[] = [
   EDGE_COLOR,
 ];
 
+const INTRODUCED_KINDS = {
+  group: { arity: 1, description: 'A set of atoms under one hull, the handle a `draw` end attaches to.' },
+  edge: { arity: 2, description: 'The (source, target) pairs an inferredEdge draws, labelled with the name.' },
+} as const;
+
 const SOURCE: SourceRules = {
   field: 'source',
   fields: [
@@ -1126,11 +1157,13 @@ export function getLanguageManifest(spytialCoreVersion: string): LanguageManifes
   return {
     language: 'spytial-layout-spec',
     languageVersion: LANGUAGE_VERSION,
+    manifestVersion: MANIFEST_VERSION,
     spytialCoreVersion,
     versioning: LANGUAGE_VERSIONING,
     document: DOCUMENT,
     hold: HOLD,
     source: SOURCE,
+    introducedKinds: INTRODUCED_KINDS,
     blocks: BLOCKS,
     items: ITEMS,
     deprecations: DEPRECATIONS,
@@ -1143,7 +1176,7 @@ export function getLanguageItems(): readonly LanguageItem[] {
   return ITEMS;
 }
 
-/** Look up an item by its manifest id (`group.byField`, `atomStyle`, …). */
+/** Look up an item by its manifest id (`group`, `atomStyle`, …). */
 export function getLanguageItem(id: string): LanguageItem | undefined {
   return ITEMS.find((item) => item.id === id);
 }

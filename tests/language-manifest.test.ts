@@ -32,8 +32,12 @@ import {
   renderArtifacts,
 } from '../scripts/generate-language-artifacts';
 import { buildJsonSchema } from '../src/language/json-schema';
-import { getLanguageManifest, LANGUAGE_VERSION } from '../src/language/manifest';
+import { getLanguageManifest, LANGUAGE_VERSION, MANIFEST_VERSION } from '../src/language/manifest';
 import type { LanguageField, LanguageItem, LanguageManifest } from '../src/language/types';
+import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import type { IJsonDataInstance } from '../src/data-instance/json-data-instance';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
+import { LayoutInstance } from '../src/layout/layoutinstance';
 import { GROUP_EDGE_DIRECTIONS, parseInferredEdgeDraw, parseLayoutSpec } from '../src/layout/layoutspec';
 import type { LayoutSpec } from '../src/layout/layoutspec';
 import { ICON_PLACEMENTS } from '../src/layout/style/atom-style-spec';
@@ -200,6 +204,157 @@ describe('language manifest — enforcement claims', () => {
       );
       expect(spec.constraints.orientation.relative[0].negated).toBe(false);
     }
+  });
+});
+
+describe('language manifest — introduced names', () => {
+  const introducing = manifest.items.flatMap((item) =>
+    item.fields.filter((f) => f.introduces).map((f) => [`${item.id}.${f.name}`, item, f] as const),
+  );
+
+  it('every introducing field is a string, and every declared reference site exists', () => {
+    expect(introducing.length).toBeGreaterThan(0);
+    const usedKinds = new Set(introducing.map(([, , f]) => f.introduces!.kind));
+    expect([...usedKinds].sort()).toEqual(Object.keys(manifest.introducedKinds).sort());
+    for (const [label, , field] of introducing) {
+      expect(field.type, `${label} should be a string field`).toBe('string');
+      for (const path of field.introduces!.referencedBy) {
+        const [itemId, fieldName] = path.split('.');
+        const target = manifest.items.find((i) => i.id === itemId);
+        expect(target, `${label} says it is referenced by ${path}, but no such item exists`).toBeDefined();
+        expect(
+          target!.fields.some((f) => f.name === fieldName),
+          `${label} says it is referenced by ${path}, but ${itemId} has no such field`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  // A two-atom instance with one relation, for the layout-level reference
+  // probes below: they need real edges, not just a parse.
+  const tinyData: IJsonDataInstance = {
+    atoms: [
+      { id: 'a1', type: 'A', label: 'a1' },
+      { id: 'a2', type: 'A', label: 'a2' },
+    ],
+    relations: [
+      { id: 'r', name: 'r', types: ['A', 'A'], tuples: [{ atoms: ['a1', 'a2'], types: ['A', 'A'] }] },
+    ],
+  };
+
+  function layoutFor(doc: unknown) {
+    const instance = new JSONDataInstance(tinyData);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: instance });
+    const spec = quietly(() => parseLayoutSpec(yaml.dump(doc)));
+    return new LayoutInstance(spec, evaluator, 0, true).generateLayout(instance).layout;
+  }
+
+  it("edgeStyle.field resolves an inferredEdge's name; hideField and attribute do not", () => {
+    const inf = { inferredEdge: { name: 'inf', selector: 'r' } };
+
+    const styled = layoutFor({ directives: [inf, { edgeStyle: { field: 'inf', lineStyle: { color: 'red' } } }] });
+    const inferred = styled.edges.filter((e) => e.relationName === 'inf');
+    expect(inferred).toHaveLength(1);
+    expect(inferred[0].color).toBe('red');
+    // The data edge is untouched — the style really keyed on the introduced name.
+    expect(styled.edges.find((e) => e.relationName === 'r')?.color).not.toBe('red');
+
+    // hideField on the introduced name does nothing: field hiding runs before
+    // inferred edges join the graph. Positive control: it does hide a data relation.
+    const hidden = layoutFor({ directives: [inf, { hideField: { field: 'inf' } }] });
+    expect(hidden.edges.filter((e) => e.relationName === 'inf')).toHaveLength(1);
+    const control = layoutFor({ directives: [inf, { hideField: { field: 'r' } }] });
+    expect(control.edges.filter((e) => e.relationName === 'r')).toHaveLength(0);
+
+    // attribute on the introduced name likewise folds nothing.
+    const attributed = layoutFor({ directives: [inf, { attribute: { field: 'inf' } }] });
+    expect(attributed.edges.filter((e) => e.relationName === 'inf')).toHaveLength(1);
+
+    // `referencedBy` must match the outcomes just executed, both ways — the
+    // path-existence check above would let the member and the engine drift.
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'edge')!.introduces!.referencedBy;
+    expect(declared).toContain('edgeStyle.field');
+    expect(declared).not.toContain('hideField.field');
+    expect(declared).not.toContain('attribute.field');
+  });
+
+  it("edgeStyle.field also resolves a group's name, styling its addEdge connector", () => {
+    const grouped = (extra: unknown[]) =>
+      layoutFor({
+        constraints: [{ group: { selector: 'r', name: 'fam', addEdge: 'togroup' } }],
+        directives: extra,
+      });
+    const plain = grouped([]);
+    const styled = grouped([{ edgeStyle: { field: 'fam', lineStyle: { color: 'magenta' } } }]);
+    const connector = (edges: typeof plain.edges) => edges.find((e) => e.relationName === 'fam');
+    expect(connector(plain.edges)?.color).not.toBe('magenta');
+    expect(connector(styled.edges)?.color).toBe('magenta');
+
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'group')!.introduces!.referencedBy;
+    expect(declared).toContain('edgeStyle.field');
+  });
+
+  it('a draw end resolves a defined group name silently, and warns on an undefined one', () => {
+    const defined = parseLayoutSpec(
+      yaml.dump({
+        constraints: [{ group: { selector: 'worksIn', name: 'Dept' } }],
+        directives: [{ inferredEdge: { name: 'e', selector: 'x', draw: '_ -> Dept' } }],
+      }),
+    );
+    expect(defined.warnings ?? []).toEqual([]);
+
+    const dangling = parseLayoutSpec(
+      yaml.dump({ directives: [{ inferredEdge: { name: 'e', selector: 'x', draw: '_ -> Nope' } }] }),
+    );
+    expect((dangling.warnings ?? []).map((w) => [w.code, w.specType])).toContainEqual([
+      'unresolved-reference',
+      'inferredEdge',
+    ]);
+    // Skipped at layout, not dropped at parse — a fragment naming a group
+    // defined in another fragment must survive.
+    expect(dangling.directives.inferredEdges).toHaveLength(1);
+
+    const declared = manifest.items
+      .flatMap((i) => i.fields)
+      .find((f) => f.introduces?.kind === 'group')!.introduces!.referencedBy;
+    expect(declared).toContain('inferredEdge.draw');
+  });
+});
+
+describe('language manifest — inert-when-bare items', () => {
+  // Deliberately hand written, like `landsIn`: the point is to state what a
+  // bare body is and where its (empty) effect shows up, independently of the
+  // manifest's own claim.
+  const bare: Record<string, [unknown, (spec: LayoutSpec) => unknown]> = {
+    atomStyle: [{ selector: 'Person' }, (s) => s.directives.atomStyles[0]?.style],
+    edgeStyle: [{ field: 'parent' }, (s) => s.directives.edgeStyles[0]?.style],
+  };
+
+  it('the marked items are exactly the hand-written list', () => {
+    expect(manifest.items.filter((i) => i.inertWhenBare).map((i) => i.id).sort()).toEqual(
+      Object.keys(bare).sort(),
+    );
+  });
+
+  it("effectFields is exactly the item's optional non-scoping field inventory", () => {
+    for (const item of manifest.items.filter((i) => i.inertWhenBare)) {
+      const inventory = item.fields
+        .filter((f) => !f.required && f.type !== 'selector' && f.type !== 'relation')
+        .map((f) => f.name);
+      expect([...item.inertWhenBare!.effectFields], item.id).toEqual(inventory);
+    }
+  });
+
+  it.each(Object.entries(bare))('%s: a bare body parses without warning and styles nothing', (id, [body, effect]) => {
+    const item = manifest.items.find((i) => i.id === id)!;
+    const spec = parseLayoutSpec(specFor(item, body));
+    expect(spec.warnings ?? []).toEqual([]);
+    expect(effect(spec), `a bare ${id} should land with an empty style`).toEqual({});
   });
 });
 
@@ -523,6 +678,8 @@ describe('spec JSON Schema', () => {
       ['size without dimensions', { directives: [{ size: { selector: 'a' } }] }],
       ['group without a name', { constraints: [{ group: { selector: 'a.b' } }] }],
       ['two items in one list entry', { constraints: [{ align: { selector: 'a', direction: 'horizontal' }, cyclic: { selector: 'b' } }] }],
+      ['bare atomStyle', { directives: [{ atomStyle: { selector: 'Person' } }] }],
+      ['bare edgeStyle', { directives: [{ edgeStyle: { field: 'parent' } }] }],
     ];
     for (const [label, doc] of badDocuments) {
       expect(validate(doc), `${label} should not validate`).toBe(false);
@@ -552,6 +709,8 @@ describe('spec JSON Schema', () => {
       ['legacy addEdge boolean', { constraints: [{ group: { selector: 'a.b', name: 'g', addEdge: true } }] }],
       ['size in either section', { constraints: [{ size: { selector: 'a', width: 1, height: 1 } }], directives: [{ size: { width: 2, height: 2 } }] }],
       ['inferredEdge with group endpoints', { constraints: [{ group: { selector: 'R.m', name: 'regions' } }], directives: [{ inferredEdge: { name: 'c', selector: 'connected', draw: 'regions -> regions' } }] }],
+      ['atomStyle with one effect field set', { directives: [{ atomStyle: { selector: 'Person', showLabel: false } }] }],
+      ['edgeStyle with one effect field set', { directives: [{ edgeStyle: { field: 'parent', hidden: true } }] }],
     ];
     for (const [label, doc] of goodDocuments) {
       expect(validate(doc), `${label} should validate: ${JSON.stringify(validate.errors)}`).toBe(true);
@@ -660,5 +819,10 @@ describe('published artifacts', () => {
     expect(LANGUAGE_VERSION).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     // A real calendar date, not just the right shape.
     expect(new Date(`${LANGUAGE_VERSION}T00:00:00Z`).toISOString().slice(0, 10)).toBe(LANGUAGE_VERSION);
+  });
+
+  it('the manifest version is semver', () => {
+    expect(MANIFEST_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(manifest.manifestVersion).toBe(MANIFEST_VERSION);
   });
 });
