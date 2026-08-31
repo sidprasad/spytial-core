@@ -220,6 +220,7 @@ const PAIR: AcceptedArity = {
 const PAIR_FROM_LONGER_TUPLE: AcceptedArity = {
   arity: 'n-ary',
   minColumns: 3,
+  middleColumns: 'ignored',
   meaning: "Accepted: the pair is the tuple's first and last atom. The columns between are ignored.",
 };
 const PAIR_ARITIES: readonly AcceptedArity[] = [PAIR, PAIR_FROM_LONGER_TUPLE];
@@ -242,6 +243,7 @@ const TUPLE_FILTER: LanguageField = {
     {
       arity: 'n-ary',
       minColumns: 2,
+      middleColumns: 'ignored',
       meaning:
         'A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair ' +
         'would. A unary result matches nothing — the directive is then scoped to no tuples at all.',
@@ -407,6 +409,7 @@ const GROUP_BY_SELECTOR: LanguageItem = {
         {
           arity: 'n-ary',
           minColumns: 3,
+          middleColumns: 'ignored',
           meaning: "As binary — the key is the tuple's first atom and the member its last, ignoring the columns between.",
         },
         {
@@ -694,6 +697,7 @@ const TAG: LanguageItem = {
         {
           arity: 'n-ary',
           minColumns: 2,
+          middleColumns: 'displayed',
           meaning:
             'One line per tuple whose first atom is the tagged atom: the last column is the value and any ' +
             'columns between become the key, as `name[k1][k2]: value`. A binary result is the plain ' +
@@ -773,6 +777,7 @@ const INFERRED_EDGE: LanguageItem = {
         {
           arity: 'n-ary',
           minColumns: 3,
+          middleColumns: 'displayed',
           meaning:
             "One edge from the tuple's first atom to its last. Unlike the constraints, the columns between are " +
             'not discarded: their labels are appended to the edge label as `<name>[m1,m2]`.',

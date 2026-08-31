@@ -1,7 +1,7 @@
 {
   "language": "spytial-layout-spec",
   "languageVersion": "2026-08-25",
-  "spytialCoreVersion": "5.3.0",
+  "spytialCoreVersion": "5.4.0",
   "versioning": {
     "note": "`languageVersion` is the date the language last changed (YYYY-MM-DD). If it has not moved since the manifest you generated against, nothing you emit needs revisiting. `spytialCoreVersion` records which release produced this file.",
     "deprecations": "A deprecated form keeps parsing and keeps its meaning while it is listed in `deprecations`, and each entry names its replacement and the rewrite to apply. Removal is signalled by `languageVersion` moving, not by the `spytialCoreVersion` major: a removed form leaves this manifest and becomes a parse error, so check `languageVersion` before assuming a spec you generated earlier still parses."
@@ -226,6 +226,7 @@
             {
               "arity": "n-ary",
               "minColumns": 3,
+              "middleColumns": "ignored",
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -315,6 +316,7 @@
             {
               "arity": "n-ary",
               "minColumns": 3,
+              "middleColumns": "ignored",
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -365,6 +367,7 @@
             {
               "arity": "n-ary",
               "minColumns": 3,
+              "middleColumns": "ignored",
               "meaning": "Accepted: the pair is the tuple's first and last atom. The columns between are ignored."
             }
           ],
@@ -418,6 +421,7 @@
             {
               "arity": "n-ary",
               "minColumns": 3,
+              "middleColumns": "ignored",
               "meaning": "As binary — the key is the tuple's first atom and the member its last, ignoring the columns between."
             },
             {
@@ -721,6 +725,7 @@
             {
               "arity": "n-ary",
               "minColumns": 2,
+              "middleColumns": "ignored",
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -800,6 +805,7 @@
             {
               "arity": "n-ary",
               "minColumns": 2,
+              "middleColumns": "ignored",
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -860,6 +866,7 @@
             {
               "arity": "n-ary",
               "minColumns": 2,
+              "middleColumns": "displayed",
               "meaning": "One line per tuple whose first atom is the tagged atom: the last column is the value and any columns between become the key, as `name[k1][k2]: value`. A binary result is the plain `name: value` case."
             },
             {
@@ -927,6 +934,7 @@
             {
               "arity": "n-ary",
               "minColumns": 2,
+              "middleColumns": "ignored",
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
@@ -969,6 +977,7 @@
             {
               "arity": "n-ary",
               "minColumns": 3,
+              "middleColumns": "displayed",
               "meaning": "One edge from the tuple's first atom to its last. Unlike the constraints, the columns between are not discarded: their labels are appended to the edge label as `<name>[m1,m2]`."
             },
             {
@@ -1222,6 +1231,7 @@
             {
               "arity": "n-ary",
               "minColumns": 2,
+              "middleColumns": "ignored",
               "meaning": "A tuple matches on its first and last atom, so a longer tuple filters the same relation ends a pair would. A unary result matches nothing — the directive is then scoped to no tuples at all."
             }
           ],
