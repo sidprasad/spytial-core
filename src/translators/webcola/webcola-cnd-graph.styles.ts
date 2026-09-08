@@ -539,9 +539,10 @@ export function getGraphCSS({
         line-height: 1;
       }
 
-      /* An inline SVG icon in a toolbar button. The canvas rule below sizes
-         every svg to fill its box, which would blow an icon up to the button's
-         full height; pin icons to their own size. */
+      /* An inline SVG icon in a toolbar button, e.g. one a host adds through
+         addToolbarControl(). The canvas rule below sizes every svg to fill its
+         box, which would blow an icon up to the button's full height; pin
+         icons to their own size. */
       :where(#graph-toolbar) button svg {
         width: 14px;
         height: 14px;

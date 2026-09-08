@@ -78,16 +78,11 @@ describe('toolbar button style', () => {
         expect(button.closest('#graph-toolbar')).toBe(toolbar);
     });
 
-    it('draws fit-to-view as inward arrows, not a full-screen lookalike glyph', () => {
+    it('labels fit-to-view with a square inside a square, not a full-screen lookalike', () => {
         const fit = shadow().querySelector('#zoom-fit')!;
-        // Inline SVG in the button; no text glyph left over.
-        const icon = fit.querySelector('svg');
-        expect(icon).toBeTruthy();
-        expect(fit.textContent?.trim()).toBe('');
-        // Four arrows, one per corner, and the icon follows the button colour.
-        expect(icon!.querySelectorAll('path').length).toBe(4);
-        expect(icon!.getAttribute('stroke')).toBe('currentColor');
-        expect(icon!.getAttribute('aria-hidden')).toBe('true');
+        // U+29C8 SQUARED SQUARE: the content framed by the view. The old ⤢ and
+        // the corner-bracket glyphs mean "full screen" in every other tool.
+        expect(fit.textContent?.trim()).toBe('\u29C8');
         expect(fit.getAttribute('aria-label')).toBeTruthy();
     });
 });

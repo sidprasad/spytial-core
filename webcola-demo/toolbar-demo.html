@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Toolbar &amp; Sizing Demo — spytial-core</title>
+    <script src="../dist/browser/spytial-core-complete.global.js"></script>
+    <style>
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; color: #1f2937; background: #f5f5f4; }
+        header { padding: 14px 20px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+        header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+        header p { margin: 4px 0 0; font-size: 13px; color: #6b7280; }
+        main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; padding: 20px; align-items: start; }
+        aside { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px 18px; font-size: 14px; line-height: 1.5; }
+        aside h2 { margin: 0 0 10px; font-size: 15px; }
+        aside ol { margin: 0; padding-left: 20px; }
+        aside li { margin-bottom: 14px; }
+        aside li strong { display: block; margin-bottom: 2px; }
+        aside code { font-size: 12px; background: #f3f4f6; padding: 1px 4px; border-radius: 3px; }
+        aside button, aside input[type=range] { margin-top: 6px; font-size: 13px; }
+        aside button { padding: 4px 10px; border: 1px solid #d1d5db; background: #f9fafb; border-radius: 4px; cursor: pointer; }
+        aside button:hover { background: #f3f4f6; }
+        #readout { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: #374151; background: #f3f4f6; padding: 6px 8px; border-radius: 4px; margin-top: 8px; }
+
+        /* The element is sized with CSS, like a <div>. width/height ATTRIBUTES on
+           the tag are not read. This one rule is the whole sizing story. */
+        webcola-cnd-graph { width: 100%; height: 480px; }
+
+        /* Fallback for the full-screen button when the Fullscreen API is refused
+           (embedded viewers, iframes without allow="fullscreen"): fill the page.
+           !important because the height slider below writes an inline style,
+           which would otherwise win over this class. */
+        webcola-cnd-graph.maximised { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; z-index: 9999; background: #fff; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Toolbar &amp; sizing</h1>
+        <p>What changed: one style for every toolbar button (so an injected button looks native), a Fit to View glyph that does not look like full screen, and CSS-only sizing.</p>
+    </header>
+    <main>
+        <webcola-cnd-graph id="g"></webcola-cnd-graph>
+
+        <aside>
+            <h2>Walkthrough</h2>
+            <ol>
+                <li>
+                    <strong>Sized by one CSS rule</strong>
+                    <code>webcola-cnd-graph { width: 100%; height: 480px; }</code>. Drag to change the height; the diagram is re-fit after each change with <code>resetViewToFitContent()</code>.
+                    <input id="height" type="range" min="240" max="800" step="20" value="480" style="width: 100%">
+                </li>
+                <li>
+                    <strong>Attributes are not read</strong>
+                    Press this to set <code>width="300" height="200"</code> on the tag. The measured box does not move.
+                    <br><button id="attrs">Set width/height attributes</button>
+                    <div id="readout"></div>
+                </li>
+                <li>
+                    <strong>Fit to View is ⧈</strong>
+                    A square inside a square: the content framed by the view. The old ⤢ read as "full screen".
+                </li>
+                <li>
+                    <strong>Full screen, injected in 3 lines</strong>
+                    The ⛶ button at the right of the toolbar is not built in. It is a bare <code>&lt;button&gt;</code> passed to <code>addToolbarControl()</code>, and it picks up the toolbar's style with no class. Click it. Esc leaves.
+                </li>
+            </ol>
+        </aside>
+    </main>
+
+    <script>
+        const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
+        const graph = document.getElementById('g');
+
+        // --- Data + spec (same shape as the quickstart) ----------------------
+        const people = ['Alice', 'Bob', 'Carol', 'Dan', 'Eve', 'Faye', 'Gus', 'Hana'];
+        const data = {
+            atoms: people.map((label, i) => ({ id: 'p' + i, type: 'Person', label })),
+            relations: [{
+                id: 'parent', name: 'parent', types: ['Person', 'Person'],
+                tuples: [[0,1],[0,2],[1,3],[1,4],[2,5],[2,6],[5,7]].map(([a, b]) =>
+                    ({ atoms: ['p' + a, 'p' + b], types: ['Person', 'Person'] })),
+            }],
+        };
+        const spec = `
+          constraints:
+            - orientation: { selector: parent, directions: [above] }
+          directives:
+            - atomStyle: { selector: Person, borderStyle: { color: "#4a90d9" } }
+        `;
+        const instance = new JSONDataInstance(data);
+        const evaluator = new SGraphQueryEvaluator();
+        evaluator.initialize({ sourceData: instance });
+        const layout = new LayoutInstance(parseLayoutSpec(spec), evaluator).generateLayout(instance).layout;
+        graph.renderLayout(layout);
+
+        // --- 1. Resize: the box follows CSS; re-fit afterwards ----------------
+        const heightInput = document.getElementById('height');
+        heightInput.addEventListener('input', () => {
+            graph.style.height = heightInput.value + 'px';
+            readout();
+            requestAnimationFrame(() => graph.resetViewToFitContent());
+        });
+
+        // --- 2. Attributes do nothing -----------------------------------------
+        const readoutEl = document.getElementById('readout');
+        function readout() {
+            const r = graph.getBoundingClientRect();
+            const w = graph.getAttribute('width'), h = graph.getAttribute('height');
+            readoutEl.textContent = `measured: ${Math.round(r.width)} × ${Math.round(r.height)} px`
+                + (w ? `   attributes: width="${w}" height="${h}" (ignored)` : '');
+        }
+        document.getElementById('attrs').addEventListener('click', () => {
+            graph.setAttribute('width', '300');
+            graph.setAttribute('height', '200');
+            readout();
+        });
+        readout();
+        requestAnimationFrame(readout);
+        window.addEventListener('resize', readout);
+
+        // --- 4. Full-screen toggle, injected through the public API -----------
+        const fs = document.createElement('button');
+        fs.textContent = '⛶';
+        fs.title = 'Full screen';
+        fs.setAttribute('aria-label', 'Toggle full screen');
+
+        const isFull = () => document.fullscreenElement === graph || graph.classList.contains('maximised');
+        const refit = () => requestAnimationFrame(() => { graph.resetViewToFitContent(); readout(); });
+        function leave() {
+            if (document.fullscreenElement === graph) document.exitFullscreen();
+            graph.classList.remove('maximised');
+            fs.textContent = '⛶';
+            refit();
+        }
+        fs.addEventListener('click', () => {
+            if (isFull()) return leave();
+            // Ask for real full screen. Some embedded viewers never answer, so if
+            // no fullscreenchange arrives promptly, fill the page instead.
+            let answered = false;
+            const onChange = () => { answered = true; };
+            document.addEventListener('fullscreenchange', onChange, { once: true });
+            Promise.resolve(graph.requestFullscreen?.()).catch(() => {});
+            setTimeout(() => {
+                document.removeEventListener('fullscreenchange', onChange);
+                if (!answered) { graph.classList.add('maximised'); fs.textContent = '⤡'; refit(); }
+            }, 400);
+        });
+        document.addEventListener('fullscreenchange', () => {
+            fs.textContent = document.fullscreenElement === graph ? '⤡' : '⛶';
+            refit();   // the box changed size, so fit the diagram to it again
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && graph.classList.contains('maximised')) leave(); });
+
+        // One call. A bare <button> looks like the built-in ones.
+        graph.addToolbarControl(fs);
+    </script>
+</body>
+</html>
