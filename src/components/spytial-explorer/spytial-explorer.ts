@@ -10,7 +10,8 @@
  *   - Datum REPL (data instance queries)
  *
  * Usage:
- *   <spytial-explorer width="800" height="600"></spytial-explorer>
+ *   <style>spytial-explorer { width: 800px; height: 600px; }</style>
+ *   <spytial-explorer></spytial-explorer>
  *   <script>
  *     const explorer = document.querySelector('spytial-explorer');
  *     // Same API as webcola-cnd-graph:

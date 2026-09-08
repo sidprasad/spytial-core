@@ -1463,7 +1463,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
-          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⤢</button>
+          <!-- A word, not a corners/arrows glyph: every such glyph is what other tools use for full screen. -->
+          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">Fit</button>
         </div>
         <div id="routing-control">
           <label for="routing-mode">Routing:</label>

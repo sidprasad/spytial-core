@@ -508,9 +508,22 @@ export function getGraphCSS({
         align-items: center;
       }
 
-      #zoom-controls button {
-        width: 24px;
-        height: 24px;
+      /* One look for every button in the toolbar, whoever put it there. A
+         bare <button> handed to addToolbarControl() lands under #graph-toolbar
+         and picks this up with no class needed.
+
+         :where() zeroes the id's specificity, so this rule is as weak as a
+         plain "button" selector: a subclass or a host page can still restyle
+         its own buttons with one class (structured-input-graph's .si-tb-btn
+         depends on that). Written as "#graph-toolbar button" it would win on
+         width and padding and squash those. */
+      :where(#graph-toolbar) button {
+        box-sizing: border-box;
+        /* 24px of content plus the 1px border each side, as before. min-width
+           rather than width so a text label like "Fit" can be wider. */
+        min-width: 26px;
+        height: 26px;
+        padding: 0 6px;
         border: 1px solid var(--cnd-control-border, #d1d5db);
         background: var(--cnd-control-bg, #f9fafb);
         color: var(--cnd-panel-text-muted, #374151);
@@ -526,26 +539,26 @@ export function getGraphCSS({
         line-height: 1;
       }
 
-      #zoom-controls button:hover {
+      :where(#graph-toolbar) button:hover {
         background: var(--cnd-control-bg-hover, #f3f4f6);
         border-color: #9ca3af;
         color: var(--cnd-panel-text, #111827);
       }
 
-      #zoom-controls button:active {
+      :where(#graph-toolbar) button:active {
         background: #e5e7eb;
         border-color: #6b7280;
         transform: translateY(0.5px);
       }
 
-      #zoom-controls button:disabled {
+      :where(#graph-toolbar) button:disabled {
         background: var(--cnd-control-bg, #f9fafb);
         border-color: #e5e7eb;
         color: #9ca3af;
         cursor: not-allowed;
       }
 
-      #zoom-controls button:disabled:hover {
+      :where(#graph-toolbar) button:disabled:hover {
         background: var(--cnd-control-bg, #f9fafb);
         border-color: #e5e7eb;
         color: #9ca3af;
@@ -637,36 +650,6 @@ export function getGraphCSS({
         margin-left: 16px;
         padding-left: 16px;
         border-left: 1px solid #e5e7eb;
-      }
-
-      #screenshot-btn {
-        width: 24px;
-        height: 24px;
-        border: 1px solid var(--cnd-control-border, #d1d5db);
-        background: var(--cnd-control-bg, #f9fafb);
-        color: var(--cnd-panel-text-muted, #374151);
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: all 0.15s ease;
-        user-select: none;
-        line-height: 1;
-      }
-
-      #screenshot-btn:hover {
-        background: var(--cnd-control-bg-hover, #f3f4f6);
-        border-color: #9ca3af;
-        color: var(--cnd-panel-text, #111827);
-      }
-
-      #screenshot-btn:active {
-        background: #e5e7eb;
-        border-color: #6b7280;
-        transform: translateY(0.5px);
       }
 
       /* Modal Overlay and Dialog */
