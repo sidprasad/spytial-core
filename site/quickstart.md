@@ -115,7 +115,7 @@ webcola-cnd-graph { width: 100%; height: 600px; }
 
 `width` and `height` attributes on the tag are not read. Your rule beats the component's own defaults, so `webcola-cnd-graph { height: 100vh; }` is all a full-page view needs. Do not set `display` from outside: `<spytial-explorer>` lays itself out as a flex column and relies on its own value.
 
-The diagram does not re-fit itself when its box changes size. Call `resetViewToFitContent()` after you resize it (the toolbar's Fit button does the same).
+The diagram does not re-fit itself when its box changes size. Call `resetViewToFitContent()` after you resize it (the toolbar's Fit to View button does the same).
 
 ## Adding a toolbar button
 

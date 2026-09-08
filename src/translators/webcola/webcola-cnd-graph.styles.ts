@@ -520,7 +520,7 @@ export function getGraphCSS({
       :where(#graph-toolbar) button {
         box-sizing: border-box;
         /* 24px of content plus the 1px border each side, as before. min-width
-           rather than width so a text label like "Fit" can be wider. */
+           rather than width so a wider label can grow instead of clipping. */
         min-width: 26px;
         height: 26px;
         padding: 0 6px;
@@ -537,6 +537,15 @@ export function getGraphCSS({
         transition: all 0.15s ease;
         user-select: none;
         line-height: 1;
+      }
+
+      /* An inline SVG icon in a toolbar button. The canvas rule below sizes
+         every svg to fill its box, which would blow an icon up to the button's
+         full height; pin icons to their own size. */
+      :where(#graph-toolbar) button svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
       }
 
       :where(#graph-toolbar) button:hover {

@@ -50,6 +50,14 @@ describe('toolbar button style', () => {
         expect(shared).not.toMatch(/(^|[^-])width:\s*\d/);
     });
 
+    it('pins inline icons to their own size', () => {
+        // The canvas rule `svg { width: 100%; height: 100% }` would otherwise
+        // blow a button icon up to the button's full height.
+        const icon = rule(cssFor(), ':where(#graph-toolbar) button svg');
+        expect(icon).toMatch(/width:\s*14px/);
+        expect(icon).toMatch(/height:\s*14px/);
+    });
+
     it('no longer repeats the look per group', () => {
         const css = cssFor();
         expect(rule(css, '#zoom-controls button')).toBe('');
@@ -70,9 +78,16 @@ describe('toolbar button style', () => {
         expect(button.closest('#graph-toolbar')).toBe(toolbar);
     });
 
-    it('labels fit-to-view with a word, not a full-screen lookalike glyph', () => {
+    it('draws fit-to-view as inward arrows, not a full-screen lookalike glyph', () => {
         const fit = shadow().querySelector('#zoom-fit')!;
-        expect(fit.textContent?.trim()).toBe('Fit');
+        // Inline SVG in the button; no text glyph left over.
+        const icon = fit.querySelector('svg');
+        expect(icon).toBeTruthy();
+        expect(fit.textContent?.trim()).toBe('');
+        // Four arrows, one per corner, and the icon follows the button colour.
+        expect(icon!.querySelectorAll('path').length).toBe(4);
+        expect(icon!.getAttribute('stroke')).toBe('currentColor');
+        expect(icon!.getAttribute('aria-hidden')).toBe('true');
         expect(fit.getAttribute('aria-label')).toBeTruthy();
     });
 });

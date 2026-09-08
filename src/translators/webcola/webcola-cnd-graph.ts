@@ -1463,8 +1463,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
-          <!-- A word, not a corners/arrows glyph: every such glyph is what other tools use for full screen. -->
-          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">Fit</button>
+          <!-- Four arrows pointing inward: pull the content into the frame. Outward arrows
+               and corner brackets mean "full screen" everywhere else, so not those. Inline
+               SVG rather than a glyph: no font has this one, and currentColor follows the theme. -->
+          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+              <path d="M2 2L6.5 6.5M6.5 3.5V6.5H3.5"/>
+              <path d="M14 2L9.5 6.5M9.5 3.5V6.5H12.5"/>
+              <path d="M2 14L6.5 9.5M6.5 12.5V9.5H3.5"/>
+              <path d="M14 14L9.5 9.5M9.5 12.5V9.5H12.5"/>
+            </svg>
+          </button>
         </div>
         <div id="routing-control">
           <label for="routing-mode">Routing:</label>
