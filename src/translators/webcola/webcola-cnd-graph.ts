@@ -1463,7 +1463,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
-          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">⤢</button>
+          <!-- U+29C8, a square inside a square: the content framed by the view. Not the
+               outward arrows or corner brackets, which mean "full screen" everywhere else. -->
+          <button id="zoom-fit" title="Fit to View" aria-label="Fit graph to view">&#x29C8;</button>
         </div>
         <div id="routing-control">
           <label for="routing-mode">Routing:</label>

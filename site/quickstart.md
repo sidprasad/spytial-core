@@ -15,9 +15,13 @@ Save the following as `demo.html`, then open it in a browser:
   <meta charset="utf-8" />
   <title>spytial-core minimal integration</title>
   <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
+  <style>
+    /* Size the element with CSS. width/height attributes on the tag are not read. */
+    webcola-cnd-graph { width: 800px; height: 500px; }
+  </style>
 </head>
 <body>
-  <webcola-cnd-graph id="g" width="800" height="500"></webcola-cnd-graph>
+  <webcola-cnd-graph id="g"></webcola-cnd-graph>
 
   <script>
     const { JSONDataInstance, parseLayoutSpec, SGraphQueryEvaluator, LayoutInstance } = spytialcore;
@@ -101,6 +105,45 @@ directives:
 
 ---
 
+## Sizing
+
+Size the element with CSS, as you would a `<div>`. It fills whatever box you give it:
+
+```css
+webcola-cnd-graph { width: 100%; height: 600px; }
+```
+
+`width` and `height` attributes on the tag are not read. Your rule beats the component's own defaults, so `webcola-cnd-graph { height: 100vh; }` is all a full-page view needs. Do not set `display` from outside: `<spytial-explorer>` lays itself out as a flex column and relies on its own value.
+
+The diagram does not re-fit itself when its box changes size. Call `resetViewToFitContent()` after you resize it (the toolbar's Fit to View button does the same).
+
+## Adding a toolbar button
+
+`addToolbarControl(element)` appends to the toolbar, and a plain `<button>` gets the same look as the built-in ones. A full-screen toggle, for example:
+
+```javascript
+const graph = document.getElementById('g');
+
+const button = document.createElement('button');
+button.textContent = '⛶';
+button.title = 'Full screen';
+button.onclick = () => {
+  if (document.fullscreenElement === graph) document.exitFullscreen();
+  else graph.requestFullscreen();
+};
+
+// The box just changed size, so fit the diagram to it again.
+document.addEventListener('fullscreenchange', () => {
+  requestAnimationFrame(() => graph.resetViewToFitContent());
+});
+
+graph.addToolbarControl(button);
+```
+
+If the page runs inside an iframe (an embedded Gradio app or Hugging Face Space, say), the iframe needs `allow="fullscreen"` or `requestFullscreen()` is refused.
+
+---
+
 ## Convenience: `setupLayout`
 
 The three lines that build the evaluator + layout instance are common enough to have a helper:
@@ -122,7 +165,8 @@ Swap `<webcola-cnd-graph>` for `<spytial-explorer>` to add keyboard navigation, 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-explorer.global.js"></script>
 
-<spytial-explorer id="g" width="800" height="500"></spytial-explorer>
+<style>spytial-explorer { width: 800px; height: 500px; }</style>
+<spytial-explorer id="g"></spytial-explorer>
 <script>
   const explorer = document.getElementById('g');
   explorer.renderLayout(layout);
