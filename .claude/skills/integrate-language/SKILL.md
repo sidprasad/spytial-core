@@ -139,7 +139,7 @@ Fetch (before deciding) for the exact pipeline code and CDN URL:
 The surface and trigger choices are already locked from Q4 / Q5. Here, decide the technical platform.
 
 Decide:
-- **Bundle source.** NPM (`spytial-core`) or CDN? **If CDN, pin a version** — `spytial-core@5.4.0` over bare `spytial-core`. Papers, locked notebooks, and reproducibility-sensitive workflows depend on this; bare CDN URLs silently shift under users. The README has the canonical pinned URL.
+- **Bundle source.** NPM (`spytial-core`) or CDN? **If CDN, pin a version** — `spytial-core@5.4.1` over bare `spytial-core`. Papers, locked notebooks, and reproducibility-sensitive workflows depend on this; bare CDN URLs silently shift under users. The README has the canonical pinned URL.
 - **Renderer element.** `<webcola-cnd-graph>` is the visual default. `<spytial-explorer>` wraps it and adds an a11y / spatial-REPL surface — pick it when accessibility is a first-class requirement for your host's audience (academic tooling, classroom use, IDE plugins). Both expose the same `renderLayout(layout)` method, so swapping is a one-line change.
 - **Core pipeline.** The browser-side payload is identical across hosts and runs in **five stages**: `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator.initialize` → `LayoutInstance.generateLayout` → element `renderLayout`. (The README markets this as a "five-line integration"; the actual snippet is six or seven physical lines depending on import style — same five stages either way. Quote stages, not lines.) Confirm you understand each stage and what it produces.
 
@@ -167,7 +167,7 @@ Only after Phases 1–3 are signed off.
 
 1. **Emit JSON.** Implement the relationalizer to produce JSON matching the `JSONDataInstance` shape (atoms + relations). Do not implement `IDataInstance` directly unless Phase 1 surfaced a measured reason (huge data, existing graph structure, fine-grained control over `applyProjections`/`generateGraph`).
 
-2. **Wire to a minimal HTML harness.** Use the core pipeline from `README.md` (the five-stage `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator` → `LayoutInstance` → `renderLayout` flow). Load the bundle from a *pinned* CDN version (e.g. `spytial-core@5.4.0`) for the prototype.
+2. **Wire to a minimal HTML harness.** Use the core pipeline from `README.md` (the five-stage `JSONDataInstance` → `parseLayoutSpec` → `SGraphQueryEvaluator` → `LayoutInstance` → `renderLayout` flow). Load the bundle from a *pinned* CDN version (e.g. `spytial-core@5.4.1`) for the prototype.
 
 3. **Round-trip the classical example from Q6.** Confirm the diagram renders. Confirm the derived metric from §2.4 appears. Confirm shared references render as one atom.
 
