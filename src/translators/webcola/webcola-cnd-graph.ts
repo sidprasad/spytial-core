@@ -6317,11 +6317,25 @@ export class WebColaCnDGraph extends HTMLElementBase {
       route.splice(1, 0, midpoint);
     }
 
-    // Calculate direction and distance once
-    const dx = route[1].x - route[0].x;
-    const dy = route[1].y - route[0].y;
-    const angle = Math.atan2(dy, dx);
-    const distance = getRouteLength(route);
+    // The two mechanisms need two different directions, and sharing one was the
+    // bug: an endpoint offset slides ports ALONG the node side the route leaves
+    // from, so its axis comes from the exit normal — the route's first segment.
+    // A curvature bows the route sideways, so its axis comes from where the
+    // edge actually travels, end to end. On a taut route those differ by 90°:
+    // the first segment is the perpendicular exit stub, and bowing across it
+    // stretches the route along its own direction of travel instead of moving
+    // it off its siblings (two wrap-around edges over the same row of nodes
+    // stayed exactly on top of each other, each overshooting the row).
+    const exitAngle = Math.atan2(route[1].y - route[0].y, route[1].x - route[0].x);
+    const last = route.length - 1;
+    const travelAngle = Math.atan2(route[last].y - route[0].y, route[last].x - route[0].x);
+
+    // Endpoint offsets are capped against the room the whole route has; the bow
+    // is a fraction of how far apart the ENDS are. Charging it the full
+    // polyline length instead made a long detour bow in proportion to its own
+    // detour, which is how an 800px route ended up 500px off the diagram.
+    const routeLength = getRouteLength(route);
+    const endSpan = Math.hypot(route[last].x - route[0].x, route[last].y - route[0].y);
 
     // Find edge index once and reuse for both offset and curvature
     const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
@@ -6331,10 +6345,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // would clip an obstacle) — endpoint/port offsets are not scaled because
     // they stay on the node perimeter by construction.
     if (edgeIndex !== -1) {
-      route = applyEdgeOffsetWithIndex(edgeData, route, angle, edgeIndex, distance);
+      route = applyEdgeOffsetWithIndex(edgeData, route, exitAngle, edgeIndex, routeLength);
       const curvature = calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeIndex);
       const cappedCurvature = clampCurvature(curvature) * curvatureScale;
-      route = applyCurvatureToRoute(route, cappedCurvature, angle, distance);
+      route = applyCurvatureToRoute(route, cappedCurvature, travelAngle, endSpan);
     }
 
     return route;
