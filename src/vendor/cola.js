@@ -1183,8 +1183,26 @@
                 v.children.forEach(function (c) { return r = r.union(_this.nodes[c].rect); });
                 v.rect = r.inflate(_this.groupPadding);
             });
-            var colMids = this.midPoints(this.cols.map(function (r) { return r.pos; }));
-            var rowMids = this.midPoints(this.rows.map(function (r) { return r.pos; }));
+            // Extent of a lone band along its own axis, so midPoints can put the
+            // corridors outside it rather than through it. Null whenever there
+            // is more than one band, which is the case midPoints handles by
+            // halving the distance between neighbours.
+            var singleBandExtent = function (bands, lo, hi) {
+                if (!bands || bands.length !== 1 || !bands[0].nodes || bands[0].nodes.length === 0) {
+                    return null;
+                }
+                var min = Infinity, max = -Infinity;
+                bands[0].nodes.forEach(function (v) {
+                    if (!v.rect) return;
+                    min = Math.min(min, v.rect[lo]);
+                    max = Math.max(max, v.rect[hi]);
+                });
+                return Number.isFinite(min) && Number.isFinite(max) ? { min: min, max: max } : null;
+            };
+            var colMids = this.midPoints(this.cols.map(function (r) { return r.pos; }),
+                singleBandExtent(this.cols, 'x', 'X'));
+            var rowMids = this.midPoints(this.rows.map(function (r) { return r.pos; }),
+                singleBandExtent(this.rows, 'y', 'Y'));
             var rowx = colMids[0], rowX = colMids[colMids.length - 1];
             var coly = rowMids[0], colY = rowMids[rowMids.length - 1];
             var hlines = this.rows.map(function (r) { return ({ x1: rowx, x2: rowX, y1: r.pos, y2: r.pos }); })
@@ -1277,10 +1295,26 @@
             }
             return depth;
         };
-        GridRouter.prototype.midPoints = function (a) {
+        GridRouter.prototype.midPoints = function (a, singleBandExtent) {
             // Safety check: handle edge cases with empty or single-element arrays
             if (!a || a.length === 0) return [0];
-            if (a.length === 1) return [a[0] - 10, a[0] + 10]; // Default gap of 20
+            if (a.length === 1) {
+                // These are the travel corridors of the grid, and with only one
+                // band on this axis there is no neighbouring band to halve the
+                // distance to. A corridor has to clear the band: one inside it
+                // is unusable, because every node in the band blocks it. That
+                // is what made a single row of nodes unroutable — every
+                // horizontal line in the grid ran through the row, the shortest
+                // path never reached its target, and the route was drawn as one
+                // straight line through the nodes. Place the pair just outside
+                // the band's own extent; the fixed gap is the last resort for
+                // when the extent is unknown.
+                var clearance = 10;
+                if (singleBandExtent) {
+                    return [singleBandExtent.min - clearance, singleBandExtent.max + clearance];
+                }
+                return [a[0] - clearance, a[0] + clearance];
+            }
             var gap = a[1] - a[0];
             // Safety check: ensure gap is a valid number
             if (!Number.isFinite(gap) || gap === 0) gap = 20;
@@ -1490,14 +1524,36 @@
                         continue;
                     }
                     if (lcs.si + lcs.length >= e.length || lcs.ti + lcs.length >= f.length) {
-                        u = e[lcs.si + 1];
+                        // The shared run reaches the end of a path, so the ordering
+                        // is decided at its START: `u` is a point on the shared run
+                        // and vi/vj are where the two paths diverge before it.
+                        // Fix: a run of a single vertex has no `si + 1` when that
+                        // vertex is e's last, and then the apex is the shared vertex
+                        // itself. Two edges arriving at one node from opposite
+                        // directions (the `next`/`prev` pair of a circular linked
+                        // list) share exactly that one vertex, and reading past the
+                        // end threw "Cannot read properties of undefined".
+                        u = lcs.si + 1 < e.length ? e[lcs.si + 1] : e[lcs.si];
                         vj = e[lcs.si - 1];
                         vi = f[lcs.ti - 1];
                     }
                     else {
-                        u = e[lcs.si + lcs.length - 2];
+                        // Same repair at the other end: with si = 0 and a run of one
+                        // vertex there is no vertex before the run to use as the
+                        // apex, so the shared vertex stands in.
+                        u = lcs.si + lcs.length >= 2
+                            ? e[lcs.si + lcs.length - 2]
+                            : e[lcs.si + lcs.length - 1];
                         vi = e[lcs.si + lcs.length];
                         vj = f[lcs.ti + lcs.length];
+                    }
+                    if (!u || !vi || !vj) {
+                        // Nothing left to base a turn on. An arbitrary ordering
+                        // nudges the two routes apart in *some* order, which is what
+                        // the "paths do not diverge" case above already settles for;
+                        // throwing here would lose every route in the graph.
+                        edgeOrder.push({ l: i, r: j });
+                        continue;
                     }
                     if (GridRouter.isLeft(u, vi, vj)) {
                         edgeOrder.push({ l: j, r: i });

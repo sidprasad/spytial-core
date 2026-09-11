@@ -5435,8 +5435,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     try {
       this.gridifyInternal(nudgeGap, margin, groupMargin);
     } catch (e) {
-      console.log("Error routing edges in GridRouter");
-      console.error(e);
+      console.error('[gridify] GridRouter failed; falling back to straight doglegs.', e);
 
       // Fall back to simple orthogonal routing on error
       try {
@@ -5486,12 +5485,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
         return;
       }
 
-      // Debug: log node positions BEFORE ensureNodeBounds
-      console.log('[gridify] Node positions BEFORE ensureNodeBounds:');
-      nodes.slice(0, 3).forEach((n: any) => {
-        console.log(`  ${n.id}: x=${n.x?.toFixed(2)}, y=${n.y?.toFixed(2)}, bounds.cx=${n.bounds?.cx?.()?.toFixed(2)}, bounds.x=${n.bounds?.x?.toFixed(2)}`);
-      });
-
       // Force recompute all node bounds from current positions
       // This ensures bounds are always in sync with node x/y coordinates
       // Note: ensureNodeBounds provides default width/height (50/30) for nodes without explicit dimensions
@@ -5510,12 +5503,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
         this.fallbackGridRouting(edges);
         return;
       }
-
-      // Debug: log node positions AFTER ensureNodeBounds  
-      console.log('[gridify] Node positions AFTER ensureNodeBounds:');
-      nodes.slice(0, 3).forEach((n: any) => {
-        console.log(`  ${n.id}: x=${n.x?.toFixed(2)}, y=${n.y?.toFixed(2)}, bounds.cx=${n.bounds?.cx?.()?.toFixed(2)}, bounds.x=${n.bounds?.x?.toFixed(2)}`);
-      });
 
       // Build/refresh port assignments so parallel edges use distinct entry/exit
       // points. Without this, multiple A→B edges share the same orthogonal route.
@@ -5540,8 +5527,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Identify self-loop edges for special handling
       const selfLoopEdges = edges.filter((edge: any) => edge?.source?.id === edge?.target?.id);
       
-      // Debug: log routing info
-      console.log('[gridify] Total edges:', edges.length, 'Routable:', routableEdges.length, 'Self-loops:', selfLoopEdges.length);
+      // Every edge should be routable or a self-loop; anything else lost its
+      // router node and is about to fall back to a dogleg, so say which.
       if (routableEdges.length + selfLoopEdges.length !== edges.length) {
         const unroutableEdges = edges.filter((edge: any) => 
           (!edge?.source?.routerNode || !edge?.target?.routerNode) && 
@@ -5583,7 +5570,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // inside adjustGridRouteForArrowPositioning, after rectangle clipping —
       // doing it here would be overwritten by that pass.
 
-      console.log('[gridify] Routes generated:', routesByEdgeId.size, 'out of', routableEdges.length);
+      // Edges the router returned nothing for, collected during the draw pass
+      // below and reported once: this runs per edge, and a graph that loses
+      // its routes loses all of them at once.
+      const fellBackTo: string[] = [];
 
       const linkGroups = this.container.selectAll(".link-group").data(edges, (d: any) => d.id ?? d);
 
@@ -5608,10 +5598,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
             const targetX = edgeData.target?.x ?? edgeData.target?.bounds?.cx() ?? 0;
             const targetY = edgeData.target?.y ?? edgeData.target?.bounds?.cy() ?? 0;
             
-            console.log('[gridify] Fallback path for edge:', edgeData.id, 
-              'from', edgeData.source?.id, '(', sourceX, ',', sourceY, ')',
-              'to', edgeData.target?.id, '(', targetX, ',', targetY, ')');
-            
+            fellBackTo.push(edgeData.id);
+
             const dx = targetX - sourceX;
             const dy = targetY - sourceY;
             
@@ -5646,6 +5634,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
           const adjustedPath = this.adjustGridRouteForArrowPositioning(edgeData, p.routepath, route);
           return adjustedPath || p.routepath;
         });
+
+      if (fellBackTo.length > 0) {
+        console.warn(
+          `[gridify] ${fellBackTo.length} of ${routableEdges.length} edges had no grid route ` +
+          `and were drawn as straight doglegs: ${fellBackTo.slice(0, 10).join(', ')}` +
+          (fellBackTo.length > 10 ? `, and ${fellBackTo.length - 10} more` : '')
+        );
+      }
 
       // NOTE: Do NOT update node positions here!
       // gridify() should only reroute edges, not move nodes.
