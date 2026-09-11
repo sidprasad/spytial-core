@@ -25,6 +25,23 @@ export const MAX_EDGE_OFFSET_RATIO = 0.35;
 export const MAX_EDGE_CURVATURE_RATIO = 0.6;
 
 /**
+ * Widest lateral bow (px) the fan may apply, at the maximum curvature ratio.
+ *
+ * Curvature is a FRACTION of how far apart the endpoints are, which reads as a
+ * gentle arc at ordinary edge lengths and as a balloon once an edge is long: a
+ * wrap-around pointer back along a five-node row spans ~800px, and 0.6 of that
+ * threw the route 500px clear of the diagram — far enough that fitting it in
+ * the viewport shrank the nodes to nothing. Past this bound extra span buys
+ * nothing, because the fan exists to make siblings tellable apart and ~40px of
+ * separation already does that.
+ *
+ * Enforced by capping the span the ratio multiplies rather than each bow, so
+ * the siblings of one fan keep their proportions (0.2 and 0.6 stay 1:3 apart)
+ * instead of collapsing onto the cap together.
+ */
+export const MAX_EDGE_CURVATURE_PX = 40;
+
+/**
  * How far edge `edgeIndex` of `allEdges` should bow.
  *
  * Curvature direction follows the edge's port offset from the side centreline:
@@ -128,9 +145,18 @@ export function clampCurvature(curvature: number): number {
 }
 
 /**
- * Bows a route's interior points by `curvature`, scaled by the edge length and
+ * Bows a route's interior points by `curvature`, scaled by the edge span and
  * shared out between the axes by the edge angle. Endpoints stay put — they are
  * already on their node perimeters. Mutates and returns `route`.
+ *
+ * `angle` must be the direction the edge TRAVELS (end to end), not the
+ * direction it leaves its node: the bow is perpendicular to it, so an angle
+ * taken from a perpendicular exit stub stretches the route along its own path
+ * instead of moving it off its siblings.
+ *
+ * `distance` is how far apart the endpoints are, capped at
+ * {@link MAX_EDGE_CURVATURE_PX} / {@link MAX_EDGE_CURVATURE_RATIO} so the bow
+ * stays bounded on long edges.
  */
 export function applyCurvatureToRoute(
   route: Point[],
@@ -140,10 +166,12 @@ export function applyCurvatureToRoute(
 ): Point[] {
   if (curvature === 0) return route;
 
+  const span = Math.min(distance, MAX_EDGE_CURVATURE_PX / MAX_EDGE_CURVATURE_RATIO);
+
   route.forEach((point, index) => {
     if (index > 0 && index < route.length - 1) {
-      point.x += curvature * Math.abs(Math.sin(angle)) * distance;
-      point.y += curvature * Math.abs(Math.cos(angle)) * distance;
+      point.x += curvature * Math.abs(Math.sin(angle)) * span;
+      point.y += curvature * Math.abs(Math.cos(angle)) * span;
     }
   });
 
