@@ -124,6 +124,7 @@
   },
   "scripts": {
     "build": "npm run build:all",
+    "prepare": "npm run build:all",
     "build:parser": "peggy --plugin ts-pegjs -o src/evaluators/layout/layout-query-parser.ts src/evaluators/layout/layout-query.pegjs",
     "build:lib": "tsup --config tsup.alloy-instance.config.ts",
     "build:evaluator": "tsup --config tsup.evaluator.config.ts",
