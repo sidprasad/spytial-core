@@ -242,7 +242,7 @@ export const DISCRIMINATOR_PAIRS: DiscriminatorPair[] = [
     a: [1, 1],
     b: [1],
     expectDistinct: true,
-    note: 'KNOWN RISK: idempotent primitives + tuple-dedup may collapse [1,1] to [1]',
+    note: 'indexed occurrences preserve repeated values',
   },
   {
     name: 'distinct-variants',
@@ -257,10 +257,8 @@ export const DISCRIMINATOR_PAIRS: DiscriminatorPair[] = [
     category: 'T1',
     a: variant('bag', 17, { items: [1, 1] }),
     b: variant('bag', 17, { items: [1] }),
-    expectDistinct: false,
-    note:
-      'KNOWN LOSS: with numbers idempotent, [1,1] under one field dedups to a ' +
-      'single tuple (addRelationTuple drops duplicate (src,tgt)) — collapses to [1]',
+    expectDistinct: true,
+    note: 'container and index columns preserve multiplicity with idempotent values',
   },
   {
     name: 'object-field-multiplicity (idempotent OFF)',

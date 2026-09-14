@@ -6,9 +6,9 @@
  * `canon` produces a stable string with:
  *   - atom ids renamed to integers via a deterministic traversal from the roots,
  *   - primitive atoms keyed by (type, label) — the label IS the data and is kept;
- *     object atoms keyed by type only — their labels are display gensyms and are
- *     dropped,
- *   - relations keyed by `rel.id` (the field name), tuples sorted lexicographically.
+ *     structured atoms retain type and metadata; their display labels are dropped,
+ *   - object/container relations keyed by source kind and name; constructor and
+ *     legacy relations retain their semantic IDs, with tuples sorted lexicographically.
  *
  * v6 constructor field IDs include position, and atom metadata includes arity.
  * Canon preserves both. Legacy field IDs encode only names; canonicalizing
@@ -18,6 +18,7 @@
  * (see tests/pyret/oracles.ts).
  */
 
+import { readValueInfo } from './values';
 import { IDataInstance } from '../interfaces';
 
 const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean']);
@@ -32,6 +33,13 @@ export function canon(di: IDataInstance): string {
   const relations = di.getRelations();
   const atomsById = new Map(atoms.map((a) => [a.id, a] as const));
 
+  // New container/object relations have opaque IDs. Their source kind and
+  // query name define their meaning; constructor IDs retain their v6 meaning.
+  const relationKey = (rel: typeof relations[number]): string => {
+    const shape = readValueInfo(atomsById.get(rel.tuples[0]?.atoms[0])?.metadata);
+    return shape ? JSON.stringify([shape.kind === 'object' ? 'object-field' : 'element', rel.name]) : rel.id;
+  };
+
   const outBySrc = new Map<string, OutEdge[]>();
   const targetSet = new Set<string>();
 
@@ -41,7 +49,7 @@ export function canon(di: IDataInstance): string {
       const src = tup.atoms[0];
       for (let i = 1; i < tup.atoms.length; i++) targetSet.add(tup.atoms[i]);
       const arr = outBySrc.get(src) ?? [];
-      arr.push({ rel: rel.id, tuple: tup.atoms.slice() });
+      arr.push({ rel: relationKey(rel), tuple: tup.atoms.slice() });
       outBySrc.set(src, arr);
     }
   }
@@ -49,7 +57,7 @@ export function canon(di: IDataInstance): string {
   const keyOf = (id: string): string => {
     const a = atomsById.get(id);
     if (!a) return `?`;
-    return PRIMITIVE_TYPES.has(a.type) ? `${a.type}=${a.label}` : a.type;
+    return JSON.stringify([a.type, PRIMITIVE_TYPES.has(a.type) ? a.label : undefined, a.metadata]);
   };
 
   // Canonical numbering: DFS from roots, children ordered by (relation, target keys).
@@ -111,7 +119,7 @@ export function canon(di: IDataInstance): string {
         for (let i = 0; i < n; i++) if (p[i] !== q[i]) return p[i] - q[i];
         return p.length - q.length;
       });
-      return { name: rel.id, tuples };
+      return { name: relationKey(rel), tuples };
     })
     .filter((r) => r.tuples.length > 0)
     .sort(
