@@ -14,7 +14,8 @@
  * production setup faithfully.
  */
 
-import { Layout as ColaLayout } from 'webcola';
+import type { Group } from 'webcola';
+import { requireCola } from '../translators/webcola/routing/cola-runtime';
 import { LayoutInstance } from '../layout/layoutinstance';
 import type { LayoutSpec } from '../layout/layoutspec';
 import type { IDataInstance } from '../data-instance/interfaces';
@@ -102,6 +103,8 @@ export interface HeadlessLayoutResult {
    * satisfaction.
    */
   nodes: NodeWithMetadata[];
+  /** Rendered groups, including their final WebCola boundary rectangles. */
+  groups: Group[];
   /**
    * Seed positions the applied policy returned before the solver ran,
    * or `null` when no policy was applied (direct prior-positions path
@@ -195,12 +198,13 @@ export async function runHeadlessLayout(
   // Solve. Iteration counts and convergence threshold match the
   // reduced-iterations production path used when prior positions are
   // present (webcola-cnd-graph.ts:1764-1772, :1803).
-  const colaLayout = new ColaLayout()
+  const colaLayout = new (requireCola().Layout)()
     .linkDistance(150)
     .convergenceThreshold(0.1)
     .avoidOverlaps(true)
     .handleDisconnected(true)
     .nodes(webcolaLayout.colaNodes as any)
+    .groups(webcolaLayout.groups)
     .links(webcolaLayout.colaEdges as any)
     .constraints(webcolaLayout.colaConstraints as any[])
     .size([webcolaLayout.FIG_WIDTH, webcolaLayout.FIG_HEIGHT]);
@@ -226,6 +230,7 @@ export async function runHeadlessLayout(
     edges,
     constraints: layout.constraints,
     nodes: webcolaLayout.colaNodes,
+    groups: webcolaLayout.groups,
     seed: seedState,
   };
 }

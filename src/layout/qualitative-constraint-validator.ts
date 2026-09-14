@@ -1670,8 +1670,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     /**
-     * Add BoundingBoxConstraint or GroupBoundaryConstraint as edges to/from
-     * virtual group nodes (V1's encoding — single edge, not per-member).
+     * Add spatial constraints, retaining group-boundary member implications
+     * so later implicit alignment orders respect the chosen group side.
      */
     private addSpatialConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
         if (isBoundingBoxConstraint(constraint)) {
@@ -1689,22 +1689,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             }
             if (!ok) return this.buildConjunctiveError(constraint);
         } else if (isGroupBoundaryConstraint(constraint)) {
-            const gc = constraint as GroupBoundaryConstraint;
-            const gAId = `_group_${gc.groupA.name}`;
-            const gBId = `_group_${gc.groupB.name}`;
-            this.hGraph.ensureNode(gAId);
-            this.hGraph.ensureNode(gBId);
-            this.vGraph.ensureNode(gAId);
-            this.vGraph.ensureNode(gBId);
-            let ok: boolean;
-            switch (gc.side) {
-                case 'left':   ok = this.hGraph.addEdge(gAId, gBId, gc.minDistance, constraint); break;
-                case 'right':  ok = this.hGraph.addEdge(gBId, gAId, gc.minDistance, constraint); break;
-                case 'top':    ok = this.vGraph.addEdge(gAId, gBId, gc.minDistance, constraint); break;
-                case 'bottom': ok = this.vGraph.addEdge(gBId, gAId, gc.minDistance, constraint); break;
-                default: ok = true;
-            }
-            if (!ok) return this.buildConjunctiveError(constraint);
+            if (!this.addQualitativeEdge(constraint)) return this.buildConjunctiveError(constraint);
         }
         return null;
     }
@@ -1918,6 +1903,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // Geometric pruning helpers
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /** A chosen group side orders every member pair, not only two virtual nodes. */
+    private groupBoundaryEdges(gc: GroupBoundaryConstraint): { axis: 'h' | 'v'; from: string; to: string }[] {
+        const axis = gc.side === 'left' || gc.side === 'right' ? 'h' : 'v';
+        const reverse = gc.side === 'right' || gc.side === 'bottom';
+        const edge = (a: string, b: string): { axis: 'h' | 'v'; from: string; to: string } =>
+            ({ axis, from: reverse ? b : a, to: reverse ? a : b });
+        return [
+            edge(`_group_${gc.groupA.name}`, `_group_${gc.groupB.name}`),
+            ...gc.groupA.nodeIds.flatMap(a => gc.groupB.nodeIds.map(b => edge(a, b))),
+        ];
+    }
+
     /**
      * Check if an alternative is feasible:
      * 1. No cycle (transitivity check)
@@ -1925,6 +1922,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      */
     private isAlternativeFeasible(alternative: LayoutConstraint[]): boolean {
         for (const constraint of alternative) {
+            if (isGroupBoundaryConstraint(constraint)) {
+                for (const edge of this.groupBoundaryEdges(constraint)) {
+                    const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                    if (edge.from === edge.to || graph.canReach(edge.to, edge.from)) return false;
+                }
+                continue;
+            }
             // BoundingBoxConstraint: check if node is aligned with a group member
             // on the constraint's axis. If so, the node can't be on that side.
             if (isBoundingBoxConstraint(constraint)) {
@@ -2381,6 +2385,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * Register the fixed reachability probes that alternative aIdx's
      * feasibility depends on — mirrors isAlternativeFeasible's queries exactly:
      *   - Left/Top/BBox/GroupBoundary edge: canReach(edge.to, edge.from);
+     *   - GroupBoundary additionally: reverse reachability for every member pair.
      *   - BBox additionally, per member m on the side's axis:
      *     areAligned(node, m) (both directions) and the isBboxFeasibleInGraphs
      *     isOrdered check (one of those directions).
@@ -2398,6 +2403,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         for (const constraint of alternative) {
             if (isAlignmentConstraint(constraint)) {
                 hasAlignment = true;
+                continue;
+            }
+            if (isGroupBoundaryConstraint(constraint)) {
+                for (const edge of this.groupBoundaryEdges(constraint)) add(edge.axis, edge.to, edge.from);
                 continue;
             }
             if (isBoundingBoxConstraint(constraint)) {
@@ -2565,17 +2574,21 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             }
         }
         if (isGroupBoundaryConstraint(constraint)) {
-            const gc = constraint as GroupBoundaryConstraint;
-            const gAId = `_group_${gc.groupA.name}`;
-            const gBId = `_group_${gc.groupB.name}`;
-            this.hGraph.ensureNode(gAId); this.hGraph.ensureNode(gBId);
-            this.vGraph.ensureNode(gAId); this.vGraph.ensureNode(gBId);
-            switch (gc.side) {
-                case 'left':   return this.hGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
-                case 'right':  return this.hGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
-                case 'top':    return this.vGraph.addEdge(gAId, gBId, gc.minDistance, constraint);
-                case 'bottom': return this.vGraph.addEdge(gBId, gAId, gc.minDistance, constraint);
+            const added: ReturnType<typeof this.groupBoundaryEdges> = [];
+            for (const edge of this.groupBoundaryEdges(constraint)) {
+                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                if (!graph.addEdge(edge.from, edge.to, constraint.minDistance, constraint)) {
+                    // tryAssign only undoes earlier constraints in the alternative;
+                    // release this constraint's partial claims here.
+                    for (const previous of added) {
+                        const previousGraph = previous.axis === 'h' ? this.hGraph : this.vGraph;
+                        previousGraph.removeEdgeClaim(previous.from, previous.to, constraint.minDistance, constraint);
+                    }
+                    return false;
+                }
+                added.push(edge);
             }
+            return true;
         }
         if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
@@ -2627,14 +2640,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     break;
             }
         } else if (isGroupBoundaryConstraint(constraint)) {
-            const gc = constraint as GroupBoundaryConstraint;
-            const gAId = `_group_${gc.groupA.name}`;
-            const gBId = `_group_${gc.groupB.name}`;
-            switch (gc.side) {
-                case 'left':   this.hGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
-                case 'right':  this.hGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
-                case 'top':    this.vGraph.removeEdgeClaim(gAId, gBId, gc.minDistance, constraint); break;
-                case 'bottom': this.vGraph.removeEdgeClaim(gBId, gAId, gc.minDistance, constraint); break;
+            for (const edge of this.groupBoundaryEdges(constraint)) {
+                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                graph.removeEdgeClaim(edge.from, edge.to, constraint.minDistance, constraint);
             }
         } else if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
@@ -4244,6 +4252,11 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const ac = constraint as AlignmentConstraint;
             const graph = ac.axis === 'x' ? hGraph : vGraph;
             graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+        } else if (isGroupBoundaryConstraint(constraint)) {
+            for (const edge of this.groupBoundaryEdges(constraint)) {
+                const graph = edge.axis === 'h' ? hGraph : vGraph;
+                graph.addEdge(edge.from, edge.to, constraint.minDistance, constraint);
+            }
         } else if (isBoundingBoxConstraint(constraint)) {
             const bc = constraint as BoundingBoxConstraint;
             const gId = `_group_${bc.group.name}`;
