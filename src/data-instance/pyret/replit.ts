@@ -20,6 +20,7 @@
  * future work and is documented in the fidelity design notes.
  */
 
+import { numberPayload, numberSource } from './numbers';
 import { IDataInstance } from '../interfaces';
 import { PyretObject } from './pyret-data-instance';
 import { reifyToValue, ReifiedValue } from './reify';
@@ -50,6 +51,9 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
   if (typeof v === 'number') return String(v);
   if (typeof v === 'boolean') return v ? 'true' : 'false';
   if (typeof v === 'string') return pyretStringLiteral(v);
+
+  const numeric = numberPayload(v);
+  if (numeric) return numberSource(numeric);
 
   if (Array.isArray(v)) {
     if (onPath.has(v)) return '<cyclic>';

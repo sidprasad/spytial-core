@@ -22,11 +22,12 @@
 
 import { IDataInstance, IAtom } from '../interfaces';
 import { PyretObject, PyretDataInstance } from './pyret-data-instance';
+import { readNumberMetadata, reifyNumber, type ReifiedNumber } from './numbers';
 import { readConstructorMetadata, readFieldId } from './identity';
 
 /** A value reconstructed from a data instance. Either a synthetic Pyret object,
  * a JS array (for multi-target fields = Pyret arrays/list-likes), or a primitive. */
-export type ReifiedValue = PyretObject | ReifiedValue[] | number | string | boolean | null;
+export type ReifiedValue = ReifiedNumber | PyretObject | ReifiedValue[] | number | string | boolean | null;
 
 const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean']);
 
@@ -84,6 +85,8 @@ function buildIndex(di: IDataInstance): RelIndex {
 function reifyPrimitiveAtom(atom: IAtom): ReifiedValue {
   switch (atom.type) {
     case 'Number': {
+      const numeric = readNumberMetadata(atom.metadata);
+      if (numeric) return reifyNumber(numeric);
       const n = Number(atom.label);
       return Number.isNaN(n) ? atom.label : n;
     }

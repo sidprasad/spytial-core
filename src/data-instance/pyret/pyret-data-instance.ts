@@ -3,6 +3,7 @@ import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType } fr
 import { DataInstanceEventEmitter } from '../data-instance-event-emitter';
 import { settleTupleTypes } from '../tuple-types';
 import { replit } from './replit';
+import { numberPayload, numberSource } from './numbers';
 import { constructorInfo, fieldId, readFieldId } from './identity';
 import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
 
@@ -174,10 +175,10 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     
     this.externalEvaluator = externalEvaluator || null;
     this.initializeBuiltinTypes();
-    if (typeof pyretData === 'number' || typeof pyretData === 'string' || typeof pyretData === 'boolean') {
+    if (this.isAtomicValue(pyretData)) {
       this.createAtomFromPrimitive(pyretData);
     } else if (pyretData != null) {
-      this.parseObjectIteratively(pyretData);
+      this.parseObjectIteratively(pyretData as PyretObject);
     }
   }
 
@@ -758,17 +759,11 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   /**
    * Creates an atom from a primitive value, optionally reusing existing atoms based on configuration
    */
-  private createAtomFromPrimitive(value: string | number | boolean | { n: number; d: number }): string {
-    // Handle rational numbers
-    let actualValue: string | number | boolean;
-    if (this.isRationalNumber(value)) {
-      actualValue = this.rationalToDecimal(value);
-    } else {
-      actualValue = value;
-    }
-
-    const type = this.mapPrimitiveType(actualValue);
-    const label = String(actualValue);
+  private createAtomFromPrimitive(value: unknown): string {
+    const numeric = numberPayload(value);
+    const type = numeric ? 'Number' : this.mapPrimitiveType(value as string | boolean);
+    const label = numeric ? numberSource(numeric) : String(value);
+    const metadata = numeric ? { pyretNumber: numeric } : undefined;
 
     // Check idempotency settings for this type
     const shouldReuse = (type === 'String' && this.options.stringsIdempotent) ||
@@ -778,7 +773,9 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     if (shouldReuse) {
       // Check if we already have an atom for this value
       const existingAtom = Array.from(this.atoms.values())
-        .find(atom => atom.label === label && atom.type === type);
+        .find(atom => atom.type === type && (numeric
+          ? JSON.stringify(atom.metadata?.pyretNumber) === JSON.stringify(numeric)
+          : atom.label === label));
 
       if (existingAtom) {
         return existingAtom.id;
@@ -790,7 +787,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     const atom: IAtom = {
       id: atomId,
       type,
-      label
+      label,
+      ...(metadata ? { metadata } : {})
     };
 
     this.atoms.set(atomId, atom);
@@ -981,35 +979,9 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     return ['Number', 'String', 'Boolean', 'PyretObject'].includes(typeName);
   }
 
-  /**
-   * Type guard for Pyret rational number objects
-   * Pyret represents rational numbers as objects with 'n' (numerator) and 'd' (denominator) properties
-   */
-  private isRationalNumber(value: unknown): value is { n: number; d: number } {
-    return typeof value === 'object' &&
-      value !== null &&
-      'n' in value &&
-      'd' in value &&
-      typeof (value as { n: unknown }).n === 'number' &&
-      typeof (value as { d: unknown }).d === 'number';
-  }
-
-  /**
-   * Converts a Pyret rational number object to a decimal number
-   */
-  private rationalToDecimal(rational: { n: number; d: number }): number {
-    return rational.n / rational.d;
-  }
-
-  /**
-   * Type guard for atomic values
-   * Now includes Pyret rational numbers
-   */
-  private isAtomicValue(value: unknown): value is string | number | boolean | { n: number; d: number } {
-    return typeof value === 'string' ||
-      typeof value === 'number' ||
-      typeof value === 'boolean' ||
-      this.isRationalNumber(value);
+  /** Primitive JS values, runtime numeric objects, and structural numeric carriers. */
+  private isAtomicValue(value: unknown): boolean {
+    return typeof value === 'string' || typeof value === 'boolean' || numberPayload(value) !== undefined;
   }
 
   /**
