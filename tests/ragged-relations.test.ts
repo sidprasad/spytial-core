@@ -40,24 +40,25 @@ function foo(instance: JSONDataInstance) {
 }
 
 describe('ragged relations: the data instance', () => {
-  it('merges two same-named relations and keeps every tuple', () => {
-    const relation = foo(new JSONDataInstance(raggedFoo()));
-
-    expect(relation.tuples).toHaveLength(2);
-    expect(relation.tuples.map(t => t.atoms)).toEqual([
+  it('preserves differently identified records with the same query name', () => {
+    const relations = new JSONDataInstance(raggedFoo()).getRelations();
+    expect(relations.map(r => r.id)).toEqual(['A<:foo', 'B<:foo']);
+    expect(relations.flatMap(r => r.tuples.map(t => t.atoms))).toEqual([
       ['a1', 'b1'],
       ['b1', 'c1', 'd1'],
     ]);
   });
 
-  it('carries no column signature once the tuples disagree on width', () => {
+  it('carries no column signature when one ID holds different widths', () => {
     // `[]` is IRelation.types' "no shared signature" value. Anything else —
     // notably the first tuple's width — claims a shape only some tuples have.
-    expect(foo(new JSONDataInstance(raggedFoo())).types).toEqual([]);
+    const data = raggedFoo();
+    data.relations[1].id = data.relations[0].id;
+    expect(foo(new JSONDataInstance(data)).types).toEqual([]);
   });
 
   it('leaves each tuple holding its own signature', () => {
-    const tuples = foo(new JSONDataInstance(raggedFoo())).tuples;
+    const tuples = new JSONDataInstance(raggedFoo()).getRelations().flatMap(r => r.tuples);
 
     expect(tuples[0].types).toEqual(['A', 'B']);
     expect(tuples[1].types).toEqual(['B', 'C', 'D']);

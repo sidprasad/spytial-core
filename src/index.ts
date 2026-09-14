@@ -20,6 +20,7 @@ export * as Translators from './translators';
 
 // Export new data instance abstraction
 export * from './data-instance/interfaces';
+export { relationsByName, nameBasedView } from './data-instance/relation-identity';
 // Keeps a relation's positional column types intact on a write — anything
 // implementing IInputDataInstance should settle a tuple through this.
 export { settleTupleTypes } from './data-instance/tuple-types';

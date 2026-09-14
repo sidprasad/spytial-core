@@ -20,11 +20,21 @@ Each type object includes:
 
 ## Relation names, ids and arity
 
-- The **name** is what selectors resolve against. The **id** is provenance only —
-  where the relation came from in the host language. Alloy uses a qualified id
-  (`A<:foo`); other integrations often just repeat the name.
-- Two relations may share a name. They are one relation: their tuples are
-  merged under that name.
+- The **id** is the stored record's identity. The **name** is its query/display
+  name. Alloy uses qualified IDs (`A<:foo`); other integrations often repeat
+  the name. Host reconstruction may depend on IDs, so normalization preserves them.
+- Since **6.0.0**, different IDs remain separate even when names match.
+  Selectors still resolve by **name**, taking the set union of all matching
+  records. SQL likewise exposes one deduplicated table per name. This query
+  projection never replaces the stored datum.
+- Repeated IDs merge by default; one ID with conflicting names throws. With
+  `mergeRelations: false`, repeated IDs throw instead. Missing IDs still default
+  to the name, so existing name-only JSON continues to combine as before.
+- Mutation methods take exact IDs, not name aliases. Combining data instances
+  preserves different relation IDs, and validates name conflicts before writing.
+- Atom `metadata` is optional JSON-serializable host reconstruction information;
+  unlike `label`/`labels`, it is not displayed. Serialization and atom-ID remapping
+  preserve it. Do not reify a name-based query projection: use the stored datum.
 - A relation may be **ragged** — its tuples need not all be the same width. Two
   unrelated Python classes can both have a `foo` field, one holding pairs and
   one holding triples. Both are the relation `foo`, and `foo` selects all of
@@ -43,7 +53,9 @@ Each type object includes:
 
 - Atom IDs should be unique strings. Relation tuples reference atoms by ID.
 - Supertypes in a type hierarchy (e.g., `object`) do not need their own entries unless they have atoms.
-- Extra fields are preserved but ignored by the core logic; only the fields above are required.
+- Use atom `metadata` for host reconstruction data. Arbitrary extra fields are
+  not a guaranteed extension mechanism across all adapters or transformations.
+- For migration guidance and the Pyret encoding, see [v6 migration](MIGRATING_TO_V6.md).
 
 ## Example: Order Statistic Tree instance
 

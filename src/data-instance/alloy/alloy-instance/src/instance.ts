@@ -124,7 +124,8 @@ export function removeInstanceRelationTuple(
   instance: AlloyInstance,
   relationId: string,
   tuple: AlloyTuple): AlloyInstance {
-  const relation = getInstanceRelation(instance, relationId);
+  const relation = instance.relations[relationId];
+  if (!relation) throw new Error(`Could not find relation ID ${relationId}`);
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
 
@@ -159,21 +160,8 @@ export function addInstanceRelationTuple(
   instance: AlloyInstance,
   relationId: string,
   tuple: AlloyTuple): AlloyInstance {
-  // Direct key lookup, then fallback to name-based search. Names are not unique
-  // (only the qualified id is), so warn when a name resolves ambiguously rather
-  // than silently appending to whichever relation comes first.
-  // https://github.com/sidprasad/spytial-core/issues/470
-  let relation = instance.relations[relationId];
-  if (!relation) {
-    const byName = Object.values(instance.relations).filter(r => r.name === relationId);
-    if (byName.length > 1) {
-      console.warn(
-        `addInstanceRelationTuple: name "${relationId}" is ambiguous (${byName.map(r => r.id).join(', ')}); ` +
-        `appending to the first. Use a qualified id (Sig<:field) to disambiguate.`
-      );
-    }
-    relation = byName[0];
-  }
+  // v6 mutations address exact identities. Names remain evaluator lookups.
+  const relation = instance.relations[relationId];
   const newRelations = { ...instance.relations };
   const newSkolems = { ...instance.skolems };
 
@@ -327,6 +315,5 @@ export function instanceFromElement(element: Element): AlloyInstance {
     skolems: keyBy(skolems, (s) => s.id)
   };
 }
-
 
 

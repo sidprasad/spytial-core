@@ -40,6 +40,7 @@ export const {
 
 import {EvaluationContext, EvaluatorConfig, IEvaluatorResult } from "../../evaluator-contracts";
 import { IDataInstance, isDataInstance } from "../../data-instance/interfaces";
+import { nameBasedView } from "../../data-instance/relation-identity";
 import { BaseEvaluatorResult } from "./base-evaluator-result";
 
 
@@ -113,7 +114,8 @@ export class SGraphQueryEvaluator implements IEvaluator {
 
 
     const id : IDataInstance = context.sourceData as IDataInstance;
-    this.eval = new SimpleGraphQueryEvaluator(id);
+    // A query sees a name-based SET view; the host/reifier keeps every ID.
+    this.eval = new SimpleGraphQueryEvaluator(nameBasedView(id));
     //console.log("SimpleGraphQueryEvaluator initialized with context:", context);
     this.ready = true;
     

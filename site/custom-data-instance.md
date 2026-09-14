@@ -37,6 +37,14 @@ The full schema is documented in [JSON Data Format](json-data.md). The bare mini
 - Every relation: `{ id, name, types, tuples: [{ atoms, types }] }`.
 - Types are optional; they're inferred from atoms unless you have a hierarchy worth preserving.
 
+In v6, relation IDs identify stored records; names identify query sets. Preserve
+distinct IDs through serialization and composition. Name-based lookups must
+collect all matching records and deduplicate tuples by ordered atom IDs. The
+exported `relationsByName` / `nameBasedView` helpers create query projections;
+never substitute those projections for the datum supplied to a host reifier.
+Mutable adapters must address exact relation IDs. Atom `metadata` can carry
+JSON-serializable reconstruction details independently of display labels.
+
 ---
 
 ## Path B — Implement `IDataInstance` directly
@@ -90,7 +98,7 @@ The cleanest reference implementation is [`JSONDataInstance`](https://github.com
 | `JSONDataInstance`         | The canonical JSON shape     | The default for every host integration.                                                     |
 | `AlloyDataInstance`        | Alloy XML evaluator output   | Use `createEmptyAlloyDataInstance()` to build incrementally.                                |
 | `DotDataInstance`          | Graphviz DOT                 | Configurable type system (`DotTypeConfig`) since DOT has no native types.                   |
-| `PyretDataInstance`        | Pyret value-skeleton output  |                                                                                             |
+| `PyretDataInstance`        | Live Pyret runtime values   | Default constructor metadata is preserved in v6; not a ValueSkeleton adapter.                |
 | `TlaDataInstance`          | TLA+ trace output            | `createTlaDataInstance(...)` factory, `isTlaDataInstance(x)` predicate.                     |
 
 Pick the one that matches your host's serialization, or use them as templates. All expose the same `IDataInstance` surface to the rest of `spytial-core`.

@@ -12,7 +12,7 @@ The canonical entry point. See [JSON Data Format](json-data.md) for the full sch
 import { JSONDataInstance, DataInstanceNormalizer } from 'spytial-core';
 
 const instance = new JSONDataInstance(jsonPayload, {
-  mergeRelations: true,    // default
+  mergeRelations: true,    // default: merge repeated IDs, not repeated names
   inferTypes: true,        // default
   validateReferences: true,// default
   deduplicateAtoms: true,  // default
