@@ -29,6 +29,7 @@
  */
 
 import type { IDataInstance, IRelation } from './interfaces';
+import { relationsByName } from './relation-identity';
 
 /**
  * Options for schema generation
@@ -242,7 +243,7 @@ export function generateSQLSchema(
   } = options;
 
   const types = dataInstance.getTypes();
-  const relations = dataInstance.getRelations();
+  const relations = relationsByName(dataInstance.getRelations());
 
   // Filter out built-in types if requested
   const filteredTypes = includeBuiltInTypes 

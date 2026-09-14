@@ -378,7 +378,7 @@ export class AlloyDataInstance extends DataInstanceEventEmitter implements IInpu
     // positionally to decide whether an atom is a builtin literal or a backticked
     // atom id — so settle the tuple against the field before writing it.
     const atoms = this.getAtoms();
-    const relation = this.getRelations().find(r => r.id === relationId || r.name === relationId);
+    const relation = this.getRelations().find(r => r.id === relationId);
     const settled = settleTupleTypes(
       tuple,
       relation,

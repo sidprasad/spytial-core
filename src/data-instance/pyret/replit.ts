@@ -11,8 +11,8 @@
  *   - data variants:  type(field0, field1, ...)   (fields in reconstructed order)
  *
  * Field ORDER here comes from the reconstructed object's dict order, which reify
- * takes from the constructor cache (declared order) — so positional rendering is
- * faithful when the cache is populated.
+ * takes from serialized field IDs for v6 constructor data. Only legacy data
+ * falls back to the constructor cache / alphabetical field order.
  *
  * LIMITATION: a flat torepr-style string cannot express sharing or cycles. DAGs
  * are re-printed (matching `torepr`); cycles emit a `<cyclic>` marker instead of
@@ -36,7 +36,11 @@ function pyretStringLiteral(s: string): string {
       .replace(/"/g, '\\"')
       .replace(/\n/g, '\\n')
       .replace(/\r/g, '\\r')
-      .replace(/\t/g, '\\t') +
+      .replace(/\t/g, '\\t')
+      // Pyret normalizes literal source Unicode before processing escapes.
+      // Emit code-unit escapes to preserve e.g. U+FAAA (otherwise U+7740),
+      // combining sequences, control characters, and unpaired surrogates.
+      .replace(/[^\x20-\x7E]/g, c => '\\u' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')) +
     '"'
   );
 }
@@ -61,7 +65,7 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
     const type = (v.$name as string) || 'object';
     const dict = (v.dict as Record<string, unknown>) || {};
     const keys = Object.keys(dict);
-    const out = keys.length
+    const out = keys.length || v.$arity === 0
       ? `${type}(${keys.map((k) => render(dict[k] as ReifiedValue, onPath)).join(', ')})`
       : type;
     onPath.delete(v);

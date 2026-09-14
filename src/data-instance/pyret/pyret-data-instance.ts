@@ -3,6 +3,8 @@ import { IDataInstance, IInputDataInstance, IAtom, IRelation, ITuple, IType } fr
 import { DataInstanceEventEmitter } from '../data-instance-event-emitter';
 import { settleTupleTypes } from '../tuple-types';
 import { replit } from './replit';
+import { constructorInfo, fieldId, readFieldId } from './identity';
+import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
 
 /**
  * Configuration options for primitive value idempotency in PyretDataInstance
@@ -160,7 +162,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    * @param options - Configuration options for primitive handling and other behaviors
    * @param externalEvaluator - Optional external Pyret evaluator for enhanced features
    */
-  constructor(pyretData?: PyretObject | null, options: PyretInstanceOptions = {}, externalEvaluator?: any) {
+  constructor(pyretData?: PyretObject | number | string | boolean | null, options: PyretInstanceOptions = {}, externalEvaluator?: any) {
     super();
     // Set default options with primitives idempotent by default
     this.options = {
@@ -172,7 +174,9 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     
     this.externalEvaluator = externalEvaluator || null;
     this.initializeBuiltinTypes();
-    if (pyretData) {
+    if (typeof pyretData === 'number' || typeof pyretData === 'string' || typeof pyretData === 'boolean') {
+      this.createAtomFromPrimitive(pyretData);
+    } else if (pyretData != null) {
       this.parseObjectIteratively(pyretData);
     }
   }
@@ -559,7 +563,12 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
           this.processTableSemantics(atomId, obj);
         } else {
           // Process regular objects
-          Object.entries(obj.dict).forEach(([relationName, fieldValue]) => {
+          const info = constructorInfo(obj);
+          // Real data variants expose their declared fields directly. Methods
+          // and extra dictionary fields are not constructor arguments.
+          const entries = info ? info.fields.map((name, position) =>
+            [fieldId(info, position), obj.dict![name]] as const) : Object.entries(obj.dict);
+          entries.forEach(([relationName, fieldValue]) => {
 
 
             // Heuristic: skip fields that look like Pyret methods (object with only a 'name' property)
@@ -730,11 +739,13 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private createAtomFromObject(obj: PyretObject): string {
     const type = this.extractType(obj);
     const atomId = this.generateAtomId(type);
+    const info = constructorInfo(obj);
 
     const atom: IAtom = {
       id: atomId,
       type,
-      label: this.extractLabel(obj)
+      label: this.extractLabel(obj),
+      ...(info ? { metadata: { pyret: { version: 1, arity: info.arity } } } : {})
     };
 
     this.atoms.set(atomId, atom);
@@ -899,7 +910,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     }
 
     let relation = this.relations.get(relationId);
-    let name = relationId + (middleAtoms.length > 0 ? `[${middleAtoms.join(', ')}]` : '');
+    const name = readFieldId(relationId)?.field ?? relationId;
 
     // `relation.types` is positional — one entry per column — so the tuple is
     // settled against the relation's declared signature rather than merged into
@@ -919,9 +930,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     }
 
     // Check for duplicate tuples
-    const isDuplicate = relation.tuples.some(t =>
-      t.atoms[0] === sourceId && t.atoms[1] === targetId
-    );
+    const isDuplicate = relation.tuples.some(t => tupleKey(t) === tupleKey(tuple));
 
     if (!isDuplicate) {
       relation.tuples.push(settled.tuple);
@@ -1162,6 +1171,10 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     }
 
     const pyretInstance = dataInstance as PyretDataInstance;
+    for (const incoming of pyretInstance.getRelations()) {
+      const existing = this.relations.get(incoming.id);
+      if (existing) assertSameRelationName(existing, incoming);
+    }
     const reIdMap = new Map<string, string>();
 
     // Add atoms
@@ -1235,7 +1248,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
       const existingRelation = this.relations.get(relation.id);
       if (existingRelation) {
         // Merge tuples into the existing relation
-        existingRelation.tuples.push(...newTuples);
+        existingRelation.tuples = uniqueTuples([...existingRelation.tuples, ...newTuples]);
+        existingRelation.types = relationSignature(existingRelation.tuples, existingRelation.types);
       } else {
         // Add a new relation
         this.relations.set(relation.id, {

@@ -38,6 +38,7 @@ const {
   synthesizeBinaryRelationWithWhy: typeof sgqNamespace.synthesizeBinaryRelationWithWhy;
 };
 import type { IAtom, IDataInstance } from '../data-instance/interfaces';
+import { nameBasedView } from '../data-instance/relation-identity';
 import type IEvaluator from '../evaluator-contracts';
 import { SGraphQueryEvaluator } from '../evaluators/data/sgq-evaluator';
 
@@ -98,7 +99,7 @@ export function synthesizeAtomSelector(
 ): string {
   const sgqExamples: AtomSelectionExample[] = examples.map(ex => ({
     atoms: new Set(ex.atoms),
-    datum: ex.dataInstance
+    datum: nameBasedView(ex.dataInstance)
   }));
   
   return synthesizeSelector(sgqExamples, maxDepth);
@@ -133,7 +134,7 @@ export function synthesizeBinarySelector(
 ): string {
   const sgqExamples: BinaryRelationExample[] = examples.map(ex => ({
     pairs: new Set(ex.pairs),
-    datum: ex.dataInstance
+    datum: nameBasedView(ex.dataInstance)
   }));
   
   return synthesizeBinaryRelation(sgqExamples, maxDepth);
@@ -151,7 +152,7 @@ export function synthesizeAtomSelectorWithExplanation(
 ): SynthesisWhy {
   const sgqExamples: AtomSelectionExample[] = examples.map(ex => ({
     atoms: new Set(ex.atoms),
-    datum: ex.dataInstance
+    datum: nameBasedView(ex.dataInstance)
   }));
   
   return synthesizeSelectorWithWhy(sgqExamples, maxDepth);
@@ -166,7 +167,7 @@ export function synthesizeBinarySelectorWithExplanation(
 ): SynthesisWhy {
   const sgqExamples: BinaryRelationExample[] = examples.map(ex => ({
     pairs: new Set(ex.pairs),
-    datum: ex.dataInstance
+    datum: nameBasedView(ex.dataInstance)
   }));
   
   return synthesizeBinaryRelationWithWhy(sgqExamples, maxDepth);

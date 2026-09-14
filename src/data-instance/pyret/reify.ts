@@ -22,6 +22,7 @@
 
 import { IDataInstance, IAtom } from '../interfaces';
 import { PyretObject, PyretDataInstance } from './pyret-data-instance';
+import { readConstructorMetadata, readFieldId } from './identity';
 
 /** A value reconstructed from a data instance. Either a synthetic Pyret object,
  * a JS array (for multi-target fields = Pyret arrays/list-likes), or a primitive. */
@@ -34,16 +35,18 @@ interface RelIndex {
   fields: Map<string, Map<string, string[]>>;
   /** atom ids that appear at index >= 1 in some tuple (i.e. are pointed-to) */
   targets: Set<string>;
+  positions: Map<string, Map<string, number>>;
 }
 
-/** Build a source-keyed view of the relations. Field name = relation `id`
- * (the dict key the relationalizer stored), which for binary object fields is
- * exactly the Pyret field name. */
+/** Decode v6 field identities into names and positions; legacy IDs are names. */
 function buildIndex(di: IDataInstance): RelIndex {
   const fields = new Map<string, Map<string, string[]>>();
   const targets = new Set<string>();
+  const positions = new Map<string, Map<string, number>>();
+  const atoms = new Map(di.getAtoms().map(a => [a.id, a]));
 
   for (const rel of di.getRelations()) {
+    const identity = readFieldId(rel.id);
     for (const tup of rel.tuples) {
       if (tup.atoms.length < 2) continue;
       const src = tup.atoms[0];
@@ -54,14 +57,27 @@ function buildIndex(di: IDataInstance): RelIndex {
         byField = new Map();
         fields.set(src, byField);
       }
-      const arr = byField.get(rel.id) ?? [];
+      const field = identity?.field ?? rel.id;
+      if (identity) {
+        if (rel.name !== field || atoms.get(src)?.type !== identity.name) {
+          throw new Error('Pyret field ID disagrees with its name or source constructor');
+        }
+        const order = positions.get(src) ?? new Map<string, number>();
+        if ((order.has(field) && order.get(field) !== identity.position)
+            || [...order].some(([f, p]) => f !== field && p === identity.position)) {
+          throw new Error('Conflicting Pyret constructor field positions');
+        }
+        order.set(field, identity.position);
+        positions.set(src, order);
+      }
+      const arr = byField.get(field) ?? [];
       // binary fields contribute one target; n-ary (e.g. nested array intermediates)
       // contribute their non-source atoms in order.
       for (let i = 1; i < tup.atoms.length; i++) arr.push(tup.atoms[i]);
-      byField.set(rel.id, arr);
+      byField.set(field, arr);
     }
   }
-  return { fields, targets };
+  return { fields, targets, positions };
 }
 
 /** Parse a primitive atom's label back into a JS primitive. */
@@ -91,7 +107,8 @@ function numericAwareCompare(a: string, b: string): number {
 /**
  * Determine constructor field order for a type.
  *
- * Field order is NOT part of the relational form — it lives in the static
+ * Legacy fallback only. New real-Pyret data carries position in relation IDs.
+ * For pre-v6 / synthetic values, order lives in the static
  * `globalConstructorCache` (populated at relationalization time from the live
  * object's dict key order). We consult it here. This only affects *positional*
  * rendering (replit); structural fidelity does not depend on it because each
@@ -122,7 +139,7 @@ function isListLike(fieldNames: string[]): boolean {
  */
 export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   const atomsById = new Map(di.getAtoms().map((a) => [a.id, a] as const));
-  const { fields, targets } = buildIndex(di);
+  const { fields, targets, positions } = buildIndex(di);
   const memo = new Map<string, ReifiedValue>();
 
   const reifyAtom = (id: string): ReifiedValue => {
@@ -139,9 +156,10 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
 
     const byField = fields.get(id) ?? new Map<string, string[]>();
     const present = Array.from(byField.keys());
+    const arity = readConstructorMetadata(atom.metadata);
 
     // Pure list-like object (numeric field names) -> JS array.
-    if (isListLike(present)) {
+    if (arity === undefined && isListLike(present)) {
       const arr: ReifiedValue[] = [];
       memo.set(id, arr);
       const ordered = present.slice().sort(numericAwareCompare);
@@ -157,12 +175,26 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
 
     // Object/data-variant: create the shell and memoize BEFORE recursing so
     // shared/cyclic references resolve to this exact JS object.
-    const obj: PyretObject = { dict: {}, $name: atom.type };
+    const obj: PyretObject = { dict: Object.create(null), $name: atom.type };
     memo.set(id, obj);
 
-    const order = fieldOrderFor(atom.type, present);
+    let order: string[];
+    if (arity !== undefined) {
+      const declared = positions.get(id) ?? new Map<string, number>();
+      const count = Math.max(0, arity);
+      if (present.length !== count || declared.size !== count
+          || [...declared.values()].some(p => p >= count)) {
+        throw new Error('Incomplete Pyret constructor fields');
+      }
+      order = [...declared].sort((a, b) => a[1] - b[1]).map(([f]) => f);
+      obj.$arity = arity;
+      obj.$constructor = { $fieldNames: order };
+    } else {
+      order = fieldOrderFor(atom.type, present);
+    }
     for (const f of order) {
       const tgts = byField.get(f) ?? [];
+      if (arity !== undefined && tgts.length !== 1) throw new Error('Pyret constructor field must have one value');
       if (tgts.length === 1) {
         // single target -> scalar field value (one binary tuple round-trips identically)
         obj.dict![f] = reifyAtom(tgts[0]) as unknown;

@@ -39,6 +39,7 @@ Each atom (node) has three required fields:
 | `id` | string | Unique identifier for the atom |
 | `type` | string | The atom's type (used by selectors like `Person`) |
 | `label` | string | Display label shown in the visualization |
+| `metadata` | object (optional) | JSON-serializable host reconstruction information; not displayed |
 
 ---
 
@@ -62,8 +63,19 @@ Each relation defines a set of edges between atoms:
 |-------|------|-------------|
 | `id` | string | Unique identifier for the relation |
 | `name` | string | Display name (used in selectors like `parent`) |
-| `types` | string[] | The general type of each column, in order. Positional — its length is the relation's arity |
+| `types` | string[] | Positional column-type summary; `[]` when tuples have different arities |
 | `tuples` | array | The actual edges |
+
+Since **6.0.0**, normalization preserves different relation IDs even when their
+names match. Repeated IDs merge; conflicting names for one ID throw. Missing
+IDs default to the name. `mergeRelations: false` disables repeated-ID merging
+and rejects duplicate IDs; it does not change query semantics.
+
+Selectors and SQL still resolve by **name**, taking the set union of matching
+records' tuples. The stored records stay separate for reification. Use exact
+IDs for `addRelationTuple`/`removeRelationTuple`; name aliases are not mutations.
+The default JSON graph draws each `(name, ordered tuple)` once, while the datum
+retains every ID. [Migration details](../docs/MIGRATING_TO_V6.md).
 
 Each **tuple** has:
 

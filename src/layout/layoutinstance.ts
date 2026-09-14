@@ -1,5 +1,6 @@
 import { Graph, Edge } from 'graphlib';
 import { IDataInstance } from '../data-instance/interfaces';
+import { uniqueTuples } from '../data-instance/relation-identity';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import type { SelectorErrorDetail, LayoutWarning } from './error-state';
@@ -3465,18 +3466,9 @@ export class LayoutInstance {
 
     private getFieldTuples(a: IDataInstance, fieldName: string): string[][] {
 
-        let relations = a.getRelations();
-        let field = Object.values(relations).find((rel) => rel.name === fieldName);
-
-
-        if (!field) {
-            return [];
-        }
-
-        let fieldTuples = field.tuples.map((tuple) => {
-            return tuple.atoms;
-        });
-        return fieldTuples;
+        return uniqueTuples(a.getRelations()
+            .filter(rel => rel.name === fieldName)
+            .flatMap(rel => rel.tuples)).map(tuple => tuple.atoms);
     }
 
     private getFieldTuplesForSourceAndTarget(a: IDataInstance, fieldName: string, src: string, tgt: string): string[][] {

@@ -10,9 +10,9 @@
  *     dropped,
  *   - relations keyed by `rel.id` (the field name), tuples sorted lexicographically.
  *
- * Field ORDER is intentionally not part of canon: each field is a distinctly
- * named relation, so the field->value binding is already unambiguous. Order only
- * matters for positional string rendering (replit), not structural fidelity.
+ * v6 constructor field IDs include position, and atom metadata includes arity.
+ * Canon preserves both. Legacy field IDs encode only names; canonicalizing
+ * them cannot recover positional information the producer did not retain.
  *
  * This is the substrate for the self-contained (Tier A) fidelity oracles
  * (see tests/pyret/oracles.ts).
@@ -96,6 +96,7 @@ export function canon(di: IDataInstance): string {
     .map((a) => ({
       id: num.get(a.id)!,
       type: a.type,
+      metadata: a.metadata,
       label: PRIMITIVE_TYPES.has(a.type) ? a.label : undefined,
     }))
     .sort((x, y) => x.id - y.id);

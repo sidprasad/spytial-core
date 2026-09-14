@@ -1,6 +1,7 @@
 import { IAtom, IRelation, IType, IInputDataInstance, ITuple, IDataInstance } from './interfaces';
 import { DataInstanceEventEmitter } from './data-instance-event-emitter';
 import { settleTupleTypes } from './tuple-types';
+import { assertSameRelationName, relationSignature, uniqueTuples } from './relation-identity';
 import { Graph } from 'graphlib';
 /**
  * JSON representation of a data instance for easy serialization/deserialization.
@@ -47,8 +48,8 @@ export interface IJsonDataInstance {
  */
 export interface IJsonImportOptions {
   /** 
-   * Whether to merge relations with the same name by combining their tuples.
-   * Useful when data comes from multiple sources that define the same relation.
+   * Whether to merge records with the same ID by taking their tuple set union.
+   * Different IDs are always preserved, even when their names match (v6).
    * @default true 
    */
   mergeRelations?: boolean;
@@ -272,9 +273,14 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
       });
     });
 
-    // Step 2: Add all relation tuples as edges
+    // The default drawing is the name-based set view, not a destructive
+    // rewrite of the stored identities. Keep the first edge ID for stability.
+    const drawn = new Set<string>();
     this.relations.forEach(relation => {
       relation.tuples.forEach((tuple, tupleIndex) => {
+        const key = JSON.stringify([relation.name, tuple.atoms]);
+        if (drawn.has(key)) return;
+        drawn.add(key);
         if (tuple.atoms.length >= 2) {
           // For binary relations, connect first to second atom
           // For higher-arity relations, connect first to last atom
@@ -378,7 +384,7 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
   /**
    * Add a new tuple to a relation. Creates the relation if it doesn't exist.
    * 
-   * @param relationId - The ID/name of the relation
+   * @param relationId - Exact relation ID (not a name alias)
    * @param tuple - The tuple to add
    * @throws {Error} If any referenced atoms don't exist
    */
@@ -393,7 +399,7 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
     // Find or create relation. `relation.types` is positional — one entry per
     // column — so the write settles against it rather than merging into it.
     // See settleTupleTypes.
-    let relation = this.relations.find(r => r.id === relationId || r.name === relationId);
+    let relation = this.relations.find(r => r.id === relationId);
     const settled = settleTupleTypes(
       tuple,
       relation,
@@ -459,12 +465,12 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
   /**
    * Remove a specific tuple from a relation.
    * 
-   * @param relationId - The ID/name of the relation
+   * @param relationId - Exact relation ID (not a name alias)
    * @param tuple - The tuple to remove (must match exactly)
    * @throws {Error} If the relation doesn't exist
    */
   removeRelationTuple(relationId: string, tuple: ITuple): void {
-    const relation = this.relations.find(r => r.id === relationId || r.name === relationId);
+    const relation = this.relations.find(r => r.id === relationId);
     if (!relation) {
       throw new Error(`Cannot remove tuple: relation '${relationId}' not found`);
     }
@@ -518,6 +524,10 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
       return false;
     }
 
+    // Validate identities BEFORE changing atoms: conflicts must not partially
+    // compose an instance. Names are query aliases, never merge keys.
+    DataInstanceNormalizer.mergeRelations([...this.relations, ...dataInstance.getRelations()]);
+
     const reIdMap = new Map<string, string>();
 
     // Add atoms
@@ -553,17 +563,11 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
         types: tuple.types,
       }));
 
-      const existingRelation = this.relations.find(r => r.id === relation.id || r.name === relation.name);
+      const existingRelation = this.relations.find(r => r.id === relation.id);
       if (existingRelation) {
         // Merge tuples into the existing relation
-        const existingTupleKeys = new Set(existingRelation.tuples.map(t => JSON.stringify(t)));
-        newTuples.forEach(tuple => {
-          const tupleKey = JSON.stringify(tuple);
-          if (!existingTupleKeys.has(tupleKey)) {
-            existingRelation.tuples.push(tuple);
-            existingTupleKeys.add(tupleKey);
-          }
-        });
+        existingRelation.tuples = uniqueTuples([...existingRelation.tuples, ...newTuples]);
+        existingRelation.types = relationSignature(existingRelation.tuples, existingRelation.types);
       } else {
         // Add a new relation
         this.relations.push({
@@ -672,8 +676,8 @@ export class JSONDataInstance extends DataInstanceEventEmitter implements IInput
  */
 export class DataInstanceNormalizer {
   /**
-   * Merge relations with the same name by combining their tuples.
-   * This is useful when data comes from multiple sources that define the same logical relation.
+   * Merge records with the same ID, preserving distinct IDs and their names.
+   * A repeated ID with conflicting names is an error, not a lossy merge.
    * 
    * @param relations - Array of relations to merge
    * @returns Array of merged relations with unique tuples
@@ -685,41 +689,25 @@ export class DataInstanceNormalizer {
    *   { id: "rel2", name: "knows", types: ["Person"], tuples: [tuple2] }
    * ];
    * const merged = DataInstanceNormalizer.mergeRelations(input);
-   * // Result: [{ id: "rel1", name: "knows", types: ["Person"], tuples: [tuple1, tuple2] }]
+   * // Result: two records, rel1 and rel2, both queryable by the name "knows".
    * ```
    */
   static mergeRelations(relations: IRelation[]): IRelation[] {
     const relationMap = new Map<string, IRelation>();
     
     for (const relation of relations) {
-      const existing = relationMap.get(relation.name);
+      const existing = relationMap.get(relation.id);
       if (existing) {
-        // Merge tuples, avoiding duplicates using JSON comparison
-        const existingTupleKeys = new Set(existing.tuples.map(t => JSON.stringify(t)));
-        
-        for (const tuple of relation.tuples) {
-          const tupleKey = JSON.stringify(tuple);
-          if (!existingTupleKeys.has(tupleKey)) {
-            existing.tuples.push(tuple);
-            existingTupleKeys.add(tupleKey);
-          }
-        }
-        
-        // Merge types, preserving order and removing duplicates
-        const existingTypeSet = new Set(existing.types);
-        for (const type of relation.types) {
-          if (!existingTypeSet.has(type)) {
-            existing.types.push(type);
-            existingTypeSet.add(type);
-          }
-        }
+        assertSameRelationName(existing, relation);
+        const allTuples = [...existing.tuples, ...relation.tuples];
+        existing.types = relationSignature(allTuples, existing.types);
+        existing.tuples = uniqueTuples(allTuples);
       } else {
         // Create new relation entry with defensive copies
-        relationMap.set(relation.name, {
-          id: relation.id || relation.name,
-          name: relation.name,
+        relationMap.set(relation.id, {
+          ...relation,
           types: [...relation.types],
-          tuples: [...relation.tuples]
+          tuples: uniqueTuples(relation.tuples)
         });
       }
     }
@@ -1028,7 +1016,7 @@ export class DataInstanceNormalizer {
     // Step 1.5: Normalize relation shape (lift bare-array tuples, fill tuple
     // types, default ids) so mergeRelations won't choke on lenient external
     // JSON. The relation-level signature is deliberately deferred to step 2.5,
-    // after merge, so a name split across records yields one arity-correct
+    // after merge, so an ID split across records yields one arity-correct
     // signature instead of a unioned, over-long one.
     if (relations.length > 0) {
       // Purely structural completion of lenient input — deliberately does NOT
@@ -1037,18 +1025,24 @@ export class DataInstanceNormalizer {
       relations = this.normalizeRelationShape(atoms, relations).relations;
     }
 
-    // Step 2: Merge relations with same name
+    // Step 2: Merge records of the same ID, never distinct same-named records.
     if (opts.mergeRelations && relations.length > 0) {
       const originalCount = relations.length;
       relations = this.mergeRelations(relations);
       if (relations.length < originalCount) {
         errors.push(`Merged ${originalCount - relations.length} duplicate relations`);
       }
+    } else {
+      const ids = new Set<string>();
+      for (const relation of relations) {
+        if (ids.has(relation.id)) throw new Error(`Duplicate relation ID ${JSON.stringify(relation.id)} with mergeRelations disabled`);
+        ids.add(relation.id);
+      }
     }
 
     // Step 2.5: Derive relation type signatures from the merged tuple set (for
     // relations left without one in step 1.5). After merge so the arity is
-    // correct even when one relation name is split across several records.
+    // correct even when one relation ID is split across several records.
     if (relations.length > 0) {
       relations = this.inferRelationSignatures(relations);
     }

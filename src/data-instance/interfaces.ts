@@ -21,6 +21,8 @@ export interface IAtom  {
   id: string; // ID might have to be DIFFERENT FROM the NAME (these are the same in Alloy, but different elsewhere.)
   type: string;
   label: string; // Label for the atom, used for display purposes
+  /** JSON-serializable host reconstruction metadata; not a display label. */
+  metadata?: Record<string, unknown>;
   
   /**
    * Optional key-value labels associated with this atom.
@@ -66,12 +68,14 @@ export interface IType {
  * sigs may each declare a field `foo`, and their ids differ (`A<:foo`,
  * `B<:foo`) while the name does not.
  *
- * The name is what selectors see; `id` is provenance only. Rendering, the
+ * Records with distinct IDs stay distinct in storage. The name is what
+ * selectors see: a name denotes the set union of all matching records.
+ * IDs are preserved for host reconstruction and exact-ID mutation. Rendering, the
  * evaluators and the constraint layer all work tuple by tuple, so a ragged
  * relation draws and queries correctly.
  */
 export interface IRelation {
-  // the relation's unique identifier — provenance, not the queryable name
+  // unique identity within the datum; preserved independently of the query name
   id: string;
   // the relation's name — what selectors resolve against
   name: string;
@@ -129,6 +133,7 @@ export function isDataInstance(value: unknown): value is IDataInstance {
 export interface IInputDataInstance  extends IDataInstance {
   // Add atoms, relations, and types
   addAtom(atom: IAtom): void;
+  // Mutations address exact IDs, never the first record matching a name.
   addRelationTuple(relationId : string, t : ITuple): void;
 
   removeAtom(id: string): void;

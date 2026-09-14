@@ -8,6 +8,7 @@ import IEvaluator, {
 } from '../../evaluator-contracts';
 import { IDataInstance, IAtom, IRelation, ITuple, isDataInstance } from '../../data-instance/interfaces';
 import { BaseEvaluatorResult } from './base-evaluator-result';
+import { uniqueTuples } from '../../data-instance/relation-identity';
 
 function isSQLErrorResult(result: EvaluatorResult): boolean {
   return typeof result === 'object' &&
@@ -328,7 +329,7 @@ export class SQLEvaluator implements IEvaluator {
    * Relations whose tuples agree on a width keep the shape they always had.
    */
   private createRelationTable(name: string, tableName: string, group: IRelation[]): void {
-    const tuples = group.flatMap(relation => relation.tuples);
+    const tuples = uniqueTuples(group.flatMap(relation => relation.tuples));
     const arities = new Set(tuples.map(tuple => tuple.atoms.length));
     const ragged = arities.size > 1;
 
