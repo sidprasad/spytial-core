@@ -1,5 +1,5 @@
 import { Node, Link, Rectangle } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, GroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import type { TextStyle } from '../../layout/style/text-style';
 import type { IconPlacement } from '../../layout/style/atom-style-spec';
@@ -513,14 +513,14 @@ export class WebColaLayout {
     this.conflictingConstraints = instanceLayout.conflictingConstraints || [];
     this.overlappingNodesData = instanceLayout.overlappingNodes || [];
     this.reintroducedNodesData = instanceLayout.reintroducedNodes || [];
-    this.colaConstraints = instanceLayout.constraints.map(constraint => this.toColaConstraint(constraint));
+    this.colaConstraints = instanceLayout.constraints.flatMap(constraint => this.toColaConstraint(constraint));
 
     // Decide which constraint endpoints stay locked (fixed=1) and which
     // get unfixed. In stability mode (lockUnconstrainedNodes=true) we
     // only unfix endpoints whose prior positions would violate the
     // constraint. Outside stability mode this preserves the historical
     // behavior of unfixing every constrained node.
-    this.applyConstraintAwareLocking(instanceLayout.constraints);
+    this.applyConstraintAwareLocking(this.colaConstraints);
 
     // Apply transitive reduction optimization if we have many constraints
     // Threshold: optimize when we have more than 100 constraints
@@ -560,7 +560,7 @@ export class WebColaLayout {
     const otherConstraints: ColaConstraint[] = [];
 
     for (const constraint of constraints) {
-      if (constraint.type === 'separation') {
+      if (constraint.type === 'separation' && !constraint.groupBoundary) {
         const sepConstraint = constraint as ColaSeparationConstraint;
         if (sepConstraint.axis === 'x' && !sepConstraint.equality) {
           xSeparationConstraints.push(sepConstraint);
@@ -954,7 +954,7 @@ export class WebColaLayout {
     return Array.from(edgeMap.values());
   }
 
-  private toColaConstraint(constraint: LayoutConstraint): ColaConstraint {
+  private toColaConstraint(constraint: LayoutConstraint): ColaConstraint | ColaConstraint[] {
 
     // Pure translation: do NOT mutate node.fixed here. The post-pass in
     // applyConstraintAwareLocking() decides whether to unfix endpoints
@@ -991,14 +991,54 @@ export class WebColaLayout {
       // We should return a null constraint or something here
       return { type: "noop" };
     }
-    if(isGroupBoundaryConstraint(constraint)) {
-      // Log and ignore for now
-      console.log("GroupBoundaryConstraint detected.");
-      // We should return a null constraint or something here
-      return { type: "noop" };
+    if (isGroupBoundaryConstraint(constraint)) {
+      return this.toColaGroupBoundary(constraint);
     }
 
     throw new Error("Constraint type not recognized");
+  }
+
+  /** Padding from each leaf's collision rectangle to this group's outer hull. */
+  private groupMemberPadding(group: LayoutGroup): Map<number, number> {
+    const name = this.collapsedGroupAliases.get(group.name) ?? group.name;
+    const index = this.groupDefinitions.findIndex((g: { name: string }) => g.name === name);
+    if (index < 0) throw new Error(`Missing rendered group: ${group.name}`);
+    const collect = (groupIndex: number): Map<number, number> => {
+      const definition = this.groupDefinitions[groupIndex];
+      const padding = definition.padding;
+      const members = new Map<number, number>();
+      for (const leaf of definition.leaves) members.set(leaf, padding);
+      for (const child of definition.groups) {
+        for (const [leaf, innerPadding] of collect(child)) {
+          members.set(leaf, Math.max(members.get(leaf) ?? 0, padding + innerPadding));
+        }
+      }
+      return members;
+    };
+    return collect(index);
+  }
+
+  private toColaGroupBoundary(constraint: GroupBoundaryConstraint): ColaSeparationConstraint[] {
+    const aMembers = this.groupMemberPadding(constraint.groupA);
+    const bMembers = this.groupMemberPadding(constraint.groupB);
+    const axis = constraint.side === 'left' || constraint.side === 'right' ? 'x' : 'y';
+    const dimension = axis === 'x' ? 'width' : 'height';
+    const reverse = constraint.side === 'right' || constraint.side === 'bottom';
+    const result: ColaSeparationConstraint[] = [];
+    for (const [a, aPadding] of aMembers) {
+      for (const [b, bPadding] of bMembers) {
+        const gap = (this.colaNodes[a][dimension] ?? 0) / 2
+          + (this.colaNodes[b][dimension] ?? 0) / 2
+          + aPadding + bPadding + constraint.minDistance;
+        result.push({
+          type: 'separation', axis, left: reverse ? b : a, right: reverse ? a : b, gap,
+          // The existing transitive reduction checks reachability, not summed
+          // distances. It must not discard the extra clearance for group hulls.
+          groupBoundary: true,
+        });
+      }
+    }
+    return result;
   }
 
   /**
@@ -1009,11 +1049,10 @@ export class WebColaLayout {
   private static readonly CONSTRAINT_SATISFACTION_TOLERANCE = 0.5;
 
   /**
-   * Per-constraint lock decision, computed once in a single switch:
+   * Lock decisions use the translated gaps, including group boundary clearance:
    *
    *   - `endpoints`: the node objects involved in this constraint, or
-   *     `null` for constraint types we don't translate (bounding-box,
-   *     group-boundary, noop). Callers skip null.
+   *     `null` for constraints with no translated endpoints. Callers skip null.
    *   - `verdict`:
    *       'satisfied' — both endpoints have prior positions and they
    *                     satisfy the constraint (within tolerance). Both
@@ -1025,69 +1064,31 @@ export class WebColaLayout {
    *                     (newly added). Lock the seeded one, free the new
    *                     one.
    *
-   * Folds the previous `endpointsOf` + `evaluateConstraintAtPriorPositions`
-   * helpers into a single switch so each constraint pays one dispatch and
-   * one pair of node lookups (O(1) each via nodeIndexMap).
+   * Each constraint uses one pair of node lookups by translated index.
    */
   private classifyConstraintForLocking(
-    constraint: LayoutConstraint
+    constraint: ColaConstraint
   ): {
     endpoints: [NodeWithMetadata, NodeWithMetadata];
     verdict: 'satisfied' | 'violated' | 'unknown';
   } | null {
+    if (constraint.type !== 'separation') return null;
+    const separation = constraint as ColaSeparationConstraint;
+    const n1 = this.colaNodes[separation.left];
+    const n2 = this.colaNodes[separation.right];
+    if (!this.priorPositionMap.has(n1.id) || !this.priorPositionMap.has(n2.id)) {
+      return { endpoints: [n1, n2], verdict: 'unknown' };
+    }
+    const actual = (n2[separation.axis] ?? 0) - (n1[separation.axis] ?? 0);
     const tol = WebColaLayout.CONSTRAINT_SATISFACTION_TOLERANCE;
-    const priors = this.priorPositionMap;
-
-    let n1: NodeWithMetadata;
-    let n2: NodeWithMetadata;
-    let bothSeeded: boolean;
-
-    if (isLeftConstraint(constraint)) {
-      n1 = this.colaNodes[this.getNodeIndex(constraint.left.id)];
-      n2 = this.colaNodes[this.getNodeIndex(constraint.right.id)];
-      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
-      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
-      const required = this.computeHorizontalSeparation(n1, n2, constraint.minDistance);
-      const actual = (n2.x ?? 0) - (n1.x ?? 0);
-      return {
-        endpoints: [n1, n2],
-        verdict: actual + tol >= required ? 'satisfied' : 'violated',
-      };
-    }
-
-    if (isTopConstraint(constraint)) {
-      n1 = this.colaNodes[this.getNodeIndex(constraint.top.id)];
-      n2 = this.colaNodes[this.getNodeIndex(constraint.bottom.id)];
-      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
-      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
-      const required = this.computeVerticalSeparation(n1, n2, constraint.minDistance);
-      const actual = (n2.y ?? 0) - (n1.y ?? 0);
-      return {
-        endpoints: [n1, n2],
-        verdict: actual + tol >= required ? 'satisfied' : 'violated',
-      };
-    }
-
-    if (isAlignmentConstraint(constraint)) {
-      n1 = this.colaNodes[this.getNodeIndex(constraint.node1.id)];
-      n2 = this.colaNodes[this.getNodeIndex(constraint.node2.id)];
-      bothSeeded = priors.has(n1.id) && priors.has(n2.id);
-      if (!bothSeeded) return { endpoints: [n1, n2], verdict: 'unknown' };
-      const a = constraint.axis === 'x' ? (n1.x ?? 0) : (n1.y ?? 0);
-      const b = constraint.axis === 'x' ? (n2.x ?? 0) : (n2.y ?? 0);
-      return {
-        endpoints: [n1, n2],
-        verdict: Math.abs(a - b) <= tol ? 'satisfied' : 'violated',
-      };
-    }
-
-    // BoundingBox / GroupBoundary / unrecognized: not translated to
-    // WebCola, so they have no endpoints to lock.
-    return null;
+    const satisfied = separation.equality
+      ? Math.abs(actual - separation.gap) <= tol
+      : actual + tol >= separation.gap;
+    return { endpoints: [n1, n2], verdict: satisfied ? 'satisfied' : 'violated' };
   }
 
   /**
-   * Post-pass over all LayoutConstraints that decides which endpoints
+   * Post-pass over translated constraints (including group separations) that decides which endpoints
    * stay locked (fixed=1 from toColaNode) and which get unfixed.
    *
    * - lockUnconstrainedNodes=true (stability mode): per-constraint
@@ -1100,7 +1101,7 @@ export class WebColaLayout {
    * Cost: O(c) — one classification per constraint, each doing two
    * O(1) node-index lookups via nodeIndexMap.
    */
-  private applyConstraintAwareLocking(constraints: LayoutConstraint[]): void {
+  private applyConstraintAwareLocking(constraints: ColaConstraint[]): void {
     const stability = this.lockUnconstrainedNodes;
 
     // Legacy mode + no nodes were locked → no-op.
@@ -1229,6 +1230,8 @@ export class WebColaLayout {
         group['keyNode'] = keyIndex;
         group['id'] = grp.name;
         group['showLabel'] = grp.showLabel;
+        // Match the renderer's label clearance before translating boundaries.
+        if (grp.showLabel) group.padding = Math.max(group.padding, 20);
         // Group's own label styling (only color consumed today; size auto-fits).
         group['labelTextStyle'] = grp.labelTextStyle;
       });
