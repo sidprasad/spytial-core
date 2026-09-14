@@ -45,6 +45,8 @@ const d3: any = (typeof window !== 'undefined' && (window as any).d3v4) || d3Ven
  *   * event.detail: { error: ConstraintError, layout: InstanceLayout }
  * - 'constraints-satisfied': When previously unsatisfied constraints become satisfied
  *   * event.detail: { layout: InstanceLayout }
+ * - 'relation-edit-error': When a name is ambiguous or a relation edit fails
+ *   * event.detail: { error: Error }
  * - 'layout-generation-error': When an unexpected error occurs during layout generation
  *   * event.detail: { error: Error }
  */
@@ -496,7 +498,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     });
 
     createBtn.addEventListener('click', async () => {
-      await this.addRelationFromForm(nameIn.value.trim());
+      if (!await this.addRelationFromForm(nameIn.value.trim())) return;
       nameIn.value = '';
       this.relationAtomPositions = ['', ''];
       aritySpan.textContent = '2';
@@ -528,21 +530,21 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
     const atoms = this.dataInstance.getAtoms();
     const relations = this.dataInstance.getRelations();
-    const atomOpts = atoms.map(a => `<option value="${a.id}">${a.label} (${a.type})</option>`).join('');
-    const relOpts = relations.flatMap(r =>
-      r.tuples.map((t, i) => `<option value="${r.id}::${i}">${r.name}(${t.atoms.join(', ')})</option>`)
-    ).join('');
+    const tupleOptions = relations.flatMap(r =>
+      r.tuples.map((tuple, tupleIndex) => ({ relationId: r.id, tupleIndex,
+        label: `${r.name}(${tuple.atoms.join(', ')}) [${r.id}]` }))
+    );
 
     const popover = document.createElement('div');
     popover.className = 'si-popover';
     popover.innerHTML = `
       <div class="si-field">
         <label>Delete Atom</label>
-        <select class="si-del-atom"><option value="">Select atom...</option>${atomOpts}</select>
+        <select class="si-del-atom"><option value="">Select atom...</option></select>
       </div>
       <div class="si-field">
         <label>Delete Relation</label>
-        <select class="si-del-rel"><option value="">Select relation...</option>${relOpts}</select>
+        <select class="si-del-rel"><option value="">Select relation...</option></select>
       </div>
       <div class="si-actions">
         <button class="si-btn-danger" disabled>Delete</button>
@@ -554,6 +556,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const atomSel = popover.querySelector('.si-del-atom') as HTMLSelectElement;
     const relSel = popover.querySelector('.si-del-rel') as HTMLSelectElement;
     const delBtn = popover.querySelector('.si-btn-danger') as HTMLButtonElement;
+    // DOM values/text preserve arbitrary IDs, including quotes and :: delimiters.
+    atoms.forEach(a => atomSel.add(new Option(`${a.label} (${a.type})`, a.id)));
+    tupleOptions.forEach((entry, index) => relSel.add(new Option(entry.label, String(index))));
 
     const updateState = () => { delBtn.disabled = !atomSel.value && !relSel.value; };
     atomSel.addEventListener('change', () => { if (atomSel.value) relSel.value = ''; updateState(); });
@@ -563,8 +568,8 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       if (atomSel.value) {
         await this.deleteAtom(atomSel.value);
       } else if (relSel.value) {
-        const [relationId, tupleIndexStr] = relSel.value.split('::');
-        await this.deleteRelationTuple(relationId, parseInt(tupleIndexStr, 10));
+        const entry = tupleOptions[Number(relSel.value)];
+        await this.deleteRelationTuple(entry.relationId, entry.tupleIndex);
       }
       this.dismissOverlays();
     });
@@ -735,6 +740,28 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     this.shadowRoot?.querySelectorAll('.si-popover, .node-context-menu').forEach(el => el.remove());
   }
 
+  /** Resolve a UI name before any ID-exact mutation. Never select an arbitrary record. */
+  private resolveRelationName(name: string, allowNew: boolean): string {
+    const relations = this.dataInstance.getRelations();
+    const matches = relations.filter(r => r.name === name);
+    if (matches.length > 1) {
+      throw new Error(`Ambiguous relation name ${JSON.stringify(name)}; choose a relation ID: ${matches.map(r => r.id).join(', ')}`);
+    }
+    if (matches.length === 1) return matches[0].id;
+    if (!allowNew) throw new Error(`Unknown relation name ${JSON.stringify(name)}`);
+    if (relations.some(r => r.id === name)) {
+      throw new Error(`Cannot create relation ${JSON.stringify(name)}: that ID belongs to another name`);
+    }
+    return name;
+  }
+
+  private rejectRelationEdit(error: unknown, event?: CustomEvent): void {
+    event?.preventDefault();
+    this.dispatchEvent(new CustomEvent('relation-edit-error', {
+      detail: { error }, bubbles: true
+    }));
+  }
+
   /**
    * Handle edge creation requests from input mode
    *
@@ -744,12 +771,15 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * needs adjusting here.
    */
   private async handleEdgeCreationRequest(event: CustomEvent): Promise<void> {
-    const { relationId, tuple } = event.detail;
+    const { tuple } = event.detail;
 
     try {
+      const relationId = event.detail.relationName !== undefined
+        ? this.resolveRelationName(event.detail.relationName, true) : event.detail.relationId;
       this.dataInstance.addRelationTuple(relationId, tuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
+      this.rejectRelationEdit(error, event);
       console.error('Failed to handle edge creation request:', error);
     }
   }
@@ -759,12 +789,19 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge label is edited
    */
   private async handleEdgeModificationRequest(event: CustomEvent): Promise<void> {
-    const { oldRelationId, newRelationId, tuple, tuples } = event.detail;
+    const { tuple, tuples } = event.detail;
 
     // Support both single `tuple` and array `tuples` (group edges send multiple).
     const allTuples: ITuple[] = tuples ?? (tuple ? [tuple] : []);
 
     try {
+      const oldName = event.detail.oldRelationName;
+      const newName = event.detail.newRelationName;
+      // Resolve BOTH ends before deleting anything, including an ambiguous destination.
+      const oldRelationId = oldName !== undefined
+        ? (oldName ? this.resolveRelationName(oldName, false) : '') : event.detail.oldRelationId;
+      const newRelationId = newName !== undefined
+        ? (newName ? this.resolveRelationName(newName, true) : '') : event.detail.newRelationId;
       // If the new relation name is empty, delete the edge
       if (!newRelationId || newRelationId.trim() === '') {
         if (oldRelationId && oldRelationId.trim()) {
@@ -803,6 +840,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       }
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
+      this.rejectRelationEdit(error, event);
       console.error('Failed to handle edge modification request:', error);
     }
   }
@@ -812,9 +850,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge endpoint is dragged to a new node
    */
   private async handleEdgeReconnectionRequest(event: CustomEvent): Promise<void> {
-    const { relationId, oldTuple, newTuple } = event.detail;
+    const { oldTuple, newTuple } = event.detail;
 
     try {
+      const relationId = event.detail.relationName !== undefined
+        ? this.resolveRelationName(event.detail.relationName, false) : event.detail.relationId;
       if (relationId && relationId.trim()) {
         try {
           this.dataInstance.removeRelationTuple(relationId, oldTuple);
@@ -823,6 +863,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
             `Failed to remove old tuple from "${relationId}": [${oldTuple.atoms.join(', ')}]`,
             removeErr
           );
+          this.rejectRelationEdit(removeErr, event);
           // Bail out — don't add the new tuple if we couldn't remove the old one,
           // as that would create a duplicate edge.
           return;
@@ -831,6 +872,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.dataInstance.addRelationTuple(relationId, newTuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
+      this.rejectRelationEdit(error, event);
       console.error('Failed to handle edge reconnection request:', error);
     }
   }
@@ -1027,18 +1069,18 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   /**
    * Add a relation from the form inputs
    */
-  private async addRelationFromForm(relationName?: string): Promise<void> {
+  private async addRelationFromForm(relationName?: string): Promise<boolean> {
     try {
       const relationType = relationName?.trim() ||
         (this.shadowRoot?.querySelector('.si-rel-name') as HTMLInputElement)?.value?.trim() || '';
 
-      if (!relationType) return;
+      if (!relationType) return false;
 
       const selectedAtomIds = this.relationAtomPositions.filter(id => id.trim() !== '');
 
       if (selectedAtomIds.length < 2) {
         console.warn('Need at least 2 atoms for a relation');
-        return;
+        return false;
       }
 
       const atoms = this.dataInstance.getAtoms();
@@ -1052,14 +1094,17 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         types: atomTypes
       };
 
-      this.dataInstance.addRelationTuple(relationType, tuple);
+      this.dataInstance.addRelationTuple(this.resolveRelationName(relationType, true), tuple);
       await this.enforceConstraintsAndRegenerate();
 
       this.dispatchEvent(new CustomEvent('relation-added', {
         detail: { relationType, tuple }
       }));
+      return true;
     } catch (error) {
+      this.rejectRelationEdit(error);
       console.error('Failed to add relation:', error);
+      return false;
     }
   }
 

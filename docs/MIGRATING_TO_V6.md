@@ -35,6 +35,28 @@ qualified IDs gain preservation automatically. Audit code that assumes one
 `getRelations()` record per name, caches a single such record, counts raw
 records as query relations, or uses relation names as mutation IDs.
 
+## Interactive editor events
+
+Graph edit requests now label name-valued fields explicitly: creation and
+reconnection use `relationName`; modification/deletion use `oldRelationName`
+and `newRelationName` (empty for deletion). External listeners must resolve
+these names to unique stored IDs before mutation. Requests are cancelable:
+call `preventDefault()` synchronously to keep a rejected edit out of the view.
+
+`StructuredInputGraph` performs this resolution for drag edits and its add
+relation form. Multiple records with the same name reject the edit before
+mutation, including when the destination of a relabel is ambiguous. A new name
+creates a relation only if it does not collide with another record's ID.
+Rejected requests emit `relation-edit-error` with `{ error }`. Programmatically
+dispatched requests using `relationId` / `oldRelationId` / `newRelationId` remain
+supported and address exact IDs. The delete dropdown lists stored identities
+and can delete a chosen tuple even when several records share a name; its DOM
+option values safely handle arbitrary IDs, including Pyret's JSON suffixes.
+
+The standalone public `DataInstanceNormalizer.mergeRelations` helper also
+defaults missing IDs to names; it does not require the constructor's preceding
+normalization step for this default.
+
 ## Pyret constructor values
 
 The working `PyretDataInstance` now accepts primitive roots directly, including
@@ -76,8 +98,10 @@ automatically upgrade downstream applications' pinned dependencies.
 
 ## Verification of this change
 
-- Core: 167 test files, **2,469 tests passing**, including 300 generated
-  relation-identity cases and 500 generated constructor-order cases.
+- Core: 168 test files, **2,484 tests passing**, including 300 generated
+  relation-identity cases and 500 generated constructor-order cases, plus
+  editor event-path regressions for JSON, Alloy, Pyret, ambiguous names, and
+  quoted IDs in the delete dropdown.
 - `npm run typecheck` and `npm run build:all` pass.
 - Real Spyret integration, native Node 22.22.2 / Chrome 152: **154/154** exact
   `torepr` matches with seed 1 (10 samples per family/schema, 5 schemas), and

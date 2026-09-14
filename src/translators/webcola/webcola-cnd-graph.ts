@@ -126,13 +126,18 @@ const DEFAULT_SCALE_FACTOR = 5;
  * - 'input-mode-activated': When Cmd/Ctrl is pressed to activate input mode
  * - 'input-mode-deactivated': When Cmd/Ctrl is released to deactivate input mode  
  * - 'edge-creation-requested': When user drags between nodes to create a new edge
- *   * event.detail: { relationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ *   * event.detail: { relationName: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ * - 'edge-reconnection-requested': When user moves an edge endpoint
+ *   * event.detail: { relationName: string, oldTuple: ITuple, newTuple: ITuple }
  * - 'edge-modification-requested': When user clicks on existing edge to modify it
- *   * event.detail: { oldRelationId: string, newRelationId: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
+ *   * event.detail: { oldRelationName: string, newRelationName: string, sourceNodeId: string, targetNodeId: string, tuple: ITuple }
  * 
+ * Requests are cancelable; call preventDefault synchronously to reject an edit.
+ * Names describe the query projection, not stored relation IDs.
+ *
  * External State Management:
  * React components should subscribe to these events and handle:
- * 1. Updating the IInputDataInstance with new atoms/relations
+ * 1. Resolving event names to unique relation IDs before updating IInputDataInstance
  * 2. Regenerating CnD layout constraints from the updated data
  * 3. Calling renderLayout() to apply changes and re-render the visualization
  * 
@@ -2003,11 +2008,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
       isUserCreated: true
     };
 
-    // Add edge to current layout
+    // Insert before dispatch: an accepting listener may regenerate the layout.
+    // A rejecting listener cancels the provisional visual edit as well.
     this.currentLayout.links.push(newEdge);
-
-    // Update external state with the new edge
-    await this.updateExternalStateForNewEdge(sourceNode, targetNode, label);
+    if (!await this.updateExternalStateForNewEdge(sourceNode, targetNode, label)) {
+      this.removeEdgeFromLayout(newEdge);
+      return;
+    }
 
     // Dispatch event for external listeners
     this.dispatchEvent(new CustomEvent('edge-created', {
@@ -2028,9 +2035,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * @param targetNode - Target node of the edge 
    * @param relationName - Name/label of the relation
    */
-  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<void> {
+  private async updateExternalStateForNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, relationName: string): Promise<boolean> {
     if (!relationName.trim()) {
-      return;
+      return true;
     }
 
     try {
@@ -2050,16 +2057,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Dispatch edge creation event for React components to handle
       const edgeCreationEvent = new CustomEvent('edge-creation-requested', {
         detail: {
-          relationId: relationName,
+          relationName: relationName,
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           tuple: tuple
         },
-        bubbles: true
+        bubbles: true,
+        cancelable: true
       });
-      this.dispatchEvent(edgeCreationEvent);
+      return this.dispatchEvent(edgeCreationEvent);
     } catch (error) {
       console.error('Failed to update external state for new edge:', error);
+      return false;
     }
   }
 
@@ -2126,7 +2135,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const targetNode = this.getNodeFromEdge(edgeData, 'target');
 
       // Update external state using relation name (not display label)
-      await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentRelName, newLabel);
+      if (!await this.updateExternalStateForEdgeModification(sourceNode, targetNode, currentRelName, newLabel)) return;
 
       // Update edge data
       edgeData.label = newLabel;
@@ -2175,9 +2184,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     targetNode: NodeWithMetadata | null, 
     oldRelationName: string, 
     newRelationName: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     if (!sourceNode || !targetNode) {
-      return;
+      return false;
     }
 
     try {
@@ -2197,17 +2206,19 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Dispatch edge modification event for React components to handle
       const edgeModificationEvent = new CustomEvent('edge-modification-requested', {
         detail: {
-          oldRelationId: oldRelationName,
-          newRelationId: newRelationName,
+          oldRelationName: oldRelationName,
+          newRelationName: newRelationName,
           sourceNodeId: sourceNode.id,
           targetNodeId: targetNode.id,
           tuple: tuple
         },
-        bubbles: true
+        bubbles: true,
+        cancelable: true
       });
-      this.dispatchEvent(edgeModificationEvent);
+      return this.dispatchEvent(edgeModificationEvent);
     } catch (error) {
       console.error('Failed to update external state for edge modification:', error);
+      return false;
     }
   }
 
@@ -3781,7 +3792,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       return;
     }
 
-    // Use relName (the data-instance relation key) rather than label (the display
+    // Use relName (the query name, resolved by the editing host) rather than label (the display
     // string, which may include n-ary suffixes like "[Person1]").
     const relationName = edgeData.relName || edgeData.label || '';
 
@@ -3816,7 +3827,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Dispatch edge reconnection event
     const edgeReconnectionEvent = new CustomEvent('edge-reconnection-requested', {
       detail: {
-        relationId: relationName,
+        relationName: relationName,
         oldTuple: oldTuple,
         newTuple: newTuple,
         oldSourceNodeId: oldSourceNode.id,
@@ -3824,9 +3835,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
         newSourceNodeId: newSourceNode.id,
         newTargetNodeId: newTargetNode.id
       },
-      bubbles: true
+      bubbles: true,
+      cancelable: true
     });
-    this.dispatchEvent(edgeReconnectionEvent);
+    if (!this.dispatchEvent(edgeReconnectionEvent)) return;
 
     // Update the edge data in the current layout
     const sourceIndex = this.currentLayout.nodes.findIndex(n => n.id === newSourceNode.id);
@@ -3853,7 +3865,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       return;
     }
 
-    // Use relName (the data-instance relation key) rather than label (display string).
+    // Use relName (the query name, resolved by the editing host) rather than label (display string).
     const relationName = edgeData.relName || edgeData.label || '';
 
     if (!relationName.trim()) {
@@ -3910,15 +3922,16 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Dispatch edge deletion event (using modification with empty new name)
     const edgeDeletionEvent = new CustomEvent('edge-modification-requested', {
       detail: {
-        oldRelationId: relationName,
-        newRelationId: '', // Empty string signals deletion
+        oldRelationName: relationName,
+        newRelationName: '', // Empty string signals deletion
         sourceNodeId: sourceNode.id,
         targetNodeId: targetNode.id,
         tuples: tuples
       },
-      bubbles: true
+      bubbles: true,
+      cancelable: true
     });
-    this.dispatchEvent(edgeDeletionEvent);
+    if (!this.dispatchEvent(edgeDeletionEvent)) return;
 
     // Remove from current layout
     this.removeEdgeFromLayout(edgeData);

@@ -678,6 +678,7 @@ export class DataInstanceNormalizer {
   /**
    * Merge records with the same ID, preserving distinct IDs and their names.
    * A repeated ID with conflicting names is an error, not a lossy merge.
+   * Missing IDs default to names, including when calling this method directly.
    * 
    * @param relations - Array of relations to merge
    * @returns Array of merged relations with unique tuples
@@ -692,10 +693,11 @@ export class DataInstanceNormalizer {
    * // Result: two records, rel1 and rel2, both queryable by the name "knows".
    * ```
    */
-  static mergeRelations(relations: IRelation[]): IRelation[] {
+  static mergeRelations(relations: (Omit<IRelation, 'id'> & { id?: string })[]): IRelation[] {
     const relationMap = new Map<string, IRelation>();
     
-    for (const relation of relations) {
+    for (const input of relations) {
+      const relation = { ...input, id: input.id ?? input.name };
       const existing = relationMap.get(relation.id);
       if (existing) {
         assertSameRelationName(existing, relation);

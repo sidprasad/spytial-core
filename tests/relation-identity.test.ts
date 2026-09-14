@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import { DataInstanceNormalizer, JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { relationsByName } from '../src/data-instance/relation-identity';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import { SQLEvaluator } from '../src/evaluators/data/sql-evaluator';
@@ -18,6 +18,19 @@ const make = () => new JSONDataInstance({ atoms, relations: [
 ] });
 
 describe('v6 relation identity: storage by ID, observation by name', () => {
+  it('public mergeRelations defaults absent IDs without mutating input or merging distinct IDs', () => {
+    const { id: _id, ...foo } = rel('unused', 'foo', [['a', 'b']]);
+    const bar = { ...foo, name: 'bar' };
+    const input = [foo, bar, { ...foo, tuples: [{ atoms: ['a', 'c'], types: ['Node', 'Node'] }] },
+      rel('A<:foo', 'foo', [['a', 'd']])];
+    const before = JSON.stringify(input);
+    const result = DataInstanceNormalizer.mergeRelations(input);
+    expect(result.map(r => r.id)).toEqual(['foo', 'bar', 'A<:foo']);
+    expect(result[0].tuples.map(t => t.atoms)).toEqual([['a', 'b'], ['a', 'c']]);
+    expect(JSON.stringify(input)).toBe(before);
+    expect(() => DataInstanceNormalizer.mergeRelations([foo, rel('foo', 'bar', [])])).toThrow(/Conflicting names/);
+  });
+
   it('keeps legacy name-only JSON working and preserves explicit empty relations', () => {
     const instance = new JSONDataInstance({ atoms, relations: [
       { name: 'foo', tuples: [['a', 'b']] }, { name: 'foo', tuples: [['a', 'c']] },
