@@ -899,7 +899,6 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
 
     const sourceId = tuple.atoms[0];
     const targetId = tuple.atoms[tuple.atoms.length - 1];
-    const middleAtoms = tuple.atoms.slice(1, -1);
 
     const sourceAtom = this.atoms.get(sourceId);
     const targetAtom = this.atoms.get(targetId);
