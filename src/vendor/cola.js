@@ -2075,14 +2075,15 @@
                     g.padding = 1;
                 if (typeof g.leaves !== "undefined") {
                     g.leaves.forEach(function (v, i) {
-                        if (typeof v === 'number')
-                            (g.leaves[i] = _this._nodes[v]).parent = g;
+                        if (typeof v === 'number') g.leaves[i] = _this._nodes[v];
+                        // Object inputs must not also appear as loose root nodes.
+                        g.leaves[i].parent = g;
                     });
                 }
                 if (typeof g.groups !== "undefined") {
                     g.groups.forEach(function (gi, i) {
-                        if (typeof gi === 'number')
-                            (g.groups[i] = _this._groups[gi]).parent = g;
+                        if (typeof gi === 'number') g.groups[i] = _this._groups[gi];
+                        g.groups[i].parent = g;
                     });
                 }
             });
@@ -3737,10 +3738,11 @@
     }
     exports.makeEdgeTo = makeEdgeTo;
     var Node = (function () {
-        function Node(v, r, pos) {
+        function Node(v, r, pos, id) {
             this.v = v;
             this.r = r;
             this.pos = pos;
+            this.id = id;
             this.prev = makeRBTree();
             this.next = makeRBTree();
         }
@@ -3770,7 +3772,9 @@
         return 0;
     }
     function makeRBTree() {
-        return new rbtree_1.RBTree(function (a, b) { return a.pos - b.pos; });
+        // Alignment-aware sweeps assign distinct ids to retain tied centres.
+        // Other callers use id=0 and retain their existing geometric ordering.
+        return new rbtree_1.RBTree(function (a, b) { return a.pos - b.pos || a.id - b.id; });
     }
     var xRect = {
         getCentre: function (r) { return r.cx(); },
@@ -3825,7 +3829,7 @@
         var events = new Array(N);
         for (i = 0; i < n; ++i) {
             var r = rs[i];
-            var v = new Node(vars[i], r, rect.getCentre(r));
+            var v = new Node(vars[i], r, rect.getCentre(r), rect.breakTies ? i : 0);
             events[i] = new Event(true, v, rect.getOpen(r));
             events[i + n] = new Event(false, v, rect.getClose(r));
         }
@@ -3842,6 +3846,7 @@
             else {
                 scanline.remove(v);
                 var makeConstraint = function (l, r) {
+                    if (rect.canSeparate && !rect.canSeparate(l.v, r.v)) return;
                     var sep = (rect.getSize(l.r) + rect.getSize(r.r)) / 2 + minSep;
                     cs.push(new vpsc_1.Constraint(l.v, r.v, sep));
                 };
@@ -3859,13 +3864,14 @@
         console.assert(scanline.size === 0);
         return cs;
     }
-    function findXNeighbours(v, scanline) {
+    function findXNeighbours(v, scanline, forceSeparation) {
         var f = function (forward, reverse) {
             var it = scanline.findIter(v);
             var u;
             while ((u = it[forward]()) !== null) {
                 var uovervX = u.r.overlapX(v.r);
-                if (uovervX <= 0 || uovervX <= u.r.overlapY(v.r)) {
+                if (uovervX <= 0 || uovervX <= u.r.overlapY(v.r)
+                    || (forceSeparation && forceSeparation(u.v, v.v))) {
                     v[forward].insert(u);
                     u[reverse].insert(v);
                 }
@@ -3896,12 +3902,22 @@
         return generateConstraints(rs, vars, yRect, 1e-6);
     }
     exports.generateYConstraints = generateYConstraints;
-    function generateXGroupConstraints(root) {
-        return generateGroupConstraints(root, xRect, 1e-6);
+    function alignmentAwareRect(rect, sameAxis, otherAxis) {
+        if (!sameAxis && !otherAxis) return rect;
+        return Object.assign({}, rect, {
+            breakTies: true,
+            canSeparate: function (a, b) { return !sameAxis || !sameAxis(a, b); },
+            findNeighbours: rect === xRect
+                ? function (v, scanline) { findXNeighbours(v, scanline, otherAxis); }
+                : findYNeighbours
+        });
+    }
+    function generateXGroupConstraints(root, alignedX, alignedY) {
+        return generateGroupConstraints(root, alignmentAwareRect(xRect, alignedX, alignedY), 1e-6);
     }
     exports.generateXGroupConstraints = generateXGroupConstraints;
-    function generateYGroupConstraints(root) {
-        return generateGroupConstraints(root, yRect, 1e-6);
+    function generateYGroupConstraints(root, alignedX, alignedY) {
+        return generateGroupConstraints(root, alignmentAwareRect(yRect, alignedY, alignedX), 1e-6);
     }
     exports.generateYGroupConstraints = generateYGroupConstraints;
     function removeOverlaps(rs) {
@@ -3957,8 +3973,55 @@
                     _this.variables[i] = g.minVar = new IndexedVariable(i++, typeof g.stiffness !== "undefined" ? g.stiffness : 0.01);
                     _this.variables[i] = g.maxVar = new IndexedVariable(i++, typeof g.stiffness !== "undefined" ? g.stiffness : 0.01);
                 });
+                this.alignedX = this.createAlignmentSeparation(this.xConstraints);
+                this.alignedY = this.createAlignmentSeparation(this.yConstraints);
             }
         }
+        // sPyTial #585: the geometric X heuristic may defer to Y even when
+        // exact same-Y constraints make that separation impossible. Derive the
+        // equality classes once. Suppress impossible same-axis separations and
+        // use current geometry to choose order on the available axis on each
+        // projection. No persistent order is added to user constraints.
+        Projection.prototype.createAlignmentSeparation = function (constraints) {
+            var nodes = this.nodes, parents = nodes.map(function (_, i) { return i; });
+            function find(i) {
+                while (parents[i] !== i) { parents[i] = parents[parents[i]]; i = parents[i]; }
+                return i;
+            }
+            var hasAlignment = false;
+            (constraints || []).forEach(function (c) {
+                if (c.equality && c.gap === 0 && c.left.index !== c.right.index) {
+                    parents[find(c.left.index)] = find(c.right.index);
+                    hasAlignment = true;
+                }
+            });
+            if (!hasAlignment) return null;
+            var members = nodes.map(function (_, i) { return [i]; });
+            function groupMembers(g) {
+                if (members[g.minVar.index]) return members[g.minVar.index];
+                var ids = (g.leaves || []).map(function (n) { return n.variable.index; });
+                (g.groups || []).forEach(function (child) {
+                    groupMembers(child).forEach(function (i) { if (ids.indexOf(i) < 0) ids.push(i); });
+                });
+                members[g.minVar.index] = members[g.maxVar.index] = ids;
+                return ids;
+            }
+            this.groups.forEach(groupMembers);
+            var cache = new Map();
+            return function (a, b) {
+                var key = a.index < b.index ? a.index + ':' + b.index : b.index + ':' + a.index;
+                if (cache.has(key)) return cache.get(key);
+                var aMembers = members[a.index], bMembers = members[b.index];
+                // Shared members (including containment) permit hull overlap.
+                var disjoint = aMembers && bMembers
+                    && !aMembers.some(function (i) { return bMembers.indexOf(i) >= 0; });
+                var aligned = !!disjoint && aMembers.some(function (i) {
+                    return bMembers.some(function (j) { return find(i) === find(j); });
+                });
+                cache.set(key, aligned);
+                return aligned;
+            };
+        };
         Projection.prototype.createSeparation = function (c) {
             return new vpsc_1.Constraint(this.nodes[c.left].variable, this.nodes[c.right].variable, c.gap, typeof c.equality !== "undefined" ? c.equality : false);
         };
@@ -4021,7 +4084,9 @@
         Projection.prototype.xProject = function (x0, y0, x) {
             if (!this.rootGroup && !(this.avoidOverlaps || this.xConstraints))
                 return;
-            this.project(x0, y0, x0, x, function (v) { return v.px; }, this.xConstraints, generateXGroupConstraints, function (v) { return v.bounds.setXCentre(x[v.variable.index] = v.variable.position()); }, function (g) {
+            var alignedX = this.alignedX, alignedY = this.alignedY;
+            this.project(x0, y0, x0, x, function (v) { return v.px; }, this.xConstraints,
+                function (root) { return generateXGroupConstraints(root, alignedX, alignedY); }, function (v) { return v.bounds.setXCentre(x[v.variable.index] = v.variable.position()); }, function (g) {
                 var xmin = x[g.minVar.index] = g.minVar.position();
                 var xmax = x[g.maxVar.index] = g.maxVar.position();
                 var p2 = g.padding / 2;
@@ -4032,7 +4097,9 @@
         Projection.prototype.yProject = function (x0, y0, y) {
             if (!this.rootGroup && !this.yConstraints)
                 return;
-            this.project(x0, y0, y0, y, function (v) { return v.py; }, this.yConstraints, generateYGroupConstraints, function (v) { return v.bounds.setYCentre(y[v.variable.index] = v.variable.position()); }, function (g) {
+            var alignedX = this.alignedX, alignedY = this.alignedY;
+            this.project(x0, y0, y0, y, function (v) { return v.py; }, this.yConstraints,
+                function (root) { return generateYGroupConstraints(root, alignedX, alignedY); }, function (v) { return v.bounds.setYCentre(y[v.variable.index] = v.variable.position()); }, function (g) {
                 var ymin = y[g.minVar.index] = g.minVar.position();
                 var ymax = y[g.maxVar.index] = g.maxVar.position();
                 var p2 = g.padding / 2;
