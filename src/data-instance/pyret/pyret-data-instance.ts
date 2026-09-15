@@ -537,8 +537,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
       if (shape?.kind === 'nothing') continue;
       if (shape?.kind === 'tuple' || shape?.kind === 'raw-array') {
         const values = Array.isArray(obj) ? obj : obj.vals as unknown[];
-        const relationId = this.valueRelationId('sequence-elements');
         for (let index = 0; index < values.length; index++) {
+          const relationId = this.valueRelationId('sequence-elements', 'element', ['PyretObject', 'Index', 'PyretObject']);
           enqueue(values[index], [atomId, this.createIndexAtom(index)], relationId, 'element');
         }
         continue;
@@ -558,19 +558,23 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
         const value = object.dict![name];
         if (!this.options.showFunctions && isCallableField(value)) return;
         const relationId = info ? fieldId(info, position)
-          : shape?.kind === 'object' ? this.valueRelationId('object-field:' + name) : name;
+          : shape?.kind === 'object' ? this.valueRelationId('object-field:' + name, name, ['PyretObject', 'PyretObject']) : name;
         enqueue(value, [atomId], relationId, shape?.kind === 'object' ? name : undefined);
       });
     }
   }
 
-  private valueRelationId(key: string): string {
+  private valueRelationId(key: string, name: string, types: string[]): string {
     let id = this.valueRelations.get(key);
     if (!id) {
       // randomUUID is unavailable on some non-secure browser origins.
       id = globalThis.crypto?.randomUUID?.()
         ?? `relation-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${this.valueRelations.size}`;
       this.valueRelations.set(key, id);
+      // These relations span containers and heterogeneous values. Declare their
+      // common supertype before insertion: settleTupleTypes treats the first
+      // inferred signature as a declaration and preserves it on later writes.
+      this.relations.set(id, { id, name, types, tuples: [] });
     }
     return id;
   }

@@ -8,6 +8,7 @@ import { canon } from '../../src/data-instance/pyret/canon';
 import { readValueInfo } from '../../src/data-instance/pyret/values';
 import { readFieldId } from '../../src/data-instance/pyret/identity';
 import { SGraphQueryEvaluator } from '../../src/evaluators/data/sgq-evaluator';
+import { generateAlloySchema } from '../../src/data-instance/schema-descriptor';
 
 const object = (dict: Record<string, unknown> = {}): PyretObject => ({ dict });
 const box = (v: unknown): PyretObject => ({ $name: 'box', $arity: 1, $constructor: { $fieldNames: ['v'] }, dict: { v } });
@@ -76,8 +77,7 @@ describe('nothing and plain objects (#595)', () => {
     const dict = Object.assign(Object.create({ inherited: shared }), {
       zebra: shared, 'a--b': 3, constructor: 4,
     });
-    Object.defineProperty(dict, '__proto__', { value: 5, enumerable: true });
-    const { reconstructed } = roundTrip(object(dict), '{zebra: {z: 2}, a--b: 3, constructor: 4, __proto__: 5, inherited: {z: 2}}');
+    const { reconstructed } = roundTrip(object(dict), '{zebra: {z: 2}, a--b: 3, constructor: 4, inherited: {z: 2}}');
     expect((reconstructed as PyretObject).dict!.zebra).toBe((reconstructed as PyretObject).dict!.inherited);
   });
 
@@ -99,6 +99,15 @@ describe('nothing and plain objects (#595)', () => {
     expect(Object.keys((reifyToValue(datum) as PyretObject).dict!)).toEqual(['not a name', 'quote"', '\uFAAA']);
     expect(() => replit(datum)).toThrow(/no literal spelling/);
   });
+
+  it.each(`function break return do yield throw continue while class interface type generator alias
+extends implements module package namespace public private protected static const enum super export new
+try finally debug spy switch this match case with __proto__`.split(/\s+/))(
+    'preserves compiler-reserved field %s structurally but rejects source generation', name => {
+      const { datum } = serialize(object({ [name]: 1 }));
+      expect((reifyToValue(datum) as PyretObject).dict![name]).toBe(1);
+      expect(() => replit(datum)).toThrow(/no literal spelling/);
+    });
 
   it('preserves the data-constructor path and excludes attached methods from its arguments', () => {
     const value = box(object());
@@ -133,6 +142,29 @@ describe('tuple and raw-array positions and multiplicity (#594)', () => {
     const ev = new SGraphQueryEvaluator();
     ev.initialize({ sourceData: datum });
     expect(ev.evaluate('element').selectedTuplesAll()).toHaveLength(2);
+  });
+
+  it('declares common column types for mixed containers and heterogeneous object fields', () => {
+    const values = [1, 'hello', tuple(true), object({ x: 2 }), object({ x: 'text' })];
+    const { original, datum } = serialize(values);
+    for (const instance of [original, datum]) {
+      const elements = instance.getRelations().find(r => r.name === 'element')!;
+      expect(elements.types).toEqual(['PyretObject', 'Index', 'PyretObject']);
+      const fields = instance.getRelations().find(r => r.name === 'x')!;
+      expect(fields.types).toEqual(['PyretObject', 'PyretObject']);
+      // Every actual endpoint must inhabit its declared column type, including
+      // the nested tuple's Boolean and both values of the shared field name x.
+      for (const relation of [elements, fields]) {
+        for (const t of relation.tuples) {
+          expect(t.types).toEqual(relation.types);
+          t.atoms.forEach((id, i) => expect(instance.getAtomType(id).types).toContain(t.types[i]));
+        }
+      }
+      const schema = generateAlloySchema(instance);
+      expect(schema).toContain('PyretObject -> Index -> PyretObject');
+      expect(schema).not.toContain('Index -> Number');
+    }
+    roundTrip(values, '[raw-array: 1, "hello", {true;}, {x: 2}, {x: "text"}]');
   });
 
   it('distinguishes one occurrence from two before and after default normalization', () => {
