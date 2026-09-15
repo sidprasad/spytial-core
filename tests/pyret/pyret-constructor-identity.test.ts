@@ -56,7 +56,7 @@ describe('Pyret constructor identity survives serialized data', () => {
     ev.initialize({ sourceData: datum });
     expect(ev.evaluate('value').selectedTuplesAll()).toHaveLength(2);
   });
-  it('retains constructor metadata when atom IDs are remapped during composition', () => {
+  it('retains constructor facts when atom IDs are remapped during composition', () => {
     const source = serialized(data('zero', [], []));
     const combined = new JSONDataInstance({ atoms: [], relations: [] });
     combined.addFromDataInstance(source, false);
@@ -75,8 +75,8 @@ describe('Pyret constructor identity survives serialized data', () => {
   });
   it('rejects missing and conflicting positions instead of guessing', () => {
     const datum = serialized(data('duo', ['z', 'a'], [1, 2])).reify();
-    datum.relations.pop();
-    expect(() => replit(new JSONDataInstance(datum))).toThrow(/Incomplete/);
+    datum.relations[0].tuples = [];
+    expect(() => replit(new JSONDataInstance(datum), datum.atoms.find(a => a.type === 'duo')!.id)).toThrow(/Incomplete/);
     const conflict = serialized(data('duo', ['z', 'a'], [1, 2])).reify();
     conflict.relations[0].id = 'pyret:field:v1:' + JSON.stringify(['duo', 0, conflict.relations[0].name]);
     expect(() => replit(new JSONDataInstance(conflict))).toThrow(/Conflicting/);

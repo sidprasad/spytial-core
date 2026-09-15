@@ -24,7 +24,7 @@
  * synthetic object cycles, which are not claimed as evaluable Pyret source.
  */
 
-import { readValueInfo } from './values';
+import { reifiedValueInfo } from './values';
 import { numberPayload, numberSource } from './numbers';
 import { IDataInstance } from '../interfaces';
 import { PyretObject } from './pyret-data-instance';
@@ -85,7 +85,7 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
   const numeric = numberPayload(v);
   if (numeric) return numberSource(numeric);
 
-  const shape = '$pyretValue' in v ? readValueInfo({ pyretValue: v.$pyretValue }) : undefined;
+  const shape = reifiedValueInfo(v as PyretObject);
   if (shape?.kind === 'nothing') return 'nothing';
   if (shape?.kind === 'string-dict') {
     if (onPath.has(v)) throw new Error('Cyclic immutable Pyret dictionary construction is not supported');
@@ -122,7 +122,7 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
     }
     const type = (v.$name as string) || 'object';
     const dict = (v.dict as Record<string, unknown>) || {};
-    const keys = shape?.kind === 'object' ? shape.fields : Object.keys(dict);
+    const keys = Object.keys(dict);
     const out = shape?.kind === 'object'
       ? `{${keys.map(k => `${objectKey(k)}: ${child(dict[k] as ReifiedValue)}`).join(', ')}}`
       : keys.length || v.$arity === 0
@@ -135,7 +135,7 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
   return String(v);
 }
 
-/** Reconstruct the value from the data instance and render it as a Pyret string. */
+/** Reconstruct and render the selected atom; infer it only when there is a unique root. */
 export function replit(di: IDataInstance, rootId?: string): string {
   const value = reifyToValue(di, rootId);
   return referenceSource(value, (v, child) => render(v, new Set(), child), objectKey)

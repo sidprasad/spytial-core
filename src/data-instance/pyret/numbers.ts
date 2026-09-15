@@ -1,4 +1,4 @@
-/** Lossless, JSON-safe numeric payloads. Labels are display text, never the decoder. */
+/** Internal lossless numbers. IDataInstance stores their literal in the atom label. */
 export type PyretNumberPayload = { version: 1 } & (
   | { kind: 'integer'; value: string }
   | { kind: 'rational'; numerator: string; denominator: string }
@@ -35,12 +35,19 @@ function validate(value: unknown): PyretNumberPayload {
       return { version: 1, kind: 'roughnum', value: p.value };
     }
   }
-  throw new Error('Malformed Pyret number metadata');
+  throw new Error('Malformed Pyret number');
 }
 
-export function readNumberMetadata(metadata?: Record<string, unknown>): PyretNumberPayload | undefined {
-  return metadata && Object.prototype.hasOwnProperty.call(metadata, 'pyretNumber')
-    ? validate(metadata.pyretNumber) : undefined;
+/** Decode the public label without passing exact values through JS Number. */
+export function parseNumberLabel(label: string): PyretNumberPayload {
+  if (label.startsWith('~')) return validate({ version: 1, kind: 'roughnum', value: label.slice(1) });
+  const rational = /^(-?(?:0|[1-9][0-9]*))\/(-?(?:0|[1-9][0-9]*))$/.exec(label);
+  if (rational) return exact(BigInt(rational[1]), BigInt(rational[2]));
+  const decimal = /^(-?(?:0|[1-9][0-9]*))(?:\.([0-9]+))?(?:e([+-]?[0-9]+))?$/i.exec(label);
+  if (!decimal) throw new Error('Malformed Pyret number label');
+  const power = BigInt(decimal[3] ?? '0') - BigInt(decimal[2]?.length ?? 0);
+  const n = BigInt(decimal[1] + (decimal[2] ?? ''));
+  return power >= 0n ? exact(n * 10n ** power) : exact(n, 10n ** -power);
 }
 
 // Pyret's js-numbers BigInteger supplies these methods on its prototype.

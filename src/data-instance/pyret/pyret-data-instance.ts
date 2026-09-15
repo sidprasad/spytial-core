@@ -4,7 +4,7 @@ import { DataInstanceEventEmitter } from '../data-instance-event-emitter';
 import { settleTupleTypes } from '../tuple-types';
 import { replit } from './replit';
 import { numberPayload, numberSource } from './numbers';
-import { isRuntimeNothing, isRuntimeReference, referenceInfo, isCallableField, objectFields, readValueInfo, type PyretValueInfo } from './values';
+import { isRuntimeNothing, isRuntimeReference, referenceInfo, isCallableField, objectFields, reifiedValueInfo, type PyretValueInfo } from './values';
 import { runtimeDictionaryInfo, dictionaryEntries } from './string-dict';
 import { constructorInfo, fieldId, readFieldId } from './identity';
 import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
@@ -496,6 +496,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    * mutable-field updates. The legacy ref-free path repeats shared subtrees
    * and prints a `<cyclic>` marker for synthetic object cycles.
    *
+   * @param rootId Atom to reconstruct. Required when no unique root can be inferred,
+   * including a fully cyclic graph. The datum does not store an observation point.
    * @returns A string representation of the data in Pyret constructor syntax
    *
    * @example
@@ -503,8 +505,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    * const pyretCode = instance.reify();
    * ```
    */
-  reify(): string {
-    return replit(this);
+  reify(rootId?: string): string {
+    return replit(this, rootId);
   }
 
   /**
@@ -513,8 +515,6 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private parseObjectIteratively(rootObject: PyretObject | unknown[]): void {
     type Pending = { obj: PyretObject | unknown[]; parentInfo?: { atoms: string[]; relationId: string; relationName?: string } };
     const queue: Pending[] = [{ obj: rootObject }];
-    let hasReferences = false;
-    let hasDictionaries = false;
     const enqueue = (value: unknown, atoms: string[], relationId: string, relationName?: string): void => {
       if (this.isAtomicValue(value)) {
         const target = this.createAtomFromPrimitive(value);
@@ -536,10 +536,10 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
       }
       if (alreadySeen) continue;
 
-      const shape = readValueInfo(this.atoms.get(atomId)!.metadata);
+      const shape = this.valueInfo(obj);
       if (shape?.kind === 'nothing') continue;
       if (shape?.kind === 'string-dict') {
-        hasDictionaries = true;
+        if (shape.sealed) this.addValueFact('sealed', atomId, 'MutableStringDict');
         const entries = dictionaryEntries(obj as PyretObject, shape);
         entries.forEach(([key, value], index) => {
           if (!this.isAtomicValue(value) && !Array.isArray(value) && !this.isPyretObject(value)) {
@@ -551,7 +551,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
         continue;
       }
       if (shape?.kind === 'reference') {
-        hasReferences = true;
+        if (shape.unrestricted) this.addValueFact('unrestricted', atomId, 'Reference');
         const value = (obj as PyretObject).value;
         if (!this.isAtomicValue(value) && !Array.isArray(value) && !this.isPyretObject(value)) {
           throw new Error('Unsupported Pyret reference target');
@@ -571,26 +571,38 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
 
       const object = obj as PyretObject;
       this.originalObjects.set(atomId, object);
+      const info = constructorInfo(object);
+      if (info?.arity === 0) this.addValueFact('nullary-constructor', atomId, 'PyretObject');
+      for (const position of info?.mutableFields ?? []) {
+        const relationId = this.valueRelationId('mutable-field', 'mutable-field', ['PyretObject', 'Index']);
+        this.addRelationTuple(relationId, { atoms: [atomId, this.createIndexAtom(position)], types: [] }, 'mutable-field');
+      }
       if (!object.dict || typeof object.dict !== 'object') continue;
       if (this.isPyretTable(object)) {
         this.processTableSemantics(atomId, object);
         continue;
       }
-      const info = constructorInfo(object);
-      const fields = info?.fields ?? (shape?.kind === 'object' ? shape.fields : Object.keys(object.dict));
+      const fields = info?.fields ?? (shape?.kind === 'object' ? objectFields(object.dict, this.options.showFunctions) : Object.keys(object.dict));
       if (!shape) this.cacheConstructorPattern(this.extractType(object), fields);
       fields.forEach((name, position) => {
         const value = object.dict![name];
-        if (!this.options.showFunctions && isCallableField(value)) return;
         const relationId = info ? fieldId(info, position)
-          : shape?.kind === 'object' ? this.valueRelationId('object-field:' + name, name, ['PyretObject', 'PyretObject']) : name;
-        enqueue(value, [atomId], relationId, shape?.kind === 'object' ? name : undefined);
+          : shape?.kind === 'object' ? this.valueRelationId('object-field:' + name, name, ['Object', 'Index', 'PyretObject']) : name;
+        if (info && !this.relations.has(relationId)) {
+          // The declaration carries constructor arity even if a field value is
+          // unsupported/omitted. Different instances may hold different types.
+          this.relations.set(relationId, { id: relationId, name, types: [info.name, 'PyretObject'], tuples: [] });
+        }
+        if (!this.options.showFunctions && isCallableField(value)) return;
+        const prefix = shape?.kind === 'object' ? [atomId, this.createIndexAtom(position)] : [atomId];
+        enqueue(value, prefix, relationId, shape?.kind === 'object' ? name : undefined);
       });
     }
-    if (hasReferences || hasDictionaries) {
-      const root = this.atoms.get(this.objectToAtomId.get(rootObject)!)!;
-      root.metadata = { ...root.metadata, pyretRoot: { version: 1 } };
-    }
+  }
+
+  private addValueFact(name: string, atomId: string, type: string): void {
+    const id = this.valueRelationId(name, name, [type]);
+    this.addRelationTuple(id, { atoms: [atomId], types: [] }, name);
   }
 
   private valueRelationId(key: string, name: string, types: string[]): string {
@@ -612,24 +624,24 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     const existing = this.indexAtoms.get(index);
     if (existing) return existing;
     const id = this.generateAtomId('Index');
-    this.atoms.set(id, { id, type: 'Index', label: String(index), metadata: { pyretIndex: index } });
+    this.atoms.set(id, { id, type: 'Index', label: String(index) });
     this.ensureTypeExists('Index');
     this.indexAtoms.set(index, id);
     return id;
   }
 
   private valueInfo(obj: PyretObject | unknown[]): PyretValueInfo | undefined {
-    if (Array.isArray(obj)) return { version: 1, kind: 'raw-array', length: obj.length };
-    if ('$pyretValue' in obj) return readValueInfo({ pyretValue: obj.$pyretValue });
+    if (Array.isArray(obj)) return { kind: 'raw-array' };
+    if ('$pyretValue' in obj) return reifiedValueInfo(obj);
     const ref = referenceInfo(obj);
     if (ref) return ref;
     const dictionary = runtimeDictionaryInfo(obj);
     if (dictionary) return dictionary;
-    if (isRuntimeNothing(obj)) return { version: 1, kind: 'nothing' };
-    if (Array.isArray(obj.vals)) return { version: 1, kind: 'tuple', length: obj.vals.length };
+    if (isRuntimeNothing(obj)) return { kind: 'nothing' };
+    if (Array.isArray(obj.vals)) return { kind: 'tuple' };
     if (constructorInfo(obj) || this.isPyretTable(obj)) return undefined;
     if (obj.dict && (typeof obj.updateDict === 'function' || this.extractType(obj) === 'PyretObject')) {
-      return { version: 1, kind: 'object', fields: objectFields(obj.dict, this.options.showFunctions) };
+      return { kind: 'object' };
     }
     return undefined;
   }
@@ -713,18 +725,14 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    */
   private createAtomFromObject(obj: PyretObject | unknown[]): string {
     const shape = this.valueInfo(obj);
-    const type = shape ? { nothing: 'Nothing', reference: 'Reference', object: 'PyretObject', tuple: 'Tuple', 'raw-array': 'RawArray',
+    const type = shape ? { nothing: 'Nothing', reference: 'Reference', object: 'Object', tuple: 'Tuple', 'raw-array': 'RawArray',
       'string-dict': shape.kind === 'string-dict' && shape.mutable ? 'MutableStringDict' : 'StringDict' }[shape.kind]
       : this.extractType(obj as PyretObject);
     const atomId = this.generateAtomId(type);
-    const info = Array.isArray(obj) ? undefined : constructorInfo(obj);
     const atom: IAtom = {
       id: atomId,
       type,
-      label: shape ? type : this.extractLabel(obj as PyretObject),
-      ...(shape ? { metadata: { pyretValue: shape } }
-        : info ? { metadata: { pyret: { version: 1, arity: info.arity,
-          ...(info.mutableFields ? { mutableFields: info.mutableFields } : {}) } } } : {})
+      label: shape ? type : this.extractLabel(obj as PyretObject)
     };
     this.atoms.set(atomId, atom);
     this.objectToAtomId.set(obj, atomId);
@@ -739,7 +747,6 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     const numeric = numberPayload(value);
     const type = numeric ? 'Number' : this.mapPrimitiveType(value as string | boolean);
     const label = numeric ? numberSource(numeric) : String(value);
-    const metadata = numeric ? { pyretNumber: numeric } : undefined;
 
     // Check idempotency settings for this type
     const shouldReuse = (type === 'String' && this.options.stringsIdempotent) ||
@@ -749,9 +756,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     if (shouldReuse) {
       // Check if we already have an atom for this value
       const existingAtom = Array.from(this.atoms.values())
-        .find(atom => atom.type === type && (numeric
-          ? JSON.stringify(atom.metadata?.pyretNumber) === JSON.stringify(numeric)
-          : atom.label === label));
+        .find(atom => atom.type === type && atom.label === label);
 
       if (existingAtom) {
         return existingAtom.id;
@@ -763,8 +768,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     const atom: IAtom = {
       id: atomId,
       type,
-      label,
-      ...(metadata ? { metadata } : {})
+      label
     };
 
     this.atoms.set(atomId, atom);

@@ -31,7 +31,8 @@ function transport(value: PyretObject) {
   const ids = new Map(raw.atoms.map((a: any, i: number) => [a.id, `opaque-${raw.atoms.length - i}`]));
   raw.atoms.forEach((a: any) => {
     a.id = ids.get(a.id);
-    if (a.metadata) a.label = 'display only';
+    expect(a).not.toHaveProperty('metadata');
+    if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
   });
   raw.relations.forEach((r: any, i: number) => {
     if (!readFieldId(r.id)) r.id = `unrelated-${i}`;

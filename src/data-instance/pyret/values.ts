@@ -1,33 +1,22 @@
-/** Container/value shape lives on atoms, never in their IDs. */
-export type PyretValueInfo = { version: 1 } & (
+/** Internal reconstructed value tags, never serialized into IDataInstance. */
+export type PyretValueInfo =
   | { kind: 'nothing' }
-  | { kind: 'reference'; canInitializeWithNothing: boolean }
-  | { kind: 'object'; fields: string[] }
-  | { kind: 'tuple' | 'raw-array'; length: number }
-  | { kind: 'string-dict'; length: number; mutable: boolean; sealed: boolean }
-);
+  | { kind: 'reference'; unrestricted: boolean }
+  | { kind: 'object' }
+  | { kind: 'tuple' | 'raw-array' }
+  | { kind: 'string-dict'; mutable: boolean; sealed: boolean };
 
-export function readValueInfo(metadata?: Record<string, unknown>): PyretValueInfo | undefined {
-  if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, 'pyretValue')) return undefined;
-  const v = metadata.pyretValue as Partial<PyretValueInfo> | null;
-  if (v?.version === 1) {
-    if (v.kind === 'nothing') return { version: 1, kind: 'nothing' };
-    if (v.kind === 'reference' && typeof v.canInitializeWithNothing === 'boolean') {
-      return { version: 1, kind: 'reference', canInitializeWithNothing: v.canInitializeWithNothing };
-    }
-    if (v.kind === 'object' && Array.isArray(v.fields)
-        && v.fields.every(f => typeof f === 'string') && new Set(v.fields).size === v.fields.length) {
-      return { version: 1, kind: 'object', fields: [...v.fields] };
-    }
-    if ((v.kind === 'tuple' || v.kind === 'raw-array') && Number.isSafeInteger(v.length) && v.length! >= 0) {
-      return { version: 1, kind: v.kind, length: v.length! };
-    }
-    if (v.kind === 'string-dict' && Number.isSafeInteger(v.length) && v.length! >= 0
-        && typeof v.mutable === 'boolean' && typeof v.sealed === 'boolean' && (v.mutable || !v.sealed)) {
-      return { version: 1, kind: v.kind, length: v.length!, mutable: v.mutable, sealed: v.sealed };
-    }
+export function reifiedValueInfo(value: Record<string, unknown>): PyretValueInfo | undefined {
+  if (!Object.prototype.hasOwnProperty.call(value, '$pyretValue')) return undefined;
+  const v = value.$pyretValue as Partial<PyretValueInfo> | null;
+  if (v?.kind === 'nothing' || v?.kind === 'object' || v?.kind === 'tuple' || v?.kind === 'raw-array') {
+    return { kind: v.kind };
   }
-  throw new Error('Malformed Pyret value metadata');
+  if (v?.kind === 'reference' && typeof v.unrestricted === 'boolean') return { kind: v.kind, unrestricted: v.unrestricted };
+  if (v?.kind === 'string-dict' && typeof v.mutable === 'boolean' && typeof v.sealed === 'boolean' && (v.mutable || !v.sealed)) {
+    return { kind: v.kind, mutable: v.mutable, sealed: v.sealed };
+  }
+  throw new Error('Malformed reconstructed Pyret value');
 }
 
 /** PRef has no dict/brand. Recognize its data and annotation-list protocol
@@ -48,10 +37,10 @@ export function referenceInfo(value: unknown): Extract<PyretValueInfo, { kind: '
   // Pyret states: 0 graphable, 1 unset, 2 set, 3 frozen. This feature snapshots
   // initialized mutable cells; silently dropping other states would lose data.
   if (value.state !== 2) throw new Error('Only initialized mutable Pyret references are supported');
-  return { version: 1, kind: 'reference',
+  return { kind: 'reference',
     // Only Any is known safe without running potentially stateful annotations.
     // Other annotations can still be reconstructed using the real target first.
-    canInitializeWithNothing: value.anns.anns.every(entry => entry.ann?.name === 'Any') };
+    unrestricted: value.anns.anns.every(entry => entry.ann?.name === 'Any') };
 }
 
 /** PNothing and PObject have identical own data. Their runtime protocols differ.

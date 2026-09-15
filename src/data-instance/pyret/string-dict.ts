@@ -19,13 +19,13 @@ export function runtimeDictionaryInfo(value: PyretObject): DictionaryInfo | unde
     if (!Number.isSafeInteger(map.size) || map.size! < 0 || typeof map.keys !== 'function' || typeof map.get !== 'function') {
       throw new Error('Malformed Pyret string dictionary backing map');
     }
-    return { version: 1, kind: 'string-dict', length: map.size!, mutable: false, sealed: false };
+    return { kind: 'string-dict', mutable: false, sealed: false };
   }
   if (value.$underlyingDict && method('keys-list-now') && method('get-value-now') && method('freeze')) {
     if (typeof value.$underlyingDict !== 'object' || (value.$sealed !== undefined && typeof value.$sealed !== 'boolean')) {
       throw new Error('Malformed Pyret mutable string dictionary backing map');
     }
-    return { version: 1, kind: 'string-dict', length: Object.keys(value.$underlyingDict).length,
+    return { kind: 'string-dict',
       mutable: true, sealed: value.$sealed === true };
   }
   return undefined;
@@ -41,7 +41,7 @@ export function dictionaryEntries(value: PyretObject, info: DictionaryInfo): Dic
     if (!Array.isArray(keys) || keys.some(key => typeof key !== 'string')) throw new Error('Malformed Pyret dictionary keys');
     entries = keys.map(key => [key, map.get(key)]);
   }
-  if (!Array.isArray(entries) || entries.length !== info.length
+  if (!Array.isArray(entries)
       || entries.some(e => !Array.isArray(e) || e.length !== 2 || typeof e[0] !== 'string')
       || new Set(entries.map(e => e[0])).size !== entries.length) throw new Error('Malformed Pyret dictionary entries');
   return entries as DictionaryEntry[];

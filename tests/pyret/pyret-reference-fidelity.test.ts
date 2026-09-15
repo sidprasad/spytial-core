@@ -29,7 +29,8 @@ function transport(value: PyretObject | unknown[]) {
   const ids = new Map(raw.atoms.map((a: any, i: number) => [a.id, `opaque-${raw.atoms.length - i}`]));
   raw.atoms.forEach((a: any) => {
     a.id = ids.get(a.id);
-    if (a.metadata) a.label = 'display only';
+    expect(a).not.toHaveProperty('metadata');
+    if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
   });
   raw.relations.forEach((r: any, i: number) => {
     if (!readFieldId(r.id)) r.id = `arbitrary-${i}`;
@@ -41,20 +42,20 @@ function transport(value: PyretObject | unknown[]) {
   PyretDataInstance.clearGlobalConstructorCache();
   const datum = new JSONDataInstance(raw);
   expect(datum.getErrors()).toEqual([]);
-  return { original, datum, raw };
+  return { original, datum, raw, rootId: ids.get(original.getAtoms()[0].id) as string };
 }
 function roundTrip(value: PyretObject | unknown[]) {
-  const { original, datum } = transport(value);
-  const rebuilt = reifyToValue(datum) as PyretObject;
+  const { original, datum, rootId } = transport(value);
+  const rebuilt = reifyToValue(datum, rootId) as PyretObject;
   expect(canon(new PyretDataInstance(rebuilt))).toBe(canon(original));
-  expect(replit(datum)).toBe(replit(original));
-  return { datum, rebuilt, source: replit(datum) };
+  expect(replit(datum, rootId)).toBe(replit(original, original.getAtoms()[0].id));
+  return { datum, rebuilt, rootId, source: replit(datum, rootId) };
 }
 
 describe('initialized Pyret references and cycles (#593)', () => {
   it('keeps the field, reference, and target as distinct relational components', () => {
     const { datum, rebuilt, source } = roundTrip(cell(5));
-    expect(datum.getAtoms().map(a => a.type).sort()).toEqual(['Number', 'Reference', 'cell']);
+    expect(datum.getAtoms().map(a => a.type).sort()).toEqual(['Index', 'Number', 'Reference', 'cell']);
     expect((target(rebuilt).value)).toBe(5);
     expect(source).toContain('cell(5)');
     const ev = new SGraphQueryEvaluator(); ev.initialize({ sourceData: datum });
@@ -66,7 +67,7 @@ describe('initialized Pyret references and cycles (#593)', () => {
   it('preserves the root and a self-cycle after arbitrary ID and record reordering', () => {
     const { datum, rebuilt, source } = roundTrip(self());
     expect(target(rebuilt).value).toBe(rebuilt);
-    expect(datum.getAtoms().filter(a => a.metadata?.pyretRoot)).toHaveLength(1);
+    expect(datum.getRelations().some(r => r.name === 'root')).toBe(false);
     expect(source).toContain('cell(nothing)');
     expect(source).toContain('!{next: spytial-value0}');
     expect(source).not.toContain('<cyclic>');
@@ -83,11 +84,11 @@ describe('initialized Pyret references and cycles (#593)', () => {
 
   it('preserves an unowned reference structurally and explicitly rejects source generation', () => {
     const r = ref(0); r.value = r;
-    const { datum, original } = transport(r);
-    const rebuilt = reifyToValue(datum) as PyretObject;
+    const { datum, original, rootId } = transport(r);
+    const rebuilt = reifyToValue(datum, rootId) as PyretObject;
     expect(rebuilt.value).toBe(rebuilt);
     expect(canon(new PyretDataInstance(rebuilt))).toBe(canon(original));
-    expect(() => replit(datum)).toThrow(/reachable mutable constructor/);
+    expect(() => replit(datum, rootId)).toThrow(/reachable mutable constructor/);
   });
 
   it('supports a reference root when its constructor owner is reachable', () => {
@@ -154,16 +155,16 @@ describe('initialized Pyret references and cycles (#593)', () => {
   it('preserves structurally but rejects cycles that cannot use a placeholder', () => {
     const c = ctor('typed', { next: ref(0, 'Cell') }, [true]);
     target(c).value = c;
-    const { datum } = transport(c);
-    const rebuilt = reifyToValue(datum) as PyretObject;
+    const { datum, rootId } = transport(c);
+    const rebuilt = reifyToValue(datum, rootId) as PyretObject;
     expect(target(rebuilt).value).toBe(rebuilt);
-    expect(() => replit(datum)).toThrow(/cannot be constructed/);
+    expect(() => replit(datum, rootId)).toThrow(/cannot be constructed/);
   });
 
   it('rejects assigning one reference to multiple implicit mutable fields instead of copying it', () => {
     const r = ref(1), pair = ctor('pair', { a: r, b: r }, [true, true]);
-    const { datum } = transport(pair);
-    expect(() => replit(datum)).toThrow(/multiple mutable constructor fields/);
+    const { datum, rootId } = transport(pair);
+    expect(() => replit(datum, rootId)).toThrow(/multiple mutable constructor fields/);
   });
 
   it.each([0, 1, 3, 7])('rejects unsupported runtime reference state %s', state => {
@@ -175,21 +176,26 @@ describe('initialized Pyret references and cycles (#593)', () => {
     expect(() => new PyretDataInstance(ref(undefined))).toThrow(/reference target/);
   });
 
-  it('validates missing/conflicting targets, mutable positions, and root metadata', () => {
+  it('validates missing/conflicting targets and mutable positions using relational data', () => {
     const make = () => transport(self()).raw;
+    const decode = (raw: any) => reifyToValue(new JSONDataInstance(raw), raw.atoms.find((a: any) => a.type === 'cell').id);
     const missing = make(); missing.relations = missing.relations.filter((r: any) => r.name !== 'target');
-    expect(() => reifyToValue(new JSONDataInstance(missing))).toThrow(/Incomplete Pyret reference/);
+    expect(() => decode(missing)).toThrow(/Incomplete Pyret reference/);
     const conflict = make(), rel = conflict.relations.find((r: any) => r.name === 'target');
     rel.tuples.push({ atoms: [rel.tuples[0].atoms[0], rel.tuples[0].atoms[0]], types: rel.types });
-    expect(() => reifyToValue(new JSONDataInstance(conflict))).toThrow(/Conflicting Pyret reference/);
-    const mask = make(); mask.atoms.find((a: any) => a.type === 'cell').metadata.pyret.mutableFields = [1];
-    expect(() => reifyToValue(new JSONDataInstance(mask))).toThrow(/mutable field positions/);
-    const rootless = make(); rootless.atoms.forEach((a: any) => { delete a.metadata.pyretRoot; });
-    expect(() => reifyToValue(new JSONDataInstance(rootless))).toThrow(/explicit root/);
-    const duplicate = make(); duplicate.atoms.forEach((a: any) => { a.metadata.pyretRoot = { version: 1 }; });
-    expect(() => reifyToValue(new JSONDataInstance(duplicate))).toThrow(/Ambiguous Pyret roots/);
-    const malformed = make(); malformed.atoms.find((a: any) => a.type === 'cell').metadata.pyretRoot = { version: 9 };
-    expect(() => reifyToValue(new JSONDataInstance(malformed))).toThrow(/Malformed Pyret root/);
+    expect(() => decode(conflict)).toThrow(/Conflicting Pyret reference/);
+    const mask = make(); mask.atoms.find((a: any) => a.type === 'Index').label = '1';
+    expect(() => decode(mask)).toThrow(/mutable field positions/);
+  });
+
+  it('requires the caller to choose an observation point for a cycle', () => {
+    const { datum, rootId } = transport(self());
+    expect(() => reifyToValue(datum)).toThrow(/explicit root/);
+    expect(() => reifyToValue(datum, 'unknown')).toThrow(/Unknown Pyret root ID/);
+    const owner = reifyToValue(datum, rootId) as PyretObject;
+    const reference = reifyToValue(datum, datum.getAtoms().find(a => a.type === 'Reference')!.id) as PyretObject;
+    expect(target(owner).value).toBe(owner);
+    expect(target(reference.value as PyretObject)).toBe(reference);
   });
 
   it('uses generated variable names that do not shadow reachable constructors', () => {

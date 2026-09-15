@@ -2,7 +2,7 @@ import type { PyretObject } from './pyret-data-instance';
 import type { ReifiedValue } from './reify';
 import { constructorInfo } from './identity';
 import { numberPayload } from './numbers';
-import { readValueInfo } from './values';
+import { reifiedValueInfo } from './values';
 import { setContents } from './set-source';
 import type { DictionaryEntry, DictionaryInfo } from './string-dict';
 
@@ -18,7 +18,7 @@ type Owner = { value: PyretObject; field: string };
  * object, undeclared helper constructor, or constructor cache is consulted.
  */
 export function referenceSource(root: ReifiedValue, render: Render, fieldName: (name: string) => string): string | undefined {
-  const shapeOf = (v: PyretObject) => '$pyretValue' in v ? readValueInfo({ pyretValue: v.$pyretValue }) : undefined;
+  const shapeOf = reifiedValueInfo;
   const structured = (v: ReifiedValue): v is PyretObject | ReifiedValue[] =>
     !!v && typeof v === 'object' && !numberPayload(v) && shapeOf(v as PyretObject)?.kind !== 'nothing';
   const children = (v: PyretObject | ReifiedValue[]): ReifiedValue[] => {
@@ -29,7 +29,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     if (Array.isArray(v.vals)) return v.vals as ReifiedValue[];
     const set = setContents(v);
     if (set) return set.elements;
-    return (shape?.kind === 'object' ? shape.fields : Object.keys(v.dict ?? {}))
+    return Object.keys(v.dict ?? {})
       .map(k => v.dict![k] as ReifiedValue);
   };
   const nodes = new Set<PyretObject | ReifiedValue[]>();
@@ -98,7 +98,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
   for (const [v, shape] of dictionaries) {
     const name = names.get(v)!;
     const storage = shape.sealed ? fresh('spytial-dict') : name;
-    lines.push(`shadow ${storage} = ${render({ $pyretValue: { ...shape, length: 0, sealed: false }, entries: [] }, expr)}`);
+    lines.push(`shadow ${storage} = ${render({ $pyretValue: { ...shape, sealed: false }, entries: [] }, expr)}`);
     if (shape.sealed) lines.push(`shadow ${name} = ${storage}.seal()`);
     ready.add(v);
     dictionaryStorage.set(v, storage);
@@ -148,7 +148,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
           const ref = obj.dict![field] as PyretObject;
           const shape = shapeOf(ref);
           dict[field] = available(ref.value as ReifiedValue) ? ref.value
-            : shape?.kind === 'reference' && shape.canInitializeWithNothing
+            : shape?.kind === 'reference' && shape.unrestricted
               ? null : ref.value;
         }
         initial = { ...obj, dict };

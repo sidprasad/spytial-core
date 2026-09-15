@@ -40,14 +40,14 @@ describe('v6 relation identity: storage by ID, observation by name', () => {
     expect(instance.getRelations()[0].tuples).toHaveLength(2);
     expect(instance.getRelations()[1].types).toEqual(['Node', 'Node']);
   });
-  it('normalization does not mutate producer records, including metadata', () => {
-    const input = { atoms: atoms.map(a => ({ ...a, metadata: { host: { kind: 'record', arity: 0 } } })),
+  it('normalization does not mutate producer records, including display labels', () => {
+    const input = { atoms: atoms.map(a => ({ ...a, labels: { detail: ['record'] } })),
       relations: [rel('A:foo', 'foo', [['a', 'b']]), rel('A:foo', 'foo', [['a', 'c']])] };
     const before = JSON.stringify(input);
     const instance = new JSONDataInstance(input);
     expect(JSON.stringify(input)).toBe(before);
     const received = new JSONDataInstance(JSON.stringify(instance.reify()));
-    expect(received.getAtoms()[0].metadata).toEqual(input.atoms[0].metadata);
+    expect(received.getAtoms()[0].labels).toEqual(input.atoms[0].labels);
   });
   it('Alloy mutation also uses exact IDs rather than first matching names', () => {
     const tuple = { _: 'tuple', atoms: ['a', 'b'], types: ['Node', 'Node'] } as const;

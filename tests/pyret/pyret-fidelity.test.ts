@@ -96,7 +96,7 @@ describe('replit — REPL-equivalent rendering', () => {
     const n: any = { dict: {}, brands: { $brandcell14: true } };
     n.dict.next = n;
     const di = relationalize(n);
-    const s = replit(di);
+    const s = replit(di, di.getAtoms()[0].id);
     expect(s).toContain('cell');
     expect(s).toContain('<cyclic>');
   });

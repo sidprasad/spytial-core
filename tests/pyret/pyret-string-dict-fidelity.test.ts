@@ -27,7 +27,8 @@ function transport(value: PyretObject) {
   const ids = new Map(raw.atoms.map((a: any, i: number) => [a.id, `opaque-${raw.atoms.length - i}`]));
   raw.atoms.forEach((a: any) => {
     a.id = ids.get(a.id);
-    if (a.metadata) a.label = 'display only';
+    expect(a).not.toHaveProperty('metadata');
+    if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
   });
   raw.relations.forEach((r: any, i: number) => {
     if (!readFieldId(r.id)) r.id = `unrelated-${i}`;
@@ -39,14 +40,14 @@ function transport(value: PyretObject) {
   PyretDataInstance.clearGlobalConstructorCache();
   const datum = new JSONDataInstance(raw);
   expect(datum.getErrors()).toEqual([]);
-  return { original, datum, raw };
+  return { original, datum, raw, rootId: ids.get(original.getAtoms()[0].id) as string };
 }
 function roundTrip(value: PyretObject) {
-  const { original, datum, raw } = transport(value);
-  const rebuilt = reifyToValue(datum) as PyretObject;
+  const { original, datum, raw, rootId } = transport(value);
+  const rebuilt = reifyToValue(datum, rootId) as PyretObject;
   expect(canon(new PyretDataInstance(rebuilt))).toBe(canon(original));
-  expect(replit(datum)).toBe(replit(original));
-  return { original, datum, rebuilt, raw, source: replit(datum) };
+  expect(replit(datum, rootId)).toBe(replit(original, original.getAtoms()[0].id));
+  return { original, datum, rebuilt, raw, source: replit(datum, rootId) };
 }
 
 describe('string dictionary fidelity (#598)', () => {
@@ -147,18 +148,17 @@ describe('string dictionary fidelity (#598)', () => {
 
   it('rejects missing, conflicting, duplicate-key and invalid-position entries', () => {
     const make = () => transport(dictionary([['a', 1], ['b', 2]])).raw;
+    const decode = (raw: any) => reifyToValue(new JSONDataInstance(raw), raw.atoms.find((a: any) => a.type === 'StringDict').id);
     const missing = make(); missing.relations[0].tuples.pop();
-    expect(() => reifyToValue(new JSONDataInstance(missing))).toThrow(/Incomplete Pyret dictionary/);
+    expect(() => decode(missing)).toThrow(/Incomplete Pyret dictionary/);
     const conflict = make(); conflict.relations[0].tuples[1].atoms[1] = conflict.relations[0].tuples[0].atoms[1];
-    expect(() => reifyToValue(new JSONDataInstance(conflict))).toThrow(/Conflicting Pyret dictionary/);
+    expect(() => decode(conflict)).toThrow(/Conflicting Pyret dictionary/);
     const duplicate = make(); duplicate.relations[0].tuples[1].atoms[2] = duplicate.relations[0].tuples[0].atoms[2];
-    expect(() => reifyToValue(new JSONDataInstance(duplicate))).toThrow(/Duplicate Pyret dictionary key/);
-    const invalid = make(); invalid.atoms.find((a: any) => a.type === 'Index').metadata.pyretIndex = 99;
-    expect(() => reifyToValue(new JSONDataInstance(invalid))).toThrow(/Malformed Pyret dictionary entry/);
+    expect(() => decode(duplicate)).toThrow(/Duplicate Pyret dictionary key/);
+    const invalid = make(); invalid.atoms.find((a: any) => a.type === 'Index').label = '99';
+    expect(() => decode(invalid)).toThrow(/Incomplete Pyret dictionary/);
     const type = make(); type.atoms.find((a: any) => a.type === 'String').type = 'Number';
-    expect(() => reifyToValue(new JSONDataInstance(type))).toThrow(/Malformed Pyret dictionary entry/);
-    const root = make(); root.atoms.forEach((a: any) => { delete a.metadata?.pyretRoot; });
-    expect(() => reifyToValue(new JSONDataInstance(root))).toThrow(/explicit root/);
+    expect(() => decode(type)).toThrow(/Malformed Pyret dictionary entry/);
   });
 
   it('generated exact key/value pairs retain their pairing and order', () => {

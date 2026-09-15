@@ -250,9 +250,67 @@ async function main() {
     }
     fixtures.push(['dictionary/history-' + n, value]);
   }
+  // Edit only the public relational datum. Expected values are built separately
+  // in Pyret, so these checks cannot pass by replaying an unedited snapshot.
+  for (const literal of ['7', '9007199254740993', '1/3', '~7.25']) {
+    fixtures.push([`edit/number-${literal}`, box(5), datum => {
+      datum.atoms.find(a => a.type === 'Number').label = literal;
+    }, box(nums.fromString(literal))]);
+  }
+  fixtures.push(['edit/object-name', object({ x: 5 }), datum => {
+    datum.relations.find(r => r.name === 'x').name = 'renamed';
+  }, object({ renamed: 5 })]);
+  fixtures.push(['edit/object-order', object({ z: 1, a: 2 }), datum => {
+    for (const atom of datum.atoms.filter(a => a.type === 'Index')) atom.label = String(1 - Number(atom.label));
+  }, object({ a: 2, z: 1 })]);
+  for (const type of ['RawArray', 'Tuple']) {
+    const wrap = values => type === 'Tuple' ? tuple(values) : values;
+    fixtures.push([`edit/${type}-append`, wrap([5]), datum => {
+      datum.atoms.push({ id: 'added-a', type: 'Index', label: '1' });
+      const relation = datum.relations.find(r => r.name === 'element');
+      const [container, , value] = relation.tuples[0].atoms;
+      relation.tuples.push({ atoms: [container, 'added-a', value], types: relation.types });
+    }, wrap([5, 5])]);
+    fixtures.push([`edit/${type}-remove`, wrap([5, 7]), datum => {
+      const removed = datum.atoms.find(a => a.type === 'Index' && a.label === '1').id;
+      datum.relations.find(r => r.name === 'element').tuples = datum.relations
+        .find(r => r.name === 'element').tuples.filter(t => t.atoms[1] !== removed);
+    }, wrap([5])]);
+  }
+  fixtures.push(['edit/dictionary-append', dictionary, datum => {
+    datum.atoms.push({ id: 'added-a', type: 'Index', label: '1' }, { id: 'added-b', type: 'String', label: 'b' });
+    const relation = datum.relations.find(r => r.name === 'entry');
+    const [container, , , value] = relation.tuples[0].atoms;
+    relation.tuples.push({ atoms: [container, 'added-a', 'added-b', value], types: relation.types });
+  }, await makeDictionary([['a', 1], ['b', 1]])]);
+  fixtures.push(['edit/dictionary-remove', dictionary, datum => {
+    datum.relations.find(r => r.name === 'entry').tuples = [];
+  }, await makeDictionary([])]);
+  fixtures.push(['edit/dictionary-key', dictionary, datum => {
+    datum.atoms.find(a => a.type === 'String').label = 'renamed';
+  }, await makeDictionary([['renamed', 1]])]);
+  fixtures.push(['edit/dictionary-mutable', dictionary, datum => {
+    datum.atoms.find(a => a.type === 'StringDict').type = 'MutableStringDict';
+  }, await makeDictionary([['a', 1]], true)]);
+  fixtures.push(['edit/dictionary-sealed', firstDictionary, datum => {
+    const id = datum.atoms.find(a => a.type === 'MutableStringDict').id;
+    datum.relations.push({ id: 'added-a', name: 'sealed', types: ['MutableStringDict'],
+      tuples: [{ atoms: [id], types: ['MutableStringDict'] }] });
+  }, await run(() => rt.getField(firstDictionary, 'seal').app())]);
+  fixtures.push(['edit/reference-cycle', cell(5), datum => {
+    datum.relations.find(r => r.name === 'target').tuples[0].atoms[1] = datum.atoms.find(a => a.type === 'cell').id;
+  }, cyclic]);
+  fixtures.push(['edit/reference-target', cyclic, datum => {
+    datum.atoms.push({ id: 'added-a', type: 'Number', label: '7' });
+    datum.relations.find(r => r.name === 'target').tuples[0].atoms[1] = 'added-a';
+  }, cell(7)]);
+  fixtures.push(['edit/set-element', await makeSet('list-set', [1, 2]), datum => {
+    datum.atoms.find(a => a.type === 'Number' && a.label === '1').label = '7';
+  }, await makeSet('list-set', [7, 2])]);
+
   const rows = [];
-  for (const [id, value] of fixtures) {
-    const A = await run(() => rt.toReprJS(value, rt.ReprMethods._torepr));
+  for (const [id, value, edit, expected = value] of fixtures) {
+    const A = await run(() => rt.toReprJS(expected, rt.ReprMethods._torepr));
     const original = new PyretDataInstance(value);
     const datum = JSON.parse(
       JSON.stringify({
@@ -261,10 +319,13 @@ async function main() {
         types: original.getTypes(),
       })
     );
+    edit?.(datum);
     const ids = new Map(datum.atoms.map((a, i) => [a.id, 'opaque-' + (datum.atoms.length - i)]));
+    const rootId = ids.get(original.getAtoms()[0].id);
     datum.atoms.forEach(a => {
       a.id = ids.get(a.id);
-      if (a.metadata) a.label = 'display only';
+      if ('metadata' in a) throw new Error('Non-relational Pyret payload');
+      if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
     });
     datum.types.forEach(t => { t.atoms = []; });
     datum.relations.forEach((r, i) => {
@@ -274,7 +335,7 @@ async function main() {
     });
     datum.atoms.reverse(); datum.relations.reverse();
     PyretDataInstance.clearGlobalConstructorCache();
-    const R = replit(new JSONDataInstance(datum));
+    const R = replit(new JSONDataInstance(datum), rootId);
     tokenizer.Tokenizer.tokenizeFrom(R);
     if (!parser.PyretGrammar.parse(tokenizer.Tokenizer))
       throw new Error('Invalid generated Pyret: ' + R);
@@ -305,8 +366,12 @@ async function main() {
     '  sealed-dictionary = ' + rows.find(row => row.id === 'dictionary/sealed-self-cycle').R,
     '  identical(sealed-dictionary.get-value-now("self"), sealed-dictionary) is true',
     '  sealed-dictionary.set-now("a", 1) raises "Cannot modify sealed string dict"',
+    '  edited-seal = ' + rows.find(row => row.id === 'edit/dictionary-sealed').R,
+    '  edited-seal.set-now("a", 2) raises "Cannot modify sealed string dict"',
+    '  edited-cycle = ' + rows.find(row => row.id === 'edit/reference-cycle').R,
+    '  identical(edited-cycle!next, edited-cycle) is true',
   ];
-  const expectedChecks = rows.length + 11;
+  const expectedChecks = rows.length + 13;
   const source =
     'include string-dict\ndata Box: box(v) end\ndata Cell: cell(ref next) end\n'
     + 'data TypedCell: typed-cell(ref v :: Number) end\n'
@@ -355,7 +420,7 @@ async function main() {
     );
   }
   console.log(
-    `All ${rows.length} Pyret inspection checks and 11 reference/dictionary behavior checks passed. Report: ${output}/report.json`
+    `All ${rows.length} Pyret inspection checks and 13 reference/dictionary behavior checks passed. Report: ${output}/report.json`
   );
 }
 main().catch(error => {

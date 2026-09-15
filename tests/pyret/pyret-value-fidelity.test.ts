@@ -5,7 +5,6 @@ import { JSONDataInstance } from '../../src/data-instance/json-data-instance';
 import { reifyToValue } from '../../src/data-instance/pyret/reify';
 import { replit } from '../../src/data-instance/pyret/replit';
 import { canon } from '../../src/data-instance/pyret/canon';
-import { readValueInfo } from '../../src/data-instance/pyret/values';
 import { readFieldId } from '../../src/data-instance/pyret/identity';
 import { SGraphQueryEvaluator } from '../../src/evaluators/data/sgq-evaluator';
 import { generateAlloySchema } from '../../src/data-instance/schema-descriptor';
@@ -26,7 +25,8 @@ function serialize(value: unknown) {
   const ids = new Map(raw.atoms.map((a: any, i: number) => [a.id, `opaque-${i}`]));
   raw.atoms.forEach((a: any) => {
     a.id = ids.get(a.id);
-    if (a.metadata) a.label = 'display only';
+    expect(a).not.toHaveProperty('metadata');
+    if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
   });
   raw.relations.forEach((r: any, i: number) => {
     if (!readFieldId(r.id)) r.id = `unrelated-${i}`;
@@ -37,15 +37,14 @@ function serialize(value: unknown) {
   raw.types.forEach((t: any) => { t.atoms = []; });
   raw.atoms.reverse(); raw.relations.reverse();
   PyretDataInstance.clearGlobalConstructorCache();
-  return { original, datum: new JSONDataInstance(raw) };
+  return { original, datum: new JSONDataInstance(raw), rootId: 'opaque-0' };
 }
 function roundTrip(value: unknown, expected: string) {
   const { datum } = serialize(value);
   expect(datum.getErrors()).toEqual([]);
   expect(replit(datum)).toBe(expected);
   const reconstructed = reifyToValue(datum);
-  // Canon includes numeric display labels for the old tests. Compare a fresh
-  // re-relationalization to the original, not the deliberately relabeled data.
+  // Primitive labels remain values; structured display labels may change.
   expect(canon(new PyretDataInstance(reconstructed as PyretObject))).toBe(canon(new PyretDataInstance(value as PyretObject)));
   return { datum, reconstructed };
 }
@@ -81,12 +80,12 @@ describe('nothing and plain objects (#595)', () => {
     expect((reconstructed as PyretObject).dict!.zebra).toBe((reconstructed as PyretObject).dict!.inherited);
   });
 
-  it('keeps fields as named binary relations, including names shared with constructor fields', () => {
+  it('keeps fields as named relations with explicit field positions, including names shared with constructor fields', () => {
     const { datum } = roundTrip(object({ v: box(1), element: 2 }), '{v: box(1), element: 2}');
     const ev = new SGraphQueryEvaluator();
     ev.initialize({ sourceData: datum });
     expect(ev.evaluate('v').selectedTuplesAll()).toHaveLength(2);
-    expect(datum.getRelations().every(r => r.tuples.every(t => t.atoms.length === 2))).toBe(true);
+    expect(datum.getRelations().filter(r => !readFieldId(r.id)).every(r => r.tuples.every(t => t.atoms.length === 3))).toBe(true);
   });
 
   it('separates field names from colon-keyword tokens and rejects reserved names', () => {
@@ -151,7 +150,7 @@ describe('tuple and raw-array positions and multiplicity (#594)', () => {
       const elements = instance.getRelations().find(r => r.name === 'element')!;
       expect(elements.types).toEqual(['PyretObject', 'Index', 'PyretObject']);
       const fields = instance.getRelations().find(r => r.name === 'x')!;
-      expect(fields.types).toEqual(['PyretObject', 'PyretObject']);
+      expect(fields.types).toEqual(['Object', 'Index', 'PyretObject']);
       // Every actual endpoint must inhabit its declared column type, including
       // the nested tuple's Boolean and both values of the shared field name x.
       for (const relation of [elements, fields]) {
@@ -193,20 +192,20 @@ describe('tuple and raw-array positions and multiplicity (#594)', () => {
   it('rejects incomplete, conflicting, and out-of-range element positions', () => {
     const make = () => serialize([1, 2]).datum.reify();
     const missing = make(); missing.relations[0].tuples.pop();
-    expect(() => replit(new JSONDataInstance(missing))).toThrow(/Incomplete/);
+    expect(() => replit(new JSONDataInstance(missing), 'opaque-0')).toThrow(/Incomplete/);
     const conflict = make();
     conflict.relations[0].tuples[1].atoms[1] = conflict.relations[0].tuples[0].atoms[1];
     expect(() => replit(new JSONDataInstance(conflict))).toThrow(/Conflicting/);
     const outOfRange = make();
-    outOfRange.atoms.find(a => a.type === 'Index')!.metadata!.pyretIndex = 9;
-    expect(() => replit(new JSONDataInstance(outOfRange))).toThrow(/Malformed/);
+    outOfRange.atoms.find(a => a.type === 'Index')!.label = '9';
+    expect(() => replit(new JSONDataInstance(outOfRange), 'opaque-0')).toThrow(/Incomplete/);
   });
 
   it('rejects cyclic mutable containers without rejecting ordinary sharing', () => {
     const a: any[] = []; a.push(a);
-    expect(() => reifyToValue(serialize(a).datum)).toThrow(/Cyclic Pyret containers/);
+    expect(() => reifyToValue(serialize(a).datum, 'opaque-0')).toThrow(/Cyclic Pyret containers/);
     const b: any[] = []; b.push(object({ back: b }));
-    expect(() => replit(serialize(b).datum)).toThrow(/Cyclic Pyret containers/);
+    expect(() => replit(serialize(b).datum, 'opaque-0')).toThrow(/Cyclic Pyret containers/);
   });
 
   it('bounded generated arrays retain every position independently of relation order', () => {
@@ -214,7 +213,7 @@ describe('tuple and raw-array positions and multiplicity (#594)', () => {
       const { datum } = serialize(rows);
       expect(reifyToValue(datum)).toEqual(rows);
       expect(canon(new PyretDataInstance(rows))).toBe(canon(new PyretDataInstance(reifyToValue(datum) as any)));
-      expect(datum.getAtoms().filter(a => readValueInfo(a.metadata)?.kind === 'raw-array')).toHaveLength(rows.length + 1);
+      expect(datum.getAtoms().filter(a => a.type === 'RawArray')).toHaveLength(rows.length + 1);
     }), { numRuns: 200, seed: 594 });
   });
 });
