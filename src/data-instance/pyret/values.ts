@@ -4,12 +4,13 @@ export type PyretValueInfo =
   | { kind: 'reference'; unrestricted: boolean }
   | { kind: 'object' }
   | { kind: 'tuple' | 'raw-array' }
+  | { kind: 'table' }
   | { kind: 'string-dict'; mutable: boolean; sealed: boolean };
 
 export function reifiedValueInfo(value: Record<string, unknown>): PyretValueInfo | undefined {
   if (!Object.prototype.hasOwnProperty.call(value, '$pyretValue')) return undefined;
   const v = value.$pyretValue as Partial<PyretValueInfo> | null;
-  if (v?.kind === 'nothing' || v?.kind === 'object' || v?.kind === 'tuple' || v?.kind === 'raw-array') {
+  if (v?.kind === 'nothing' || v?.kind === 'object' || v?.kind === 'tuple' || v?.kind === 'raw-array' || v?.kind === 'table') {
     return { kind: v.kind };
   }
   if (v?.kind === 'reference' && typeof v.unrestricted === 'boolean') return { kind: v.kind, unrestricted: v.unrestricted };

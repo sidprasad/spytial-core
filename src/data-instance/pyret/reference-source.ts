@@ -5,11 +5,12 @@ import { numberPayload } from './numbers';
 import { reifiedValueInfo } from './values';
 import { setContents } from './set-source';
 import type { DictionaryEntry, DictionaryInfo } from './string-dict';
+import { tableContents } from './table';
 
 type Render = (value: ReifiedValue, child: (value: ReifiedValue) => string) => string;
 type Owner = { value: PyretObject; field: string };
 
-/** Emit graph construction when references or shared mutable dictionaries need it.
+/** Emit graph construction for references, shared mutable dictionaries, and shared table cells.
  * Constructor calls allocate their own mutable cells. Bind aliases to those
  * cells, rather than passing a preallocated ref (which would wrap it again).
  * Each reference must have a reachable mutable constructor field that allocates
@@ -26,6 +27,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     const shape = shapeOf(v);
     if (shape?.kind === 'reference') return [v.value as ReifiedValue];
     if (shape?.kind === 'string-dict') return (v.entries as DictionaryEntry[]).map(entry => entry[1]);
+    if (shape?.kind === 'table') return tableContents(v).rows.flat();
     if (Array.isArray(v.vals)) return v.vals as ReifiedValue[];
     const set = setContents(v);
     if (set) return set.elements;
@@ -36,6 +38,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
   const refs = new Set<PyretObject>();
   const dictionaries = new Map<PyretObject, DictionaryInfo>();
   let hasSharing = false;
+  let hasTables = false;
   const stack = [root];
   while (stack.length) {
     const v = stack.pop()!;
@@ -46,11 +49,12 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     if (!Array.isArray(v)) {
       const shape = shapeOf(v);
       if (shape?.kind === 'string-dict' && shape.mutable) dictionaries.set(v, shape);
+      if (shape?.kind === 'table') hasTables = true;
     }
     const next = children(v);
     for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]);
   }
-  if (!refs.size && !(dictionaries.size && hasSharing)) return undefined;
+  if (!refs.size && !((dictionaries.size || hasTables) && hasSharing)) return undefined;
 
   const owners = new Map<PyretObject, Owner>();
   const mutable = new Map<PyretObject, string[]>();

@@ -11,6 +11,7 @@
  *   - tuples:         {a; b}
  *   - built-in sets:  public collection syntax (list-set adds preserve order)
  *   - dictionaries:  public collection syntax (include string-dict at evaluation)
+ *   - tables:        table literals / public constructors (include tables at evaluation)
  *   - plain objects:  {field: value}
  *   - data variants:  type(field0, field1, ...)   (fields in reconstructed order)
  *
@@ -18,7 +19,7 @@
  * takes from serialized field IDs for v6 constructor data. Only legacy data
  * falls back to the constructor cache / alphabetical field order.
  *
- * References and shared mutable dictionaries use bindings and updates to
+ * References, shared mutable dictionaries, and shared table cells use bindings and updates to
  * preserve sharing/cycles (see reference-source.ts for the construction subset).
  * The legacy ref-free renderer repeats DAGs and emits a `<cyclic>` marker for
  * synthetic object cycles, which are not claimed as evaluable Pyret source.
@@ -32,6 +33,7 @@ import { reifyToValue, ReifiedValue } from './reify';
 import { referenceSource } from './reference-source';
 import { setContents, setSource } from './set-source';
 import { dictionarySource, type DictionaryEntry } from './string-dict';
+import { tableSource } from './table';
 
 function isPyretObject(v: unknown): v is PyretObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && 'dict' in v;
@@ -87,6 +89,13 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
 
   const shape = reifiedValueInfo(v as PyretObject);
   if (shape?.kind === 'nothing') return 'nothing';
+  if (shape?.kind === 'table') {
+    if (onPath.has(v)) throw new Error('Cyclic Pyret table construction is not supported');
+    onPath.add(v);
+    const out = tableSource(v as PyretObject, child, objectKey);
+    onPath.delete(v);
+    return out;
+  }
   if (shape?.kind === 'string-dict') {
     if (onPath.has(v)) throw new Error('Cyclic immutable Pyret dictionary construction is not supported');
     onPath.add(v);
