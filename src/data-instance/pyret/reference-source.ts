@@ -4,11 +4,12 @@ import { constructorInfo } from './identity';
 import { numberPayload } from './numbers';
 import { readValueInfo } from './values';
 import { setContents } from './set-source';
+import type { DictionaryEntry, DictionaryInfo } from './string-dict';
 
 type Render = (value: ReifiedValue, child: (value: ReifiedValue) => string) => string;
 type Owner = { value: PyretObject; field: string };
 
-/** Emit a graph construction block only when references are reachable.
+/** Emit graph construction when references or shared mutable dictionaries need it.
  * Constructor calls allocate their own mutable cells. Bind aliases to those
  * cells, rather than passing a preallocated ref (which would wrap it again).
  * Each reference must have a reachable mutable constructor field that allocates
@@ -24,6 +25,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     if (Array.isArray(v)) return v;
     const shape = shapeOf(v);
     if (shape?.kind === 'reference') return [v.value as ReifiedValue];
+    if (shape?.kind === 'string-dict') return (v.entries as DictionaryEntry[]).map(entry => entry[1]);
     if (Array.isArray(v.vals)) return v.vals as ReifiedValue[];
     const set = setContents(v);
     if (set) return set.elements;
@@ -32,16 +34,23 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
   };
   const nodes = new Set<PyretObject | ReifiedValue[]>();
   const refs = new Set<PyretObject>();
+  const dictionaries = new Map<PyretObject, DictionaryInfo>();
+  let hasSharing = false;
   const stack = [root];
   while (stack.length) {
     const v = stack.pop()!;
-    if (!structured(v) || nodes.has(v)) continue;
+    if (!structured(v)) continue;
+    if (nodes.has(v)) { hasSharing = true; continue; }
     nodes.add(v);
     if (!Array.isArray(v) && shapeOf(v)?.kind === 'reference') refs.add(v);
+    if (!Array.isArray(v)) {
+      const shape = shapeOf(v);
+      if (shape?.kind === 'string-dict' && shape.mutable) dictionaries.set(v, shape);
+    }
     const next = children(v);
     for (let i = next.length - 1; i >= 0; i--) stack.push(next[i]);
   }
-  if (!refs.size) return undefined;
+  if (!refs.size && !(dictionaries.size && hasSharing)) return undefined;
 
   const owners = new Map<PyretObject, Owner>();
   const mutable = new Map<PyretObject, string[]>();
@@ -82,11 +91,51 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     throw new Error('Pyret reference source requires a reachable mutable constructor field for each reference');
   }
 
+  // Mutable dictionaries allocate independently of their entries. A sealed
+  // view is made before filling through its private local, so cycles and
+  // aliases can point at the final view without bypassing its public seal.
+  const dictionaryStorage = new Map<PyretObject, string>();
+  for (const [v, shape] of dictionaries) {
+    const name = names.get(v)!;
+    const storage = shape.sealed ? fresh('spytial-dict') : name;
+    lines.push(`shadow ${storage} = ${render({ $pyretValue: { ...shape, length: 0, sealed: false }, entries: [] }, expr)}`);
+    if (shape.sealed) lines.push(`shadow ${name} = ${storage}.seal()`);
+    ready.add(v);
+    dictionaryStorage.set(v, storage);
+  }
+  const unfilled = new Map(dictionaryStorage);
+  const fillAvailable = (): void => {
+    for (const [v, storage] of unfilled) {
+      if (!children(v).every(available)) continue;
+      for (const [key, value] of v.entries as DictionaryEntry[]) {
+        lines.push(`${storage}.set-now(${expr(key)}, ${expr(value)})`);
+      }
+      unfilled.delete(v);
+    }
+    for (const [ref, { owner, field }] of patches) {
+      if (!available(ref.value as ReifiedValue)) continue;
+      lines.push(`${owner}!{${fieldName(field)}: ${expr(ref.value as ReifiedValue)}}`);
+      patches.delete(ref);
+    }
+  };
+  const complete = (value: ReifiedValue): boolean => {
+    const seen = new Set<object>(), todo = [value];
+    while (todo.length) {
+      const v = todo.pop()!;
+      if (!structured(v) || seen.has(v)) continue;
+      if (!ready.has(v) || unfilled.has(v as PyretObject) || patches.has(v as PyretObject)) return false;
+      seen.add(v);
+      todo.push(...children(v));
+    }
+    return true;
+  };
+
   // Construct immutable dependencies first. An unrestricted mutable field may
   // temporarily contain nothing, which breaks the reference cycle. Annotated
   // fields use their final target at construction time instead.
-  const pending = [...nodes].filter(v => !refs.has(v as PyretObject));
+  const pending = [...nodes].filter(v => !refs.has(v as PyretObject) && !dictionaries.has(v as PyretObject));
   while (pending.length) {
+    fillAvailable();
     let progress = false;
     for (let i = 0; i < pending.length;) {
       const v = pending[i];
@@ -105,6 +154,9 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
         initial = { ...obj, dict };
       }
       if (!children(initial).every(available)) { i++; continue; }
+      // Set constructors compare their elements. Comparing empty dictionary
+      // shells would collapse distinct eventual elements into one member.
+      if (setContents(initial) && !children(initial).every(complete)) { i++; continue; }
       const name = names.get(v)!;
       lines.push(`shadow ${name} = ${render(initial, expr)}`);
       ready.add(v);
@@ -120,12 +172,10 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
       progress = true;
     }
     if (!progress) {
-      throw new Error('Pyret graph cannot be constructed: cycles must cross mutable fields that can initialize with nothing');
+      throw new Error('Pyret graph cannot be constructed: cycles need allocatable mutable fields and set elements need complete contents');
     }
   }
-  for (const [ref, { owner, field }] of patches) {
-    lines.push(`${owner}!{${fieldName(field)}: ${expr(ref.value as ReifiedValue)}}`);
-  }
+  fillAvailable();
   lines.push(expr(root));
   return `block:\n${lines.map(line => '  ' + line).join('\n')}\nend`;
 }

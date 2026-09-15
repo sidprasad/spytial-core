@@ -4,6 +4,7 @@ export type PyretValueInfo = { version: 1 } & (
   | { kind: 'reference'; canInitializeWithNothing: boolean }
   | { kind: 'object'; fields: string[] }
   | { kind: 'tuple' | 'raw-array'; length: number }
+  | { kind: 'string-dict'; length: number; mutable: boolean; sealed: boolean }
 );
 
 export function readValueInfo(metadata?: Record<string, unknown>): PyretValueInfo | undefined {
@@ -20,6 +21,10 @@ export function readValueInfo(metadata?: Record<string, unknown>): PyretValueInf
     }
     if ((v.kind === 'tuple' || v.kind === 'raw-array') && Number.isSafeInteger(v.length) && v.length! >= 0) {
       return { version: 1, kind: v.kind, length: v.length! };
+    }
+    if (v.kind === 'string-dict' && Number.isSafeInteger(v.length) && v.length! >= 0
+        && typeof v.mutable === 'boolean' && typeof v.sealed === 'boolean' && (v.mutable || !v.sealed)) {
+      return { version: 1, kind: v.kind, length: v.length!, mutable: v.mutable, sealed: v.sealed };
     }
   }
   throw new Error('Malformed Pyret value metadata');

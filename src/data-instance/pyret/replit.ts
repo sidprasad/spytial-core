@@ -10,6 +10,7 @@
  *   - raw arrays:     [raw-array: a, b, c]
  *   - tuples:         {a; b}
  *   - built-in sets:  public collection syntax (list-set adds preserve order)
+ *   - dictionaries:  public collection syntax (include string-dict at evaluation)
  *   - plain objects:  {field: value}
  *   - data variants:  type(field0, field1, ...)   (fields in reconstructed order)
  *
@@ -17,8 +18,8 @@
  * takes from serialized field IDs for v6 constructor data. Only legacy data
  * falls back to the constructor cache / alphabetical field order.
  *
- * Reference graphs use bindings and mutable-field updates to preserve sharing
- * and cycles (see reference-source.ts for the supported construction subset).
+ * References and shared mutable dictionaries use bindings and updates to
+ * preserve sharing/cycles (see reference-source.ts for the construction subset).
  * The legacy ref-free renderer repeats DAGs and emits a `<cyclic>` marker for
  * synthetic object cycles, which are not claimed as evaluable Pyret source.
  */
@@ -30,6 +31,7 @@ import { PyretObject } from './pyret-data-instance';
 import { reifyToValue, ReifiedValue } from './reify';
 import { referenceSource } from './reference-source';
 import { setContents, setSource } from './set-source';
+import { dictionarySource, type DictionaryEntry } from './string-dict';
 
 function isPyretObject(v: unknown): v is PyretObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && 'dict' in v;
@@ -85,6 +87,13 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
 
   const shape = '$pyretValue' in v ? readValueInfo({ pyretValue: v.$pyretValue }) : undefined;
   if (shape?.kind === 'nothing') return 'nothing';
+  if (shape?.kind === 'string-dict') {
+    if (onPath.has(v)) throw new Error('Cyclic immutable Pyret dictionary construction is not supported');
+    onPath.add(v);
+    const out = dictionarySource(shape, (v as PyretObject).entries as DictionaryEntry[], child);
+    onPath.delete(v);
+    return out;
+  }
   if ('vals' in v && Array.isArray(v.vals)) {
     if (onPath.has(v)) throw new Error('Cyclic Pyret containers are not supported');
     if (!v.vals.length) throw new Error('Pyret has no empty tuple literal');

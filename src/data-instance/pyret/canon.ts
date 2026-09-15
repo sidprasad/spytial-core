@@ -38,7 +38,8 @@ export function canon(di: IDataInstance): string {
   const relationKey = (rel: typeof relations[number]): string => {
     const shape = readValueInfo(atomsById.get(rel.tuples[0]?.atoms[0])?.metadata);
     return shape ? JSON.stringify([shape.kind === 'object' ? 'object-field'
-      : shape.kind === 'reference' ? 'reference-target' : 'element', rel.name]) : rel.id;
+      : shape.kind === 'reference' ? 'reference-target'
+      : shape.kind === 'string-dict' ? 'dictionary-entry' : 'element', rel.name]) : rel.id;
   };
 
   const outBySrc = new Map<string, OutEdge[]>();

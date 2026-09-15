@@ -26,7 +26,7 @@ import { readValueInfo } from './values';
 import { readNumberMetadata, reifyNumber, type ReifiedNumber } from './numbers';
 import { readConstructorMetadata, readMutableFields, readFieldId } from './identity';
 
-/** A reconstructed value: a synthetic Pyret object/tuple/nothing, a JS raw array,
+/** A reconstructed value: a synthetic Pyret object/tuple/dictionary/nothing, a JS raw array,
  * or a primitive. Legacy multi-target fields also reconstruct as JS arrays. */
 export type ReifiedValue = ReifiedNumber | PyretObject | ReifiedValue[] | number | string | boolean | null;
 
@@ -40,6 +40,7 @@ interface RelIndex {
   positions: Map<string, Map<string, number>>;
   elements: Map<string, Map<number, string>>;
   references: Map<string, string>;
+  entries: Map<string, Map<number, { key: string; value: string }>>;
 }
 
 /** Decode v6 field identities into names and positions; legacy IDs are names. */
@@ -49,6 +50,7 @@ function buildIndex(di: IDataInstance): RelIndex {
   const targets = new Set<string>();
   const positions = new Map<string, Map<string, number>>();
   const references = new Map<string, string>();
+  const entries: RelIndex['entries'] = new Map();
   const atoms = new Map(di.getAtoms().map(a => [a.id, a]));
 
   for (const rel of di.getRelations()) {
@@ -58,6 +60,24 @@ function buildIndex(di: IDataInstance): RelIndex {
       const src = tup.atoms[0];
       const shape = readValueInfo(atoms.get(src)?.metadata);
       for (let i = 1; i < tup.atoms.length; i++) targets.add(tup.atoms[i]);
+
+      if (shape?.kind === 'string-dict') {
+        const indexAtom = atoms.get(tup.atoms[1]);
+        const index = indexAtom?.metadata?.pyretIndex;
+        if (rel.name !== 'entry' || tup.atoms.length !== 4 || indexAtom?.type !== 'Index'
+            || typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= shape.length
+            || atoms.get(tup.atoms[2])?.type !== 'String' || !atoms.has(tup.atoms[3])) {
+          throw new Error('Malformed Pyret dictionary entry');
+        }
+        const indexed = entries.get(src) ?? new Map();
+        const previous = indexed.get(index);
+        if (previous && (previous.key !== tup.atoms[2] || previous.value !== tup.atoms[3])) {
+          throw new Error('Conflicting Pyret dictionary entry positions');
+        }
+        indexed.set(index, { key: tup.atoms[2], value: tup.atoms[3] });
+        entries.set(src, indexed);
+        continue;
+      }
 
       if (shape?.kind === 'reference') {
         if (rel.name !== 'target' || tup.atoms.length !== 2 || !atoms.has(tup.atoms[1])) {
@@ -114,7 +134,7 @@ function buildIndex(di: IDataInstance): RelIndex {
       byField.set(field, arr);
     }
   }
-  return { fields, targets, positions, elements, references };
+  return { fields, targets, positions, elements, references, entries };
 }
 
 /** Parse a primitive atom's label back into a JS primitive. */
@@ -178,7 +198,7 @@ function isListLike(fieldNames: string[]): boolean {
  */
 export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   const atomsById = new Map(di.getAtoms().map((a) => [a.id, a] as const));
-  const { fields, targets, positions, elements, references } = buildIndex(di);
+  const { fields, targets, positions, elements, references, entries } = buildIndex(di);
   // Crossing a reference breaks a construction dependency. Array cycles that
   // never cross a reference retain their existing unsupported status.
   const pending = new Map<string, number>();
@@ -208,6 +228,26 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
       return nothing;
     }
     pending.set(id, referenceDepth);
+    if (shape?.kind === 'string-dict') {
+      const indexed = entries.get(id) ?? new Map();
+      if (indexed.size !== shape.length) throw new Error('Incomplete Pyret dictionary entries');
+      const result: PyretObject = { $pyretValue: shape, entries: [] };
+      memo.set(id, result);
+      const keys = new Set<string>();
+      // Mutable dictionaries can be allocated before their contents, just as
+      // unrestricted reference cells can break a construction cycle.
+      if (shape.mutable) referenceDepth++;
+      for (let i = 0; i < shape.length; i++) {
+        const entry = indexed.get(i)!;
+        const key = atomsById.get(entry.key)!.label;
+        if (keys.has(key)) throw new Error('Duplicate Pyret dictionary key');
+        keys.add(key);
+        (result.entries as unknown[][]).push([key, reifyAtom(entry.value)]);
+      }
+      if (shape.mutable) referenceDepth--;
+      pending.delete(id);
+      return result;
+    }
     if (shape?.kind === 'reference') {
       const target = references.get(id);
       if (target === undefined) throw new Error('Incomplete Pyret reference target');
@@ -302,7 +342,7 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
     return obj;
   };
 
-  // Reference snapshots carry their observation point in atom metadata. Legacy
+  // Reference/dictionary snapshots carry their observation point in atom metadata. Legacy
   // data without references keeps its in-degree/atom-order fallback.
   const allIds = di.getAtoms().map((a) => a.id);
   if (allIds.length === 0) return null;
@@ -315,8 +355,8 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   }
   if (marked.length > 1) throw new Error('Ambiguous Pyret roots');
   if (marked.length === 1) return reifyAtom(marked[0].id);
-  if (di.getAtoms().some(a => readValueInfo(a.metadata)?.kind === 'reference')) {
-    throw new Error('Pyret reference graphs require an explicit root');
+  if (di.getAtoms().some(a => ['reference', 'string-dict'].includes(readValueInfo(a.metadata)?.kind ?? ''))) {
+    throw new Error('Pyret reference/dictionary graphs require an explicit root');
   }
 
   const roots = allIds.filter((id) => !targets.has(id));
