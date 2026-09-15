@@ -22,11 +22,13 @@
 
 import { IDataInstance, IAtom } from '../interfaces';
 import { PyretObject, PyretDataInstance } from './pyret-data-instance';
+import { readValueInfo } from './values';
+import { readNumberMetadata, reifyNumber, type ReifiedNumber } from './numbers';
 import { readConstructorMetadata, readFieldId } from './identity';
 
-/** A value reconstructed from a data instance. Either a synthetic Pyret object,
- * a JS array (for multi-target fields = Pyret arrays/list-likes), or a primitive. */
-export type ReifiedValue = PyretObject | ReifiedValue[] | number | string | boolean | null;
+/** A reconstructed value: a synthetic Pyret object/tuple/nothing, a JS raw array,
+ * or a primitive. Legacy multi-target fields also reconstruct as JS arrays. */
+export type ReifiedValue = ReifiedNumber | PyretObject | ReifiedValue[] | number | string | boolean | null;
 
 const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean']);
 
@@ -36,28 +38,50 @@ interface RelIndex {
   /** atom ids that appear at index >= 1 in some tuple (i.e. are pointed-to) */
   targets: Set<string>;
   positions: Map<string, Map<string, number>>;
+  elements: Map<string, Map<number, string>>;
 }
 
 /** Decode v6 field identities into names and positions; legacy IDs are names. */
 function buildIndex(di: IDataInstance): RelIndex {
   const fields = new Map<string, Map<string, string[]>>();
+  const elements = new Map<string, Map<number, string>>();
   const targets = new Set<string>();
   const positions = new Map<string, Map<string, number>>();
   const atoms = new Map(di.getAtoms().map(a => [a.id, a]));
 
   for (const rel of di.getRelations()) {
-    const identity = readFieldId(rel.id);
+
     for (const tup of rel.tuples) {
       if (tup.atoms.length < 2) continue;
       const src = tup.atoms[0];
+      const shape = readValueInfo(atoms.get(src)?.metadata);
       for (let i = 1; i < tup.atoms.length; i++) targets.add(tup.atoms[i]);
 
+      if (shape?.kind === 'tuple' || shape?.kind === 'raw-array') {
+        const indexAtom = atoms.get(tup.atoms[1]);
+        const index = indexAtom?.metadata?.pyretIndex;
+        if (rel.name !== 'element' || tup.atoms.length !== 3 || indexAtom?.type !== 'Index'
+            || typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0 || index >= shape.length
+            || !atoms.has(tup.atoms[2])) throw new Error('Malformed Pyret indexed element');
+        const indexed = elements.get(src) ?? new Map<number, string>();
+        if (indexed.has(index) && indexed.get(index) !== tup.atoms[2]) throw new Error('Conflicting Pyret element positions');
+        indexed.set(index, tup.atoms[2]);
+        elements.set(src, indexed);
+        continue;
+      }
+      if (shape?.kind === 'nothing') throw new Error('Pyret nothing cannot have fields');
+      if (shape?.kind === 'object' && (tup.atoms.length !== 2 || !atoms.has(tup.atoms[1]))) {
+        throw new Error('Pyret object field must have one value');
+      }
+      // Only constructor/legacy data decodes relation IDs. New value kinds use
+      // relation names and explicit index columns; their IDs are opaque.
+      const identity = shape ? undefined : readFieldId(rel.id);
       let byField = fields.get(src);
       if (!byField) {
         byField = new Map();
         fields.set(src, byField);
       }
-      const field = identity?.field ?? rel.id;
+      const field = shape?.kind === 'object' ? rel.name : identity?.field ?? rel.id;
       if (identity) {
         if (rel.name !== field || atoms.get(src)?.type !== identity.name) {
           throw new Error('Pyret field ID disagrees with its name or source constructor');
@@ -77,13 +101,15 @@ function buildIndex(di: IDataInstance): RelIndex {
       byField.set(field, arr);
     }
   }
-  return { fields, targets, positions };
+  return { fields, targets, positions, elements };
 }
 
 /** Parse a primitive atom's label back into a JS primitive. */
 function reifyPrimitiveAtom(atom: IAtom): ReifiedValue {
   switch (atom.type) {
     case 'Number': {
+      const numeric = readNumberMetadata(atom.metadata);
+      if (numeric) return reifyNumber(numeric);
       const n = Number(atom.label);
       return Number.isNaN(n) ? atom.label : n;
     }
@@ -139,11 +165,16 @@ function isListLike(fieldNames: string[]): boolean {
  */
 export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   const atomsById = new Map(di.getAtoms().map((a) => [a.id, a] as const));
-  const { fields, targets, positions } = buildIndex(di);
+  const { fields, targets, positions, elements } = buildIndex(di);
+  const pending = new Set<string>();
+  const activeSequences = new Set<string>();
   const memo = new Map<string, ReifiedValue>();
 
   const reifyAtom = (id: string): ReifiedValue => {
-    if (memo.has(id)) return memo.get(id)!;
+    if (memo.has(id)) {
+      if (pending.has(id) && activeSequences.size) throw new Error('Cyclic Pyret containers are not supported');
+      return memo.get(id)!;
+    }
 
     const atom = atomsById.get(id);
     if (!atom) return null;
@@ -154,12 +185,32 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
       return v;
     }
 
+    const shape = readValueInfo(atom.metadata);
+    if (shape?.kind === 'nothing') {
+      const nothing = { $pyretValue: shape };
+      memo.set(id, nothing);
+      return nothing;
+    }
+    pending.add(id);
+    if (shape?.kind === 'raw-array' || shape?.kind === 'tuple') {
+      const indexed = elements.get(id) ?? new Map<number, string>();
+      if (indexed.size !== shape.length) throw new Error('Incomplete Pyret container elements');
+      const values: ReifiedValue[] = [];
+      const result: ReifiedValue = shape.kind === 'raw-array' ? values : { vals: values };
+      memo.set(id, result);
+      activeSequences.add(id);
+      for (let i = 0; i < shape.length; i++) values.push(reifyAtom(indexed.get(i)!));
+      activeSequences.delete(id);
+      pending.delete(id);
+      return result;
+    }
+
     const byField = fields.get(id) ?? new Map<string, string[]>();
     const present = Array.from(byField.keys());
     const arity = readConstructorMetadata(atom.metadata);
 
     // Pure list-like object (numeric field names) -> JS array.
-    if (arity === undefined && isListLike(present)) {
+    if (!shape && arity === undefined && isListLike(present)) {
       const arr: ReifiedValue[] = [];
       memo.set(id, arr);
       const ordered = present.slice().sort(numericAwareCompare);
@@ -170,16 +221,23 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
         // tuple per inner element under the SAME numeric field), so nest it.
         arr.push(tgts.length === 1 ? reifyAtom(tgts[0]) : tgts.map((t) => reifyAtom(t)));
       }
+      pending.delete(id);
       return arr;
     }
 
     // Object/data-variant: create the shell and memoize BEFORE recursing so
     // shared/cyclic references resolve to this exact JS object.
-    const obj: PyretObject = { dict: Object.create(null), $name: atom.type };
+    const obj: PyretObject = { dict: Object.create(null),
+      ...(shape?.kind === 'object' ? { $pyretValue: shape } : { $name: atom.type }) };
     memo.set(id, obj);
 
     let order: string[];
-    if (arity !== undefined) {
+    if (shape?.kind === 'object') {
+      if (shape.fields.length !== present.length || shape.fields.some(f => !byField.has(f))) {
+        throw new Error('Incomplete Pyret object fields');
+      }
+      order = shape.fields;
+    } else if (arity !== undefined) {
       const declared = positions.get(id) ?? new Map<string, number>();
       const count = Math.max(0, arity);
       if (present.length !== count || declared.size !== count
@@ -194,7 +252,7 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
     }
     for (const f of order) {
       const tgts = byField.get(f) ?? [];
-      if (arity !== undefined && tgts.length !== 1) throw new Error('Pyret constructor field must have one value');
+      if ((shape?.kind === 'object' || arity !== undefined) && tgts.length !== 1) throw new Error('Pyret constructor field must have one value');
       if (tgts.length === 1) {
         // single target -> scalar field value (one binary tuple round-trips identically)
         obj.dict![f] = reifyAtom(tgts[0]) as unknown;
@@ -204,6 +262,7 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
         obj.dict![f] = tgts.map((t) => reifyAtom(t)) as unknown;
       }
     }
+    pending.delete(id);
     return obj;
   };
 
@@ -222,12 +281,12 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
     // like a name string) would reify to just that leaf and drop the rest of
     // the graph. Atom order starts at the value the instance was built from, so
     // the first structured atom is the original root.
-    const entry = allIds.find((id) => (fields.get(id)?.size ?? 0) > 0) ?? allIds[0];
+    const entry = allIds.find((id) => (fields.get(id)?.size ?? elements.get(id)?.size ?? 0) > 0) ?? allIds[0];
     return reifyAtom(entry);
   }
 
-  // Multiple roots -> wrap them in a synthetic list, so `replit` renders them as
-  // [list: r1, r2]. (Structural round-trip of multi-root instances is
+  // Multiple roots -> wrap them in a JS array, so `replit` renders them as
+  // [raw-array: r1, r2]. (Structural round-trip of multi-root instances is
   // intentionally not claimed.) Atoms in a cyclic component that no root reaches
   // are not part of that list.
   const arr: ReifiedValue[] = roots.map((r) => reifyAtom(r));

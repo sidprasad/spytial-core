@@ -197,13 +197,13 @@ describe('PyretDataInstance', () => {
         const atoms = instance.getAtoms();
         const relations = instance.getRelations();
 
-        // Should have 2 atoms: the parent object and the converted rational number
+        // Should have 2 atoms: the parent object and the exact rational number
         expect(atoms).toHaveLength(2);
 
         // Find the number atom
         const numberAtom = atoms.find(a => a.type === 'Number');
         expect(numberAtom).toBeDefined();
-        expect(numberAtom?.label).toBe('1.5'); // 3/2 = 1.5
+        expect(numberAtom?.label).toBe('3/2');
 
         // Should have 1 relation connecting the parent to the rational number
         expect(relations).toHaveLength(1);
@@ -229,8 +229,8 @@ describe('PyretDataInstance', () => {
         expect(numberAtoms).toHaveLength(3);
 
         const labels = numberAtoms.map(a => a.label).sort();
-        expect(labels).toContain('0.5');   // 1/2
-        expect(labels).toContain('0.25');  // 1/4
-        expect(labels).toContain('1.5');   // 3/2
+        expect(labels).toContain('1/2');   // 1/2
+        expect(labels).toContain('1/4');  // 1/4
+        expect(labels).toContain('3/2');   // 3/2
     });
 });

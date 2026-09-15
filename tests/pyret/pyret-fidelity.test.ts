@@ -65,10 +65,8 @@ describe('replit — REPL-equivalent rendering', () => {
     ['string', 'hi', '"hi"'],
     ['string-escape', 'a\nb', '"a\\nb"'],
     ['bool', true, 'true'],
-    ['array', [1, 2, 3], '[list: 1, 2, 3]'],
-    // KNOWN AMBIGUITY: an empty array has zero relations, so it is structurally
-    // indistinguishable from an empty object — reify cannot recover "array-ness".
-    ['empty-array (ambiguous)', [], 'RawArray'],
+    ['array', [1, 2, 3], '[raw-array: 1, 2, 3]'],
+    ['empty-array', [], '[raw-array: ]'],
     [
       'point',
       { dict: { x: 1, y: 2 }, brands: { $brandpoint7: true } },

@@ -25,48 +25,9 @@ import { canon } from '../../src/data-instance/pyret/canon';
 /** Anything we can relationalize: a Pyret object graph, an array, or a primitive. */
 export type Reifiable = PyretObject | ReifiedValue;
 
-function isPrimitive(v: unknown): v is number | string | boolean {
-  const t = typeof v;
-  return t === 'number' || t === 'string' || t === 'boolean';
-}
-
-function primitiveType(v: number | string | boolean): string {
-  return typeof v === 'number' ? 'Number' : typeof v === 'string' ? 'String' : 'Boolean';
-}
-
-/**
- * Relationalize a value into a PyretDataInstance.
- *
- * Mirrors `PyretDataInstance.fromExpression`'s handling of primitive roots
- * (the constructor expects an object, so a bare primitive is added directly).
- * Arrays at the root are wrapped in a synthetic indexed object so the existing
- * array path produces relations.
- */
-export function relationalize(
-  v: Reifiable,
-  options: PyretInstanceOptions = {},
-): PyretDataInstance {
-  if (v === null || v === undefined) return new PyretDataInstance(null, options);
-
-  if (isPrimitive(v)) {
-    const di = new PyretDataInstance(null, options);
-    di.addAtom({
-      id: `prim_${primitiveType(v)}_${String(v)}`,
-      type: primitiveType(v),
-      label: String(v),
-    });
-    return di;
-  }
-
-  if (Array.isArray(v)) {
-    const dict: Record<string, unknown> = {};
-    v.forEach((el, i) => {
-      dict[String(i)] = el;
-    });
-    return new PyretDataInstance({ dict, $name: 'RawArray' } as PyretObject, options);
-  }
-
-  return new PyretDataInstance(v as PyretObject, options);
+/** Use the working constructor directly, including primitive and array roots. */
+export function relationalize(v: Reifiable, options: PyretInstanceOptions = {}): PyretDataInstance {
+  return new PyretDataInstance(v as PyretObject | unknown[] | number | string | boolean | null, options);
 }
 
 export interface RoundTripResult {
