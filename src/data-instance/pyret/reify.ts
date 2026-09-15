@@ -31,7 +31,7 @@ export type ReifiedValue = ReifiedNumber | PyretObject | ReifiedValue[] | number
 
 const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean']);
 const VALUE_TYPES = new Set([...PRIMITIVE_TYPES, 'Index', 'Nothing', 'Object', 'Tuple', 'RawArray',
-  'Reference', 'StringDict', 'MutableStringDict']);
+  'Reference', 'StringDict', 'MutableStringDict', 'Table']);
 
 interface RelIndex {
   fields: Map<string, Map<string, string[]>>;
@@ -40,6 +40,8 @@ interface RelIndex {
   constructors: Map<string, Map<string, number>>;
   objectPositions: Map<string, Map<string, number>>;
   elements: Map<string, Map<number, string>>;
+  columns: Map<string, Map<number, string>>;
+  rows: Map<string, Map<number, string[]>>;
   references: Map<string, string>;
   entries: Map<string, Map<number, { key: string; value: string }>>;
   mutableFields: Map<string, Set<number>>;
@@ -75,7 +77,7 @@ function ordered<T>(indexed: Map<number, T>, context: string): T[] {
 function buildIndex(di: IDataInstance): RelIndex {
   const idx: RelIndex = {
     fields: new Map(), targets: new Set(), constructors: new Map(), objectPositions: new Map(),
-    elements: new Map(), references: new Map(), entries: new Map(), mutableFields: new Map(),
+    elements: new Map(), columns: new Map(), rows: new Map(), references: new Map(), entries: new Map(), mutableFields: new Map(),
     sealed: new Set(), unrestricted: new Set(), nullary: new Set(),
   };
   const atoms = new Map(di.getAtoms().map(a => [a.id, a]));
@@ -117,6 +119,26 @@ function buildIndex(di: IDataInstance): RelIndex {
         }
       }
       if (size < 2) throw new Error('Malformed Pyret unary relation');
+      if (type === 'Table') {
+        if (identity) throw new Error('Pyret table relations must have opaque IDs');
+        const index = indexValue(atoms.get(second));
+        if (rel.name === 'column' && size === 3 && atoms.get(third)?.type === 'String') {
+          const columns = idx.columns.get(src) ?? new Map<number, string>();
+          if (columns.has(index) && columns.get(index) !== third) throw new Error('Conflicting Pyret table column positions');
+          columns.set(index, third);
+          idx.columns.set(src, columns);
+        } else if (rel.name === 'row') {
+          const rows = idx.rows.get(src) ?? new Map<number, string[]>();
+          const cells = tup.atoms.slice(2);
+          if (rows.has(index) && JSON.stringify(rows.get(index)) !== JSON.stringify(cells)) {
+            throw new Error('Conflicting Pyret table row positions');
+          }
+          if (cells.some(id => atoms.get(id)?.type === 'Index')) throw new Error('Pyret table cells cannot be positions');
+          rows.set(index, cells);
+          idx.rows.set(src, rows);
+        } else throw new Error('Malformed Pyret table relation');
+        continue;
+      }
       if (type === 'StringDict' || type === 'MutableStringDict') {
         if (rel.name !== 'entry' || size !== 4 || atoms.get(third)?.type !== 'String') {
           throw new Error('Malformed Pyret dictionary entry');
@@ -168,6 +190,7 @@ function shapeOf(atom: IAtom, idx: RelIndex): PyretValueInfo | undefined {
     case 'Object': return { kind: 'object' };
     case 'Tuple': return { kind: 'tuple' };
     case 'RawArray': return { kind: 'raw-array' };
+    case 'Table': return { kind: 'table' };
     case 'Reference': return { kind: 'reference', unrestricted: idx.unrestricted.has(atom.id) };
     case 'StringDict': case 'MutableStringDict':
       return { kind: 'string-dict', mutable: atom.type === 'MutableStringDict', sealed: idx.sealed.has(atom.id) };
@@ -260,6 +283,22 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
       return nothing;
     }
     pending.set(id, referenceDepth);
+    if (shape?.kind === 'table') {
+      const headers = ordered(idx.columns.get(id) ?? new Map<number, string>(), 'table columns')
+        .map(header => atomsById.get(header)!.label);
+      if (new Set(headers).size !== headers.length) throw new Error('Duplicate Pyret table column name');
+      const rows = ordered(idx.rows.get(id) ?? new Map<number, string[]>(), 'table rows');
+      if (rows.some(row => row.length !== headers.length)) throw new Error('Pyret table row width must match its columns');
+      const values: ReifiedValue[][] = [];
+      const table: PyretObject = { $pyretValue: shape,
+        dict: { '_header-raw-array': headers, '_rows-raw-array': values } };
+      memo.set(id, table);
+      activeSequences.add(id);
+      for (const row of rows) values.push(row.map(reifyAtom));
+      activeSequences.delete(id);
+      pending.delete(id);
+      return table;
+    }
     if (shape?.kind === 'string-dict') {
       const indexed = entries.get(id) ?? new Map();
       const orderedEntries = ordered(indexed, 'dictionary entries');

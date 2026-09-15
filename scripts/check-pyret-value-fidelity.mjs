@@ -44,7 +44,7 @@ async function loadCollections(root, rt, requirejs) {
     }
     order.push(uri);
   }
-  visit('ffi'); visit('sets'); visit('string-dict');
+  visit('ffi'); visit('sets'); visit('string-dict'); visit('tables');
   const hooks = await new Promise((resolve, reject) =>
     requirejs(['pyret-base/js/post-load-hooks'], resolve, reject));
   const realm = { static: {}, instantiated: {} };
@@ -53,7 +53,8 @@ async function loadCollections(root, rt, requirejs) {
     rt.runStandalone(modules, realm, dependencies, order, hooks.makeDefaultPostLoadHooks(rt, {})),
   result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
   const values = name => rt.getField(rt.getField(realm.instantiated['builtin://' + name], 'provide-plus-types'), 'values');
-  return { sets: values('sets'), dictionaries: values('string-dict') };
+  return { sets: values('sets'), dictionaries: values('string-dict'),
+    tableRuntime: rt.getField(realm.instantiated['builtin://table'], 'provide-plus-types').dict.internal };
 }
 async function main() {
   if (!process.argv[2])
@@ -93,7 +94,7 @@ async function main() {
     stdout: console.log,
     stderr: console.error,
   });
-  const { sets, dictionaries } = await loadCollections(root, rt, r);
+  const { sets, dictionaries, tableRuntime } = await loadCollections(root, rt, r);
   const run = thunk => new Promise((resolve, reject) => rt.runThunk(thunk,
     result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
   const makeSet = (kind, values) => run(() => {
@@ -308,6 +309,87 @@ async function main() {
     datum.atoms.find(a => a.type === 'Number' && a.label === '1').label = '7';
   }, await makeSet('list-set', [7, 2])]);
 
+  const makeTable = (headers, rows) => run(() => tableRuntime.makeTable(headers, rows));
+  const basicTable = await makeTable(['name', 'score'], [['Ada', 7], ['Ada', 7]]);
+  const nestedTable = await makeTable(['inner'], [[await makeTable(['x'], [[1], [2]])]]);
+  const sharedTableArray = [1, 2];
+  const arrayTable = await makeTable(['a', 'b'], [[sharedTableArray, sharedTableArray]]);
+  const tableCell = cell(rt.nothing);
+  const cyclicTable = await makeTable(['x'], [[tableCell]]);
+  rt.unsafeSetRef(tableCell.dict.next, cyclicTable);
+  const tableDict = await makeDictionary([], true);
+  const dictionaryTable = await makeTable(['x'], [[tableDict]]);
+  await run(() => rt.getField(tableDict, 'set-now').app('table', dictionaryTable));
+  fixtures.push(['skeleton/table', await makeTable(['a', 'b'], [[1, 2]])],
+    ['table/duplicates', basicTable], ['table/empty', await makeTable(['z', 'a'], [])],
+    ['table/zero-columns', await makeTable([], [[], []])], ['table/empty-zero-columns', await makeTable([], [])],
+    ['table/nested', nestedTable], ['table/shared-array', arrayTable], ['table/reference-cycle', cyclicTable],
+    ['table/dictionary-cycle', dictionaryTable],
+    ['table/field', box(basicTable)],
+    ['table/multiple-widths', tuple([basicTable, nestedTable])],
+    ['table/mixed', await makeTable(['value'], [[1], ['one'], [true], [rt.nothing], [box(2)], [tuple([3, 3])],
+      [nums.fromString('1/3')], [nums.fromString('~1.5')], [nums.fromString('123456789012345678901234567890')],
+      [innerListSet], [dictionary]])],
+    ['table/beyond-display-limit', await makeTable(['n'], Array.from({ length: 1002 }, (_, i) => [i]))]);
+  fixtures.push(['table/large-zero-columns', await makeTable([], Array.from({ length: 1002 }, () => []))]);
+  fixtures.push(['table/after-drop-last-column', await run(() =>
+    rt.getField(rt.getField(basicTable, 'drop').app('score'), 'drop').app('name'))]);
+  fixtures.push(['edit/table-author', await makeTable([], []), datum => {
+    const root = datum.atoms[0].id;
+    datum.atoms = [{ id: root, type: 'Table', label: 'authored' }, { id: 'i', type: 'Index', label: '0' },
+      { id: 'j', type: 'Index', label: '1' }, { id: 'h', type: 'String', label: 'input column' },
+      { id: 'v', type: 'Number', label: '1/3' }];
+    datum.types = [];
+    datum.relations = [
+      { id: 'c', name: 'column', types: ['Table', 'Index', 'String'], tuples: [{ atoms: [root, 'i', 'h'], types: [] }] },
+      { id: 'r', name: 'row', types: ['Table', 'Index', 'Number'],
+        tuples: [{ atoms: [root, 'j', 'v'], types: [] }, { atoms: [root, 'i', 'v'], types: [] }] },
+    ];
+  }, await makeTable(['input column'], [[nums.fromString('1/3')], [nums.fromString('1/3')]])]);
+  for (const headers of [['row', 'table', 'source', 'a--b'], ['', 'end', 'first name', '__proto__', 'constructor'],
+    ['quote"', 'slash\\', 'line\n', '\uFAAA', 'e\u0301']]) {
+    fixtures.push(['table/headers-' + fixtures.length, await makeTable(headers, [headers.map((_, i) => i)])]);
+    fixtures.push(['table/empty-headers-' + fixtures.length, await makeTable(headers, [])]);
+  }
+  for (const [id, edit, expected] of [
+    ['header', datum => { datum.atoms.find(a => a.type === 'String' && a.label === 'name').label = 'first name'; },
+      await makeTable(['first name', 'score'], [['Ada', 7], ['Ada', 7]])],
+    ['value', datum => { datum.atoms.find(a => a.type === 'Number').label = '9'; },
+      await makeTable(['name', 'score'], [['Ada', 9], ['Ada', 9]])],
+    ['remove-row', datum => { datum.relations.find(r => r.name === 'row').tuples.pop(); },
+      await makeTable(['name', 'score'], [['Ada', 7]])],
+    ['append-row', datum => {
+      datum.atoms.push({ id: 'new-index', type: 'Index', label: '2' });
+      const r = datum.relations.find(r => r.name === 'row');
+      const [t, , a, n] = r.tuples[0].atoms;
+      r.tuples.push({ atoms: [t, 'new-index', n, a], types: r.types });
+    }, await makeTable(['name', 'score'], [['Ada', 7], ['Ada', 7], [7, 'Ada']])],
+    ['reorder-rows', datum => {
+      const r = datum.relations.find(r => r.name === 'row');
+      const [t, i, a, n] = r.tuples[0].atoms, j = r.tuples[1].atoms[1];
+      r.tuples[0].atoms = [t, j, n, a]; r.tuples[1].atoms = [t, i, a, n];
+    }, await makeTable(['name', 'score'], [['Ada', 7], [7, 'Ada']])],
+    ['reorder-columns', datum => {
+      const c = datum.relations.find(r => r.name === 'column');
+      [c.tuples[0].atoms[1], c.tuples[1].atoms[1]] = [c.tuples[1].atoms[1], c.tuples[0].atoms[1]];
+      for (const t of datum.relations.find(r => r.name === 'row').tuples) [t.atoms[2], t.atoms[3]] = [t.atoms[3], t.atoms[2]];
+    }, await makeTable(['score', 'name'], [[7, 'Ada'], [7, 'Ada']])],
+    ['remove-columns', datum => {
+      datum.relations.find(r => r.name === 'column').tuples = [];
+      const r = datum.relations.find(r => r.name === 'row'); r.types = ['Table', 'Index'];
+      for (const t of r.tuples) { t.atoms = t.atoms.slice(0, 2); t.types = r.types; }
+    }, await makeTable([], [[], []])],
+    ['remove-all-rows', datum => { datum.relations.find(r => r.name === 'row').tuples = []; },
+      await makeTable(['name', 'score'], [])],
+  ]) fixtures.push(['edit/table-' + id, basicTable, edit, expected]);
+
+  // This structural oracle is computed from live expected contents separately
+  // from the reifier. The Pyret checks below use public row/column accessors.
+  const tableSnapshot = v => tableRuntime.isTable(v) ? tuple([
+    rt.ffi.makeList(v.dict['_header-raw-array']),
+    rt.ffi.makeList(v.dict['_rows-raw-array'].map(row => rt.ffi.makeList(row.map(tableSnapshot)))),
+  ]) : v;
+
   const rows = [];
   for (const [id, value, edit, expected = value] of fixtures) {
     const A = await run(() => rt.toReprJS(expected, rt.ReprMethods._torepr));
@@ -339,7 +421,9 @@ async function main() {
     tokenizer.Tokenizer.tokenizeFrom(R);
     if (!parser.PyretGrammar.parse(tokenizer.Tokenizer))
       throw new Error('Invalid generated Pyret: ' + R);
-    rows.push({ id, A, R });
+    const snapshot = tableRuntime.isTable(expected)
+      ? await run(() => rt.toReprJS(tableSnapshot(expected), rt.ReprMethods._torepr)) : undefined;
+    rows.push({ id, A, R, tableSnapshot: snapshot });
   }
   fs.writeFileSync(
     path.join(output, 'report.json'),
@@ -371,18 +455,40 @@ async function main() {
     '  edited-cycle = ' + rows.find(row => row.id === 'edit/reference-cycle').R,
     '  identical(edited-cycle!next, edited-cycle) is true',
   ];
-  const expectedChecks = rows.length + 13;
+  const tableSource = id => rows.find(row => row.id === id).R;
+  const tableChecks = [
+    ...rows.filter(row => row.tableSnapshot !== undefined).map(row =>
+      '  torepr(table-snapshot(' + row.R + ')) is ' + replit(new PyretDataInstance(row.tableSnapshot))),
+    '  table-aliases = ' + tableSource('table/shared-array'),
+    '  identical(table-aliases.row-n(0).get-value("a"), table-aliases.row-n(0).get-value("b")) is true',
+    '  raw-array-set(table-aliases.row-n(0).get-value("a"), 0, 9)',
+    '  raw-array-get(table-aliases.row-n(0).get-value("b"), 0) is 9',
+    '  table-cycle = ' + tableSource('table/reference-cycle'),
+    '  table-owner = table-cycle.row-n(0).get-value("x")',
+    '  identical(table-owner!next, table-cycle) is true',
+    '  table-dict-cycle = ' + tableSource('table/dictionary-cycle'),
+    '  identical(table-dict-cycle.row-n(0).get-value("x").get-value-now("table"), table-dict-cycle) is true',
+    '  table-operations = ' + tableSource('table/duplicates'),
+    '  table-operations.add-row(table-operations.row("Grace", 9)).length() is 3',
+    '  table-operations.drop("score").column-names() is [list: "name"]',
+    '  table-operations.length() is 2',
+  ];
+  const tableCheckCount = rows.filter(row => row.tableSnapshot !== undefined).length + 7;
+  const expectedChecks = rows.length + 13 + tableCheckCount;
   const source =
-    'include string-dict\ndata Box: box(v) end\ndata Cell: cell(ref next) end\n'
+    'include string-dict\ninclude tables\ndata Box: box(v) end\ndata Cell: cell(ref next) end\n'
     + 'data TypedCell: typed-cell(ref v :: Number) end\n'
     + 'data Two: two(ref row, ref second) end\n'
-    + 'data Collision: spytial-value0(ref v) end\ncheck:\n' +
+    + 'data Collision: spytial-value0(ref v) end\n'
+    + 'fun table-snapshot(v):\n  if is-table(v):\n    {v.column-names(); for map(r from v.all-rows()):\n'
+    + '      for map(c from v.column-names()): table-snapshot(r.get-value(c)) end\n    end}\n  else: v end\nend\n'
+    + 'check "value inspection and reference behavior":\n' +
     rows
       .map(
         row =>
           '  torepr(' + row.R + ') is ' + replit(new PyretDataInstance(row.A))
       )
-      .join('\n') + '\n' + topologyChecks.join('\n') +
+      .join('\n') + '\n' + topologyChecks.join('\n') + '\nend\ncheck "table contents and behavior":\n' + tableChecks.join('\n') +
     '\nend\n';
   fs.writeFileSync(path.join(output, 'checks.arr'), source);
   console.log(
@@ -420,7 +526,7 @@ async function main() {
     );
   }
   console.log(
-    `All ${rows.length} Pyret inspection checks and 13 reference/dictionary behavior checks passed. Report: ${output}/report.json`
+    `All ${rows.length} Pyret inspection checks, 13 reference/dictionary behavior checks, and ${tableCheckCount} table structural/behavior checks passed. Report: ${output}/report.json`
   );
 }
 main().catch(error => {

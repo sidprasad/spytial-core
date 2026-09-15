@@ -6,6 +6,7 @@ import { replit } from './replit';
 import { numberPayload, numberSource } from './numbers';
 import { isRuntimeNothing, isRuntimeReference, referenceInfo, isCallableField, objectFields, reifiedValueInfo, type PyretValueInfo } from './values';
 import { runtimeDictionaryInfo, dictionaryEntries } from './string-dict';
+import { isRuntimeTable, isRuntimeRow, tableContents } from './table';
 import { constructorInfo, fieldId, readFieldId } from './identity';
 import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
 
@@ -114,7 +115,8 @@ export function generateEdgeId(
  *   }
  * };
  * const instance2 = new PyretDataInstance(tableData);
- * // Creates relation "row" with tuples: (PVD, ORD), (ORD, PVD)
+ * // Creates column(table, index, name) and row(table, index, ...cells).
+ * // Project with Index.(Table.row) for the cell-only (PVD, ORD), (ORD, PVD) view.
  * 
  * // Custom idempotency settings
  * const instance3 = new PyretDataInstance(pyretData, {
@@ -515,6 +517,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private parseObjectIteratively(rootObject: PyretObject | unknown[]): void {
     type Pending = { obj: PyretObject | unknown[]; parentInfo?: { atoms: string[]; relationId: string; relationName?: string } };
     const queue: Pending[] = [{ obj: rootObject }];
+    const processed = new WeakSet<object>();
     const enqueue = (value: unknown, atoms: string[], relationId: string, relationName?: string): void => {
       if (this.isAtomicValue(value)) {
         const target = this.createAtomFromPrimitive(value);
@@ -528,16 +531,31 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
     for (let next = 0; next < queue.length; next++) {
       const { obj, parentInfo } = queue[next];
       let atomId = this.objectToAtomId.get(obj);
-      const alreadySeen = atomId !== undefined;
       if (!atomId) atomId = this.createAtomFromObject(obj);
       if (parentInfo) {
         this.addRelationTuple(parentInfo.relationId,
           { atoms: [...parentInfo.atoms, atomId], types: [] }, parentInfo.relationName);
       }
-      if (alreadySeen) continue;
+      if (processed.has(obj)) continue;
+      processed.add(obj);
 
       const shape = this.valueInfo(obj);
       if (shape?.kind === 'nothing') continue;
+      if (shape?.kind === 'table') {
+        this.processTableSemantics(atomId, obj as PyretObject, value => {
+          if (this.isAtomicValue(value)) return this.createAtomFromPrimitive(value);
+          if (isCallableField(value) || (!Array.isArray(value) && !this.isPyretObject(value))) {
+            throw new Error('Unsupported Pyret table cell');
+          }
+          const object = value as PyretObject | unknown[];
+          // Allocate every cell endpoint before inserting the n-ary row tuple.
+          // Traversal is tracked separately, so preallocation cannot skip fields.
+          const id = this.objectToAtomId.get(object) ?? this.createAtomFromObject(object);
+          queue.push({ obj: object });
+          return id;
+        });
+        continue;
+      }
       if (shape?.kind === 'string-dict') {
         if (shape.sealed) this.addValueFact('sealed', atomId, 'MutableStringDict');
         const entries = dictionaryEntries(obj as PyretObject, shape);
@@ -578,10 +596,6 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
         this.addRelationTuple(relationId, { atoms: [atomId, this.createIndexAtom(position)], types: [] }, 'mutable-field');
       }
       if (!object.dict || typeof object.dict !== 'object') continue;
-      if (this.isPyretTable(object)) {
-        this.processTableSemantics(atomId, object);
-        continue;
-      }
       const fields = info?.fields ?? (shape?.kind === 'object' ? objectFields(object.dict, this.options.showFunctions) : Object.keys(object.dict));
       if (!shape) this.cacheConstructorPattern(this.extractType(object), fields);
       fields.forEach((name, position) => {
@@ -633,91 +647,31 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private valueInfo(obj: PyretObject | unknown[]): PyretValueInfo | undefined {
     if (Array.isArray(obj)) return { kind: 'raw-array' };
     if ('$pyretValue' in obj) return reifiedValueInfo(obj);
+    if (isRuntimeRow(obj)) throw new Error('Standalone Pyret Row values are not supported');
+    if (isRuntimeTable(obj)) return { kind: 'table' };
     const ref = referenceInfo(obj);
     if (ref) return ref;
     const dictionary = runtimeDictionaryInfo(obj);
     if (dictionary) return dictionary;
     if (isRuntimeNothing(obj)) return { kind: 'nothing' };
     if (Array.isArray(obj.vals)) return { kind: 'tuple' };
-    if (constructorInfo(obj) || this.isPyretTable(obj)) return undefined;
+    if (constructorInfo(obj)) return undefined;
     if (obj.dict && (typeof obj.updateDict === 'function' || this.extractType(obj) === 'PyretObject')) {
       return { kind: 'object' };
     }
     return undefined;
   }
 
-  /**
-   * Checks if a Pyret object is a table with semantic data
-   */
-  private isPyretTable(obj: PyretObject): boolean {
-    if (!obj.dict || typeof obj.dict !== 'object') {
-      return false;
-    }
-    
-    // Check if it has the table brand
-    if (obj.brands && typeof obj.brands === 'object') {
-      const hasBrandTable = Object.keys(obj.brands).some(key => key.includes('brandtable'));
-      if (!hasBrandTable) {
-        return false;
-      }
-    }
-    
-    // Check if it has _header-raw-array and _rows-raw-array
-    return '_header-raw-array' in obj.dict && '_rows-raw-array' in obj.dict;
-  }
-
-  /**
-   * Processes a Pyret table to create semantic relational tuples
-   * Each row becomes a tuple in a relation
-   */
-  private processTableSemantics(tableAtomId: string, tableObj: PyretObject): void {
-    const dict = tableObj.dict as Record<string, unknown>;
-    const headerArray = dict['_header-raw-array'] as unknown[];
-    const rowsArray = dict['_rows-raw-array'] as unknown[];
-    
-    if (!Array.isArray(headerArray) || !Array.isArray(rowsArray)) {
-      // Fallback to regular processing if structure is unexpected
-      return;
-    }
-    
-    // Extract column names from header
-    const columnNames = headerArray.filter(h => typeof h === 'string') as string[];
-    
-    if (columnNames.length === 0) {
-      return;
-    }
-    
-    // Use "row" as the relation name to represent table rows
-    const relationName = 'row';
-    
-    // Process each row as a tuple
-    rowsArray.forEach((row) => {
-      if (!Array.isArray(row)) {
-        return;
-      }
-      
-      // Create atoms for each cell value and collect them as a tuple
-      const tupleAtomIds: string[] = [];
-      
-      row.forEach((cellValue) => {
-        if (this.isAtomicValue(cellValue)) {
-          const atomId = this.createAtomFromPrimitive(cellValue);
-          tupleAtomIds.push(atomId);
-        }
-      });
-      
-      // Only create the tuple if we have the expected number of values
-      if (tupleAtomIds.length === columnNames.length && tupleAtomIds.length > 0) {
-        // Create an n-ary tuple for this row
-        this.addRelationTuple(
-          relationName,
-          { 
-            atoms: tupleAtomIds, 
-            types: tupleAtomIds.map(() => 'String') // Assuming string types for now
-          }
-        );
-      }
-    });
+  /** One ordered header relation and one row relation per width; IDs stay opaque. */
+  private processTableSemantics(tableAtomId: string, tableObj: PyretObject, cellAtom: (value: unknown) => string): void {
+    const { headers, rows } = tableContents(tableObj);
+    const columns = this.valueRelationId('table-columns', 'column', ['Table', 'Index', 'String']);
+    headers.forEach((name, i) => this.addRelationTuple(columns,
+      { atoms: [tableAtomId, this.createIndexAtom(i), this.createAtomFromPrimitive(name)], types: [] }, 'column'));
+    const relation = this.valueRelationId('table-rows:' + headers.length, 'row',
+      ['Table', 'Index', ...headers.map(() => 'PyretObject')]);
+    rows.forEach((row, i) => this.addRelationTuple(relation,
+      { atoms: [tableAtomId, this.createIndexAtom(i), ...Array.from(row, cellAtom)], types: [] }, 'row'));
   }
 
   /**
@@ -725,7 +679,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    */
   private createAtomFromObject(obj: PyretObject | unknown[]): string {
     const shape = this.valueInfo(obj);
-    const type = shape ? { nothing: 'Nothing', reference: 'Reference', object: 'Object', tuple: 'Tuple', 'raw-array': 'RawArray',
+    const type = shape ? { nothing: 'Nothing', reference: 'Reference', object: 'Object', tuple: 'Tuple', 'raw-array': 'RawArray', table: 'Table',
       'string-dict': shape.kind === 'string-dict' && shape.mutable ? 'MutableStringDict' : 'StringDict' }[shape.kind]
       : this.extractType(obj as PyretObject);
     const atomId = this.generateAtomId(type);
