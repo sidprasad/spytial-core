@@ -3,6 +3,7 @@ import type { ReifiedValue } from './reify';
 import { constructorInfo } from './identity';
 import { numberPayload } from './numbers';
 import { readValueInfo } from './values';
+import { setContents } from './set-source';
 
 type Render = (value: ReifiedValue, child: (value: ReifiedValue) => string) => string;
 type Owner = { value: PyretObject; field: string };
@@ -24,6 +25,8 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
     const shape = shapeOf(v);
     if (shape?.kind === 'reference') return [v.value as ReifiedValue];
     if (Array.isArray(v.vals)) return v.vals as ReifiedValue[];
+    const set = setContents(v);
+    if (set) return set.elements;
     return (shape?.kind === 'object' ? shape.fields : Object.keys(v.dict ?? {}))
       .map(k => v.dict![k] as ReifiedValue);
   };

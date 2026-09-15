@@ -9,6 +9,7 @@
  *   - primitives:     5     "hi"    true     nothing
  *   - raw arrays:     [raw-array: a, b, c]
  *   - tuples:         {a; b}
+ *   - built-in sets:  public collection syntax (list-set adds preserve order)
  *   - plain objects:  {field: value}
  *   - data variants:  type(field0, field1, ...)   (fields in reconstructed order)
  *
@@ -28,6 +29,7 @@ import { IDataInstance } from '../interfaces';
 import { PyretObject } from './pyret-data-instance';
 import { reifyToValue, ReifiedValue } from './reify';
 import { referenceSource } from './reference-source';
+import { setContents, setSource } from './set-source';
 
 function isPyretObject(v: unknown): v is PyretObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && 'dict' in v;
@@ -103,6 +105,12 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
   if (isPyretObject(v)) {
     if (onPath.has(v)) return '<cyclic>';
     onPath.add(v);
+    const set = setContents(v);
+    if (set) {
+      const out = setSource(set, child);
+      onPath.delete(v);
+      return out;
+    }
     const type = (v.$name as string) || 'object';
     const dict = (v.dict as Record<string, unknown>) || {};
     const keys = shape?.kind === 'object' ? shape.fields : Object.keys(dict);

@@ -19,6 +19,41 @@ import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instanc
 import { JSONDataInstance } from '../src/data-instance/json-data-instance.ts';
 import { replit } from '../src/data-instance/pyret/replit.ts';
 import { readFieldId } from '../src/data-instance/pyret/identity.ts';
+
+// Use the checkout's compiled builtins to construct actual Set values, including
+// their _output methods. These modules are available only to the test producer;
+// the reifier below receives ordinary serialized atoms/relations/types.
+async function loadSets(root, rt, requirejs) {
+  const compiled = path.join(root, 'build/phaseA/compiled');
+  const files = fs.readdirSync(compiled);
+  const modules = {}, dependencies = {}, order = [];
+  function visit(name) {
+    const uri = 'builtin://' + name;
+    if (modules[uri]) return;
+    const matches = files.filter(f => f.startsWith(name + '-')
+      && /^[a-f0-9]{64}(?:-module)?\.js$/.test(f.slice(name.length + 1)));
+    if (matches.length !== 1) throw new Error(`Expected one compiled builtin ${name}, found ${matches.length}`);
+    // Compiled Pyret modules are JS expressions, as in Pyret's own loader.
+    const mod = (0, eval)(fs.readFileSync(path.join(compiled, matches[0]), 'utf8'));
+    modules[uri] = mod;
+    dependencies[uri] = {};
+    for (const dep of mod.requires) {
+      if (dep['import-type'] !== 'builtin') throw new Error('Expected builtin dependency');
+      visit(dep.name);
+      dependencies[uri]['builtin(' + dep.name + ')'] = 'builtin://' + dep.name;
+    }
+    order.push(uri);
+  }
+  visit('ffi'); visit('sets');
+  const hooks = await new Promise((resolve, reject) =>
+    requirejs(['pyret-base/js/post-load-hooks'], resolve, reject));
+  const realm = { static: {}, instantiated: {} };
+  rt.modules = realm.instantiated;
+  await new Promise((resolve, reject) => rt.runThunk(() =>
+    rt.runStandalone(modules, realm, dependencies, order, hooks.makeDefaultPostLoadHooks(rt, {})),
+  result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
+  return rt.getField(rt.getField(realm.instantiated['builtin://sets'], 'provide-plus-types'), 'values');
+}
 async function main() {
   if (!process.argv[2])
     throw new Error(
@@ -34,7 +69,7 @@ async function main() {
   r.config({
     nodeRequire: require,
     paths: {
-      'pyret-base': root + '/build/phase0',
+      'pyret-base': root + '/build/phaseA',
       jglr: root + '/build/phaseA/js',
       seedrandom: root + '/node_modules/seedrandom/index',
       'js-sha256': root + '/node_modules/js-sha256/src/sha256',
@@ -56,6 +91,14 @@ async function main() {
   const rt = runtime.makeRuntime({
     stdout: console.log,
     stderr: console.error,
+  });
+  const sets = await loadSets(root, rt, r);
+  const run = thunk => new Promise((resolve, reject) => rt.runThunk(thunk,
+    result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
+  const makeSet = (kind, values) => run(() => {
+    const ctor = rt.getField(sets, kind);
+    const optimized = values.length <= 5;
+    return rt.getField(ctor, optimized ? 'make' + values.length : 'make').app(...(optimized ? values : [values]));
   });
   const box = v =>
     rt.makeDataValue({ v }, { brandCount: 0 }, 'box', () => {}, 1, [false], {
@@ -142,9 +185,30 @@ async function main() {
     cells.forEach((c, i) => rt.unsafeSetRef(c.dict.next, cells[(i + 1) % size]));
     fixtures.push(['cycle/generated-ring-' + size, cells]);
   }
+  for (const kind of ['list-set', 'tree-set']) {
+    for (let size = 0; size <= 12; size++) {
+      const values = Array.from({ length: size }, (_, i) => (i * 7 + 3) % 13);
+      fixtures.push([`set/${kind}-${size}`, await makeSet(kind, values)]);
+    }
+    const pair = await makeSet(kind, [1, 2]);
+    const added = await run(() => rt.getField(pair, 'add').app(9));
+    const removed = await run(() => rt.getField(added, 'remove').app(1));
+    fixtures.push([`skeleton/${kind}`, pair], [`set/${kind}-field`, box(pair)],
+      [`set/${kind}-after-add`, added], [`set/${kind}-after-remove`, removed],
+      [`set/${kind}-duplicates`, await makeSet(kind, [2, 1, 2, 1, 2, 1])],
+      [`set/${kind}-strings`, await makeSet(kind, ['z', 'a', 'é', 'quote"'])],
+      [`set/${kind}-numbers`, await makeSet(kind, [nums.fromString('1/3'), nums.fromString('123456789012345678901234567890'), -2])],
+      [`set/${kind}-reference-sibling`, object({ owner: cell(pair), set: pair })]);
+  }
+  const innerListSet = await makeSet('list-set', [2, 1]);
+  const innerTreeSet = await makeSet('tree-set', [3, 1]);
+  fixtures.push(['set/nested', await makeSet('list-set', [innerListSet, innerTreeSet])],
+    ['set/constructor-elements', await makeSet('list-set', [box(innerListSet), box(innerTreeSet)])],
+    ['set/array-tuple', tuple([[innerListSet], innerTreeSet])],
+    ['set/reference-element', await makeSet('list-set', [cell(5)])]);
   const rows = [];
   for (const [id, value] of fixtures) {
-    const A = rt.toReprJS(value, rt.ReprMethods._torepr);
+    const A = await run(() => rt.toReprJS(value, rt.ReprMethods._torepr));
     const original = new PyretDataInstance(value);
     const datum = JSON.parse(
       JSON.stringify({
