@@ -1,6 +1,7 @@
 /** Container/value shape lives on atoms, never in their IDs. */
 export type PyretValueInfo = { version: 1 } & (
   | { kind: 'nothing' }
+  | { kind: 'reference'; canInitializeWithNothing: boolean }
   | { kind: 'object'; fields: string[] }
   | { kind: 'tuple' | 'raw-array'; length: number }
 );
@@ -10,6 +11,9 @@ export function readValueInfo(metadata?: Record<string, unknown>): PyretValueInf
   const v = metadata.pyretValue as Partial<PyretValueInfo> | null;
   if (v?.version === 1) {
     if (v.kind === 'nothing') return { version: 1, kind: 'nothing' };
+    if (v.kind === 'reference' && typeof v.canInitializeWithNothing === 'boolean') {
+      return { version: 1, kind: 'reference', canInitializeWithNothing: v.canInitializeWithNothing };
+    }
     if (v.kind === 'object' && Array.isArray(v.fields)
         && v.fields.every(f => typeof f === 'string') && new Set(v.fields).size === v.fields.length) {
       return { version: 1, kind: 'object', fields: [...v.fields] };
@@ -19,6 +23,30 @@ export function readValueInfo(metadata?: Record<string, unknown>): PyretValueInf
     }
   }
   throw new Error('Malformed Pyret value metadata');
+}
+
+/** PRef has no dict/brand. Recognize its data and annotation-list protocol
+ * without relying on constructor names, runtime realms, or executing checks. */
+export function isRuntimeReference(value: unknown): value is {
+  state: number; value: unknown; anns: { anns: Array<{ ann: { name?: string } }> };
+} {
+  if (!value || typeof value !== 'object' || 'dict' in value) return false;
+  const ref = value as Record<string, any>;
+  return Number.isInteger(ref.state) && 'value' in ref && !!ref.anns
+    && Array.isArray(ref.anns.anns) && typeof ref.anns.check === 'function'
+    && typeof ref.anns.addAnn === 'function'
+    && Object.keys(ref).every(k => k === 'state' || k === 'value' || k === 'anns');
+}
+
+export function referenceInfo(value: unknown): Extract<PyretValueInfo, { kind: 'reference' }> | undefined {
+  if (!isRuntimeReference(value)) return undefined;
+  // Pyret states: 0 graphable, 1 unset, 2 set, 3 frozen. This feature snapshots
+  // initialized mutable cells; silently dropping other states would lose data.
+  if (value.state !== 2) throw new Error('Only initialized mutable Pyret references are supported');
+  return { version: 1, kind: 'reference',
+    // Only Any is known safe without running potentially stateful annotations.
+    // Other annotations can still be reconstructed using the real target first.
+    canInitializeWithNothing: value.anns.anns.every(entry => entry.ann?.name === 'Any') };
 }
 
 /** PNothing and PObject have identical own data. Their runtime protocols differ.

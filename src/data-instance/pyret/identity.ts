@@ -5,10 +5,10 @@
  */
 const FIELD = 'pyret:field:v1:';
 
-export interface ConstructorInfo { name: string; arity: number; fields: string[] }
+export interface ConstructorInfo { name: string; arity: number; fields: string[]; mutableFields?: number[] }
 
 export function constructorInfo(value: {
-  $name?: string; $arity?: number; $constructor?: unknown;
+  $name?: string; $arity?: number; $constructor?: unknown; $mut_fields_mask?: unknown;
 }): ConstructorInfo | undefined {
   const { $name: name, $arity: arity } = value;
   if (typeof name !== 'string' || !Number.isInteger(arity) || arity! < -1) return undefined;
@@ -18,7 +18,23 @@ export function constructorInfo(value: {
       || new Set(fields).size !== fields.length) {
     throw new Error(`Invalid Pyret constructor metadata for ${name}`);
   }
-  return { name, arity: arity!, fields };
+  const mask = value.$mut_fields_mask;
+  if (mask !== undefined && (!Array.isArray(mask) || mask.length !== arity || mask.some(v => typeof v !== 'boolean'))) {
+    throw new Error(`Invalid Pyret mutable field mask for ${name}`);
+  }
+  const mutableFields = (mask as boolean[] | undefined)?.flatMap((mut, i) => mut ? [i] : []) ?? [];
+  return { name, arity: arity!, fields, ...(mutableFields.length ? { mutableFields } : {}) };
+}
+
+export function readMutableFields(metadata?: Record<string, unknown>): number[] {
+  const arity = readConstructorMetadata(metadata);
+  const positions = (metadata?.pyret as { mutableFields?: unknown } | undefined)?.mutableFields;
+  if (positions === undefined) return [];
+  if (arity === undefined || !Array.isArray(positions) || new Set(positions).size !== positions.length
+      || positions.some(p => !Number.isInteger(p) || p < 0 || p >= arity)) {
+    throw new Error('Malformed Pyret mutable field positions');
+  }
+  return [...positions];
 }
 
 export function fieldId(info: ConstructorInfo, position: number): string {
