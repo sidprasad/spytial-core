@@ -16,10 +16,10 @@
  * takes from serialized field IDs for v6 constructor data. Only legacy data
  * falls back to the constructor cache / alphabetical field order.
  *
- * LIMITATION: a flat torepr-style string cannot express sharing or cycles. DAGs
- * are re-printed (matching `torepr`); cycles emit a `<cyclic>` marker instead of
- * looping forever. The cyclic bind-and-backpatch source form (block:/var) is
- * future work and is documented in the fidelity design notes.
+ * Reference graphs use bindings and mutable-field updates to preserve sharing
+ * and cycles (see reference-source.ts for the supported construction subset).
+ * The legacy ref-free renderer repeats DAGs and emits a `<cyclic>` marker for
+ * synthetic object cycles, which are not claimed as evaluable Pyret source.
  */
 
 import { readValueInfo } from './values';
@@ -27,6 +27,7 @@ import { numberPayload, numberSource } from './numbers';
 import { IDataInstance } from '../interfaces';
 import { PyretObject } from './pyret-data-instance';
 import { reifyToValue, ReifiedValue } from './reify';
+import { referenceSource } from './reference-source';
 
 function isPyretObject(v: unknown): v is PyretObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && 'dict' in v;
@@ -71,7 +72,7 @@ function objectKey(key: string): string {
   return COLON_WORDS.has(key) ? key + ' ' : key;
 }
 
-function render(v: ReifiedValue, onPath: Set<object>): string {
+function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedValue): string => render(value, onPath)): string {
   if (v === null || v === undefined) return 'nothing';
   if (typeof v === 'number') return String(v);
   if (typeof v === 'boolean') return v ? 'true' : 'false';
@@ -86,7 +87,7 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
     if (onPath.has(v)) throw new Error('Cyclic Pyret containers are not supported');
     if (!v.vals.length) throw new Error('Pyret has no empty tuple literal');
     onPath.add(v);
-    const out = `{${v.vals.map(e => render(e as ReifiedValue, onPath)).join('; ')}${v.vals.length === 1 ? ';' : ''}}`;
+    const out = `{${v.vals.map(e => child(e as ReifiedValue)).join('; ')}${v.vals.length === 1 ? ';' : ''}}`;
     onPath.delete(v);
     return out;
   }
@@ -94,7 +95,7 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
   if (Array.isArray(v)) {
     if (onPath.has(v)) return '<cyclic>';
     onPath.add(v);
-    const out = `[raw-array: ${v.map((e) => render(e, onPath)).join(', ')}]`;
+    const out = `[raw-array: ${v.map(child).join(', ')}]`;
     onPath.delete(v);
     return out;
   }
@@ -106,9 +107,9 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
     const dict = (v.dict as Record<string, unknown>) || {};
     const keys = shape?.kind === 'object' ? shape.fields : Object.keys(dict);
     const out = shape?.kind === 'object'
-      ? `{${keys.map(k => `${objectKey(k)}: ${render(dict[k] as ReifiedValue, onPath)}`).join(', ')}}`
+      ? `{${keys.map(k => `${objectKey(k)}: ${child(dict[k] as ReifiedValue)}`).join(', ')}}`
       : keys.length || v.$arity === 0
-      ? `${type}(${keys.map((k) => render(dict[k] as ReifiedValue, onPath)).join(', ')})`
+      ? `${type}(${keys.map((k) => child(dict[k] as ReifiedValue)).join(', ')})`
       : type;
     onPath.delete(v);
     return out;
@@ -119,5 +120,7 @@ function render(v: ReifiedValue, onPath: Set<object>): string {
 
 /** Reconstruct the value from the data instance and render it as a Pyret string. */
 export function replit(di: IDataInstance, rootId?: string): string {
-  return render(reifyToValue(di, rootId), new Set());
+  const value = reifyToValue(di, rootId);
+  return referenceSource(value, (v, child) => render(v, new Set(), child), objectKey)
+    ?? render(value, new Set());
 }

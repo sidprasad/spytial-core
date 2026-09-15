@@ -37,7 +37,8 @@ export function canon(di: IDataInstance): string {
   // query name define their meaning; constructor IDs retain their v6 meaning.
   const relationKey = (rel: typeof relations[number]): string => {
     const shape = readValueInfo(atomsById.get(rel.tuples[0]?.atoms[0])?.metadata);
-    return shape ? JSON.stringify([shape.kind === 'object' ? 'object-field' : 'element', rel.name]) : rel.id;
+    return shape ? JSON.stringify([shape.kind === 'object' ? 'object-field'
+      : shape.kind === 'reference' ? 'reference-target' : 'element', rel.name]) : rel.id;
   };
 
   const outBySrc = new Map<string, OutEdge[]>();
@@ -61,7 +62,8 @@ export function canon(di: IDataInstance): string {
   };
 
   // Canonical numbering: DFS from roots, children ordered by (relation, target keys).
-  const roots = atoms.map((a) => a.id).filter((id) => !targetSet.has(id));
+  const marked = atoms.filter(a => a.metadata?.pyretRoot).map(a => a.id);
+  const roots = marked.length ? marked : atoms.map((a) => a.id).filter((id) => !targetSet.has(id));
   const seeds = (roots.length ? roots : atoms.map((a) => a.id)).slice().sort((x, y) => {
     const k = keyOf(x).localeCompare(keyOf(y));
     return k !== 0 ? k : x.localeCompare(y);

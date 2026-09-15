@@ -4,7 +4,7 @@ import { DataInstanceEventEmitter } from '../data-instance-event-emitter';
 import { settleTupleTypes } from '../tuple-types';
 import { replit } from './replit';
 import { numberPayload, numberSource } from './numbers';
-import { isRuntimeNothing, isCallableField, objectFields, readValueInfo, type PyretValueInfo } from './values';
+import { isRuntimeNothing, isRuntimeReference, referenceInfo, isCallableField, objectFields, readValueInfo, type PyretValueInfo } from './values';
 import { constructorInfo, fieldId, readFieldId } from './identity';
 import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
 
@@ -491,9 +491,9 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    * This is the REPL-equivalent string form: the value is first reconstructed
    * from the relations (`reifyToValue`, which memoizes by atom id so a shared
    * atom becomes one shared object and a cycle becomes a real back-reference),
-   * then rendered (`replit`). A flat string cannot express sharing or cycles, so
-   * shared subtrees are re-printed (matching `torepr`) and cycles print a
-   * `<cyclic>` marker at the back-edge.
+   * then rendered (`replit`). Supported reference graphs emit bindings and
+   * mutable-field updates. The legacy ref-free path repeats shared subtrees
+   * and prints a `<cyclic>` marker for synthetic object cycles.
    *
    * @returns A string representation of the data in Pyret constructor syntax
    *
@@ -512,6 +512,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private parseObjectIteratively(rootObject: PyretObject | unknown[]): void {
     type Pending = { obj: PyretObject | unknown[]; parentInfo?: { atoms: string[]; relationId: string; relationName?: string } };
     const queue: Pending[] = [{ obj: rootObject }];
+    let hasReferences = false;
     const enqueue = (value: unknown, atoms: string[], relationId: string, relationName?: string): void => {
       if (this.isAtomicValue(value)) {
         const target = this.createAtomFromPrimitive(value);
@@ -535,6 +536,16 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
 
       const shape = readValueInfo(this.atoms.get(atomId)!.metadata);
       if (shape?.kind === 'nothing') continue;
+      if (shape?.kind === 'reference') {
+        hasReferences = true;
+        const value = (obj as PyretObject).value;
+        if (!this.isAtomicValue(value) && !Array.isArray(value) && !this.isPyretObject(value)) {
+          throw new Error('Unsupported Pyret reference target');
+        }
+        const relationId = this.valueRelationId('reference-target', 'target', ['Reference', 'PyretObject']);
+        enqueue(value, [atomId], relationId, 'target');
+        continue;
+      }
       if (shape?.kind === 'tuple' || shape?.kind === 'raw-array') {
         const values = Array.isArray(obj) ? obj : obj.vals as unknown[];
         for (let index = 0; index < values.length; index++) {
@@ -561,6 +572,10 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
           : shape?.kind === 'object' ? this.valueRelationId('object-field:' + name, name, ['PyretObject', 'PyretObject']) : name;
         enqueue(value, [atomId], relationId, shape?.kind === 'object' ? name : undefined);
       });
+    }
+    if (hasReferences) {
+      const root = this.atoms.get(this.objectToAtomId.get(rootObject)!)!;
+      root.metadata = { ...root.metadata, pyretRoot: { version: 1 } };
     }
   }
 
@@ -592,6 +607,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private valueInfo(obj: PyretObject | unknown[]): PyretValueInfo | undefined {
     if (Array.isArray(obj)) return { version: 1, kind: 'raw-array', length: obj.length };
     if ('$pyretValue' in obj) return readValueInfo({ pyretValue: obj.$pyretValue });
+    const ref = referenceInfo(obj);
+    if (ref) return ref;
     if (isRuntimeNothing(obj)) return { version: 1, kind: 'nothing' };
     if (Array.isArray(obj.vals)) return { version: 1, kind: 'tuple', length: obj.vals.length };
     if (constructorInfo(obj) || this.isPyretTable(obj)) return undefined;
@@ -680,7 +697,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    */
   private createAtomFromObject(obj: PyretObject | unknown[]): string {
     const shape = this.valueInfo(obj);
-    const type = shape ? { nothing: 'Nothing', object: 'PyretObject', tuple: 'Tuple', 'raw-array': 'RawArray' }[shape.kind]
+    const type = shape ? { nothing: 'Nothing', reference: 'Reference', object: 'PyretObject', tuple: 'Tuple', 'raw-array': 'RawArray' }[shape.kind]
       : this.extractType(obj as PyretObject);
     const atomId = this.generateAtomId(type);
     const info = Array.isArray(obj) ? undefined : constructorInfo(obj);
@@ -689,7 +706,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
       type,
       label: shape ? type : this.extractLabel(obj as PyretObject),
       ...(shape ? { metadata: { pyretValue: shape } }
-        : info ? { metadata: { pyret: { version: 1, arity: info.arity } } } : {})
+        : info ? { metadata: { pyret: { version: 1, arity: info.arity,
+          ...(info.mutableFields ? { mutableFields: info.mutableFields } : {}) } } } : {})
     };
     this.atoms.set(atomId, atom);
     this.objectToAtomId.set(obj, atomId);
@@ -932,7 +950,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   private isPyretObject(obj: unknown): obj is PyretObject {
     return typeof obj === 'object' &&
       obj !== null &&
-      ('dict' in obj || 'brands' in obj || '$name' in obj || 'vals' in obj || '$pyretValue' in obj);
+      ('dict' in obj || 'brands' in obj || '$name' in obj || 'vals' in obj || '$pyretValue' in obj || isRuntimeReference(obj));
   }
 
   /**
