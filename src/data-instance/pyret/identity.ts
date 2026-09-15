@@ -26,28 +26,8 @@ export function constructorInfo(value: {
   return { name, arity: arity!, fields, ...(mutableFields.length ? { mutableFields } : {}) };
 }
 
-export function readMutableFields(metadata?: Record<string, unknown>): number[] {
-  const arity = readConstructorMetadata(metadata);
-  const positions = (metadata?.pyret as { mutableFields?: unknown } | undefined)?.mutableFields;
-  if (positions === undefined) return [];
-  if (arity === undefined || !Array.isArray(positions) || new Set(positions).size !== positions.length
-      || positions.some(p => !Number.isInteger(p) || p < 0 || p >= arity)) {
-    throw new Error('Malformed Pyret mutable field positions');
-  }
-  return [...positions];
-}
-
 export function fieldId(info: ConstructorInfo, position: number): string {
   return FIELD + JSON.stringify([info.name, position, info.fields[position]]);
-}
-
-export function readConstructorMetadata(metadata?: Record<string, unknown>): number | undefined {
-  if (!metadata || !Object.prototype.hasOwnProperty.call(metadata, 'pyret')) return undefined;
-  const value = metadata.pyret as { version?: number; arity?: number } | null;
-  if (!value || value.version !== 1 || !Number.isInteger(value.arity) || value.arity! < -1) {
-    throw new Error('Malformed Pyret constructor metadata');
-  }
-  return value.arity;
 }
 
 export function readFieldId(id: string): { name: string; position: number; field: string } | undefined {

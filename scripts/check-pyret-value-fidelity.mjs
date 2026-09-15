@@ -19,6 +19,42 @@ import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instanc
 import { JSONDataInstance } from '../src/data-instance/json-data-instance.ts';
 import { replit } from '../src/data-instance/pyret/replit.ts';
 import { readFieldId } from '../src/data-instance/pyret/identity.ts';
+
+// Use the checkout's compiled builtins to construct actual collection values, including
+// their _output methods. These modules are available only to the test producer;
+// the reifier below receives ordinary serialized atoms/relations/types.
+async function loadCollections(root, rt, requirejs) {
+  const compiled = path.join(root, 'build/phaseA/compiled');
+  const files = fs.readdirSync(compiled);
+  const modules = {}, dependencies = {}, order = [];
+  function visit(name) {
+    const uri = 'builtin://' + name;
+    if (modules[uri]) return;
+    const matches = files.filter(f => f.startsWith(name + '-')
+      && /^[a-f0-9]{64}(?:-module)?\.js$/.test(f.slice(name.length + 1)));
+    if (matches.length !== 1) throw new Error(`Expected one compiled builtin ${name}, found ${matches.length}`);
+    // Compiled Pyret modules are JS expressions, as in Pyret's own loader.
+    const mod = (0, eval)(fs.readFileSync(path.join(compiled, matches[0]), 'utf8'));
+    modules[uri] = mod;
+    dependencies[uri] = {};
+    for (const dep of mod.requires) {
+      if (dep['import-type'] !== 'builtin') throw new Error('Expected builtin dependency');
+      visit(dep.name);
+      dependencies[uri]['builtin(' + dep.name + ')'] = 'builtin://' + dep.name;
+    }
+    order.push(uri);
+  }
+  visit('ffi'); visit('sets'); visit('string-dict');
+  const hooks = await new Promise((resolve, reject) =>
+    requirejs(['pyret-base/js/post-load-hooks'], resolve, reject));
+  const realm = { static: {}, instantiated: {} };
+  rt.modules = realm.instantiated;
+  await new Promise((resolve, reject) => rt.runThunk(() =>
+    rt.runStandalone(modules, realm, dependencies, order, hooks.makeDefaultPostLoadHooks(rt, {})),
+  result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
+  const values = name => rt.getField(rt.getField(realm.instantiated['builtin://' + name], 'provide-plus-types'), 'values');
+  return { sets: values('sets'), dictionaries: values('string-dict') };
+}
 async function main() {
   if (!process.argv[2])
     throw new Error(
@@ -34,7 +70,7 @@ async function main() {
   r.config({
     nodeRequire: require,
     paths: {
-      'pyret-base': root + '/build/phase0',
+      'pyret-base': root + '/build/phaseA',
       jglr: root + '/build/phaseA/js',
       seedrandom: root + '/node_modules/seedrandom/index',
       'js-sha256': root + '/node_modules/js-sha256/src/sha256',
@@ -57,6 +93,16 @@ async function main() {
     stdout: console.log,
     stderr: console.error,
   });
+  const { sets, dictionaries } = await loadCollections(root, rt, r);
+  const run = thunk => new Promise((resolve, reject) => rt.runThunk(thunk,
+    result => rt.isSuccessResult(result) ? resolve(result.result) : reject(result.exn)));
+  const makeSet = (kind, values) => run(() => {
+    const ctor = rt.getField(sets, kind);
+    const optimized = values.length <= 5;
+    return rt.getField(ctor, optimized ? 'make' + values.length : 'make').app(...(optimized ? values : [values]));
+  });
+  const makeDictionary = (entries, mutable = false) => run(() => rt.getField(
+    rt.getField(dictionaries, mutable ? 'mutable-string-dict' : 'string-dict'), 'make').app(entries.flat()));
   const box = v =>
     rt.makeDataValue({ v }, { brandCount: 0 }, 'box', () => {}, 1, [false], {
       $fieldNames: ['v'],
@@ -142,9 +188,129 @@ async function main() {
     cells.forEach((c, i) => rt.unsafeSetRef(c.dict.next, cells[(i + 1) % size]));
     fixtures.push(['cycle/generated-ring-' + size, cells]);
   }
+  for (const kind of ['list-set', 'tree-set']) {
+    for (let size = 0; size <= 12; size++) {
+      const values = Array.from({ length: size }, (_, i) => (i * 7 + 3) % 13);
+      fixtures.push([`set/${kind}-${size}`, await makeSet(kind, values)]);
+    }
+    const pair = await makeSet(kind, [1, 2]);
+    const added = await run(() => rt.getField(pair, 'add').app(9));
+    const removed = await run(() => rt.getField(added, 'remove').app(1));
+    fixtures.push([`skeleton/${kind}`, pair], [`set/${kind}-field`, box(pair)],
+      [`set/${kind}-after-add`, added], [`set/${kind}-after-remove`, removed],
+      [`set/${kind}-duplicates`, await makeSet(kind, [2, 1, 2, 1, 2, 1])],
+      [`set/${kind}-strings`, await makeSet(kind, ['z', 'a', 'é', 'quote"'])],
+      [`set/${kind}-numbers`, await makeSet(kind, [nums.fromString('1/3'), nums.fromString('123456789012345678901234567890'), -2])],
+      [`set/${kind}-reference-sibling`, object({ owner: cell(pair), set: pair })]);
+  }
+  const innerListSet = await makeSet('list-set', [2, 1]);
+  const innerTreeSet = await makeSet('tree-set', [3, 1]);
+  fixtures.push(['set/nested', await makeSet('list-set', [innerListSet, innerTreeSet])],
+    ['set/constructor-elements', await makeSet('list-set', [box(innerListSet), box(innerTreeSet)])],
+    ['set/array-tuple', tuple([[innerListSet], innerTreeSet])],
+    ['set/reference-element', await makeSet('list-set', [cell(5)])]);
+  const dictionary = await makeDictionary([['a', 1]]);
+  fixtures.push(['skeleton/string-dict', dictionary], ['dictionary/value-kinds', await makeDictionary([
+    ['nothing', rt.nothing], ['rational', nums.fromString('1/3')], ['rough', nums.fromString('~1.5')],
+    ['big', nums.fromString('123456789012345678901234567890')], ['boolean', true]])]);
+  for (const mutable of [false, true]) {
+    const kind = mutable ? 'mutable-string-dict' : 'string-dict';
+    for (const size of [0, 1, 2, 3, 5, 8, 9, 12, 20, 40]) {
+      const entries = Array.from({ length: size }, (_, i) => ['key-' + ((i * 7) % 41), i]);
+      fixtures.push([`dictionary/${kind}-${size}`, await makeDictionary(entries, mutable)]);
+    }
+    const strangeKeys = ['', '"\\\n', 'é', '\uFAAA', 'e\u0301', '__proto__', 'constructor', '10', '2', 'toString'];
+    fixtures.push([`dictionary/${kind}-keys`, await makeDictionary(strangeKeys.map((key, i) => [key, i]), mutable)],
+      [`dictionary/${kind}-nested`, await makeDictionary([['a', dictionary], ['b', innerListSet]], mutable)],
+      [`dictionary/${kind}-field`, box(await makeDictionary([['a', [box(1), tuple([2, 2])]]], mutable))],
+      [`dictionary/${kind}-ref`, await makeDictionary([['a', cell(5)]], mutable)]);
+    // These strings share the JVM-style string hash used by Pyret's HAMT.
+    const collisions = Array.from({ length: 16 }, (_, i) =>
+      Array.from({ length: 4 }, (_, bit) => i & (1 << bit) ? 'Aa' : 'BB').join(''));
+    for (const size of [8, 9, 10, 16]) fixtures.push([
+      `dictionary/${kind}-collisions-${size}`, await makeDictionary(collisions.slice(0, size).map((key, i) => [key, i]), mutable)]);
+  }
+  const mutableDictionary = await makeDictionary([['a', 1]], true);
+  await run(() => rt.getField(mutableDictionary, 'set-now').app('self', mutableDictionary));
+  fixtures.push(['dictionary/mutable-self-cycle', mutableDictionary]);
+  const firstDictionary = await makeDictionary([['a', 1]], true);
+  const secondDictionary = await makeDictionary([['a', 2]], true);
+  const dictionarySet = await makeSet('list-set', [firstDictionary, secondDictionary]);
+  fixtures.push(['dictionary/shared-set-elements', object({ set: dictionarySet, dictionary: firstDictionary })]);
+  fixtures.push(['dictionary/sealed', await run(() => rt.getField(firstDictionary, 'seal').app())]);
+  const sealedCycle = await makeDictionary([], true);
+  const sealedView = await run(() => rt.getField(sealedCycle, 'seal').app());
+  await run(() => rt.getField(sealedCycle, 'set-now').app('self', sealedView));
+  fixtures.push(['dictionary/sealed-self-cycle', sealedView]);
+  for (let n = 0; n < 30; n++) {
+    let value = await makeDictionary(Array.from({ length: n }, (_, i) => ['k-' + ((i * 17 + n) % 47), i]));
+    for (let j = 0; j < n; j++) {
+      const key = 'k-' + ((j * 17 + n) % 47);
+      value = await run(() => rt.getField(value, j % 3 === 0 ? 'remove' : 'set').app(...(j % 3 === 0 ? [key] : [key, -j])));
+    }
+    fixtures.push(['dictionary/history-' + n, value]);
+  }
+  // Edit only the public relational datum. Expected values are built separately
+  // in Pyret, so these checks cannot pass by replaying an unedited snapshot.
+  for (const literal of ['7', '9007199254740993', '1/3', '~7.25']) {
+    fixtures.push([`edit/number-${literal}`, box(5), datum => {
+      datum.atoms.find(a => a.type === 'Number').label = literal;
+    }, box(nums.fromString(literal))]);
+  }
+  fixtures.push(['edit/object-name', object({ x: 5 }), datum => {
+    datum.relations.find(r => r.name === 'x').name = 'renamed';
+  }, object({ renamed: 5 })]);
+  fixtures.push(['edit/object-order', object({ z: 1, a: 2 }), datum => {
+    for (const atom of datum.atoms.filter(a => a.type === 'Index')) atom.label = String(1 - Number(atom.label));
+  }, object({ a: 2, z: 1 })]);
+  for (const type of ['RawArray', 'Tuple']) {
+    const wrap = values => type === 'Tuple' ? tuple(values) : values;
+    fixtures.push([`edit/${type}-append`, wrap([5]), datum => {
+      datum.atoms.push({ id: 'added-a', type: 'Index', label: '1' });
+      const relation = datum.relations.find(r => r.name === 'element');
+      const [container, , value] = relation.tuples[0].atoms;
+      relation.tuples.push({ atoms: [container, 'added-a', value], types: relation.types });
+    }, wrap([5, 5])]);
+    fixtures.push([`edit/${type}-remove`, wrap([5, 7]), datum => {
+      const removed = datum.atoms.find(a => a.type === 'Index' && a.label === '1').id;
+      datum.relations.find(r => r.name === 'element').tuples = datum.relations
+        .find(r => r.name === 'element').tuples.filter(t => t.atoms[1] !== removed);
+    }, wrap([5])]);
+  }
+  fixtures.push(['edit/dictionary-append', dictionary, datum => {
+    datum.atoms.push({ id: 'added-a', type: 'Index', label: '1' }, { id: 'added-b', type: 'String', label: 'b' });
+    const relation = datum.relations.find(r => r.name === 'entry');
+    const [container, , , value] = relation.tuples[0].atoms;
+    relation.tuples.push({ atoms: [container, 'added-a', 'added-b', value], types: relation.types });
+  }, await makeDictionary([['a', 1], ['b', 1]])]);
+  fixtures.push(['edit/dictionary-remove', dictionary, datum => {
+    datum.relations.find(r => r.name === 'entry').tuples = [];
+  }, await makeDictionary([])]);
+  fixtures.push(['edit/dictionary-key', dictionary, datum => {
+    datum.atoms.find(a => a.type === 'String').label = 'renamed';
+  }, await makeDictionary([['renamed', 1]])]);
+  fixtures.push(['edit/dictionary-mutable', dictionary, datum => {
+    datum.atoms.find(a => a.type === 'StringDict').type = 'MutableStringDict';
+  }, await makeDictionary([['a', 1]], true)]);
+  fixtures.push(['edit/dictionary-sealed', firstDictionary, datum => {
+    const id = datum.atoms.find(a => a.type === 'MutableStringDict').id;
+    datum.relations.push({ id: 'added-a', name: 'sealed', types: ['MutableStringDict'],
+      tuples: [{ atoms: [id], types: ['MutableStringDict'] }] });
+  }, await run(() => rt.getField(firstDictionary, 'seal').app())]);
+  fixtures.push(['edit/reference-cycle', cell(5), datum => {
+    datum.relations.find(r => r.name === 'target').tuples[0].atoms[1] = datum.atoms.find(a => a.type === 'cell').id;
+  }, cyclic]);
+  fixtures.push(['edit/reference-target', cyclic, datum => {
+    datum.atoms.push({ id: 'added-a', type: 'Number', label: '7' });
+    datum.relations.find(r => r.name === 'target').tuples[0].atoms[1] = 'added-a';
+  }, cell(7)]);
+  fixtures.push(['edit/set-element', await makeSet('list-set', [1, 2]), datum => {
+    datum.atoms.find(a => a.type === 'Number' && a.label === '1').label = '7';
+  }, await makeSet('list-set', [7, 2])]);
+
   const rows = [];
-  for (const [id, value] of fixtures) {
-    const A = rt.toReprJS(value, rt.ReprMethods._torepr);
+  for (const [id, value, edit, expected = value] of fixtures) {
+    const A = await run(() => rt.toReprJS(expected, rt.ReprMethods._torepr));
     const original = new PyretDataInstance(value);
     const datum = JSON.parse(
       JSON.stringify({
@@ -153,10 +319,13 @@ async function main() {
         types: original.getTypes(),
       })
     );
+    edit?.(datum);
     const ids = new Map(datum.atoms.map((a, i) => [a.id, 'opaque-' + (datum.atoms.length - i)]));
+    const rootId = ids.get(original.getAtoms()[0].id);
     datum.atoms.forEach(a => {
       a.id = ids.get(a.id);
-      if (a.metadata) a.label = 'display only';
+      if ('metadata' in a) throw new Error('Non-relational Pyret payload');
+      if (!['Number', 'String', 'Boolean', 'Index'].includes(a.type)) a.label = 'display only';
     });
     datum.types.forEach(t => { t.atoms = []; });
     datum.relations.forEach((r, i) => {
@@ -166,7 +335,7 @@ async function main() {
     });
     datum.atoms.reverse(); datum.relations.reverse();
     PyretDataInstance.clearGlobalConstructorCache();
-    const R = replit(new JSONDataInstance(datum));
+    const R = replit(new JSONDataInstance(datum), rootId);
     tokenizer.Tokenizer.tokenizeFrom(R);
     if (!parser.PyretGrammar.parse(tokenizer.Tokenizer))
       throw new Error('Invalid generated Pyret: ' + R);
@@ -189,10 +358,22 @@ async function main() {
     '  ref-get(shared.separate) is 5',
     '  cyclic = ' + cycleSource,
     '  identical(cyclic!next, cyclic) is true',
+    '  dictionary-cycle = ' + rows.find(row => row.id === 'dictionary/mutable-self-cycle').R,
+    '  identical(dictionary-cycle.get-value-now("self"), dictionary-cycle) is true',
+    '  dictionary-aliases = ' + rows.find(row => row.id === 'dictionary/shared-set-elements').R,
+    '  dictionary-aliases.dictionary.set-now("a", 9)',
+    '  dictionary-aliases.set.member([mutable-string-dict: "a", 9]) is true',
+    '  sealed-dictionary = ' + rows.find(row => row.id === 'dictionary/sealed-self-cycle').R,
+    '  identical(sealed-dictionary.get-value-now("self"), sealed-dictionary) is true',
+    '  sealed-dictionary.set-now("a", 1) raises "Cannot modify sealed string dict"',
+    '  edited-seal = ' + rows.find(row => row.id === 'edit/dictionary-sealed').R,
+    '  edited-seal.set-now("a", 2) raises "Cannot modify sealed string dict"',
+    '  edited-cycle = ' + rows.find(row => row.id === 'edit/reference-cycle').R,
+    '  identical(edited-cycle!next, edited-cycle) is true',
   ];
-  const expectedChecks = rows.length + 7;
+  const expectedChecks = rows.length + 13;
   const source =
-    'data Box: box(v) end\ndata Cell: cell(ref next) end\n'
+    'include string-dict\ndata Box: box(v) end\ndata Cell: cell(ref next) end\n'
     + 'data TypedCell: typed-cell(ref v :: Number) end\n'
     + 'data Two: two(ref row, ref second) end\n'
     + 'data Collision: spytial-value0(ref v) end\ncheck:\n' +
@@ -239,7 +420,7 @@ async function main() {
     );
   }
   console.log(
-    `All ${rows.length} Pyret inspection checks and 7 reference topology checks passed. Report: ${output}/report.json`
+    `All ${rows.length} Pyret inspection checks and 13 reference/dictionary behavior checks passed. Report: ${output}/report.json`
   );
 }
 main().catch(error => {

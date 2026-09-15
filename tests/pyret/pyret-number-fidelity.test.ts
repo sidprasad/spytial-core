@@ -49,9 +49,8 @@ describe('lossless Pyret numbers through default JSON normalization (#592)', () 
     '9007199254740993', '-9007199254740993', '100000000000000000000000000000000000001']) (
     'preserves integer boundary %s', value => {
       const datum = check(box(big(value)), `box(${value})`);
-      expect(datum.getAtoms().find(a => a.type === 'Number')?.metadata).toEqual({
-        pyretNumber: { version: 1, kind: 'integer', value },
-      });
+      expect(datum.getAtoms().find(a => a.type === 'Number')?.label).toBe(value);
+      expect(datum.getAtoms().every(a => !('metadata' in a))).toBe(true);
     });
 
   it.each([Number.MIN_VALUE, Number.MAX_VALUE, -1e-100, -0, 0, 1])('preserves rough payload %s', n => {
@@ -61,12 +60,12 @@ describe('lossless Pyret numbers through default JSON normalization (#592)', () 
     expect(Object.is(Number(payload.value), n)).toBe(true);
   });
 
-  it('decodes metadata independently of labels and preserves relation IDs and name lookup', () => {
+  it('decodes an edited numeric label and preserves relation IDs and name lookup', () => {
     const datum = serialized(box({ n: big('123456789012345678901234567891'), d: big('9007199254740993') }));
     const payload = datum.reify();
-    payload.atoms.forEach(a => { a.label = 'display only'; });
+    payload.atoms.forEach(a => { a.label = a.type === 'Number' ? '9007199254740993/7' : 'display only'; });
     const renamed = new JSONDataInstance(payload);
-    expect(replit(renamed)).toBe('box(123456789012345678901234567891/9007199254740993)');
+    expect(replit(renamed)).toBe('box(9007199254740993/7)');
     expect(renamed.getRelations().map(r => r.id)).toEqual(datum.getRelations().map(r => r.id));
     const evaluator = new SGraphQueryEvaluator();
     evaluator.initialize({ sourceData: renamed });
@@ -79,7 +78,7 @@ describe('lossless Pyret numbers through default JSON normalization (#592)', () 
     } });
     const numbers = datum.getAtoms().filter(a => a.type === 'Number');
     expect(numbers).toHaveLength(2);
-    expect(numbers.map(a => (a.metadata!.pyretNumber as any).kind).sort()).toEqual(['integer', 'roughnum']);
+    expect(numbers.map(a => a.label).sort()).toEqual(['1', '~1']);
     expect(new PyretDataInstance({ dict: { a: rough(1), b: rough(1) } }, { numbersIdempotent: false })
       .getAtoms().filter(a => a.type === 'Number')).toHaveLength(2);
   });
@@ -91,16 +90,11 @@ describe('lossless Pyret numbers through default JSON normalization (#592)', () 
     expect(reifyToValue(new JSONDataInstance({ atoms: [{ id: 'n', type: 'Number', label: '42' }], relations: [] }))).toBe(42);
   });
 
-  it.each([
-    { version: 2, kind: 'integer', value: '1' },
-    { version: 1, kind: 'integer', value: 9007199254740992 },
-    { version: 1, kind: 'rational', numerator: '1', denominator: '0' },
-    { version: 1, kind: 'roughnum', value: 'Infinity' },
-    { version: 1, kind: 'roughnum', value: '1); arbitrary-code(' },
-  ])('rejects malformed numeric metadata rather than falling back to labels', pyretNumber => {
-    const datum = new JSONDataInstance({ atoms: [{ id: 'n', type: 'Number', label: '1', metadata: { pyretNumber } }], relations: [] });
-    expect(() => replit(datum)).toThrow(/Pyret/);
-  });
+  it.each(['NaN', 'Infinity', '1/0', '~Infinity', '~1); arbitrary-code(', '', '0x10']) (
+    'rejects malformed numeric label %s', label => {
+      const datum = new JSONDataInstance({ atoms: [{ id: 'n', type: 'Number', label }], relations: [] });
+      expect(() => replit(datum)).toThrow(/Pyret/);
+    });
 
   it('bounded generated exact integers and rationals survive nested serialized round trips', () => {
     const bound = 10n ** 80n;

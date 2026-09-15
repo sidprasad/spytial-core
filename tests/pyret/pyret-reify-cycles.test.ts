@@ -52,7 +52,7 @@ describe('reify() cycle handling (issue #422)', () => {
     expect(di.reify()).toBe('Holder(N("a", N("b", <cyclic>)))');
   });
 
-  it('reifies a fully cyclic instance instead of reporting no roots', () => {
+  it('reifies a fully cyclic instance from an explicit root', () => {
     // Every atom is pointed at, so there is no in-degree-0 atom to start from.
     const a: PyretObject = variant('N', 3, { name: 'a' });
     const b: PyretObject = variant('N', 3, { name: 'b' });
@@ -60,10 +60,10 @@ describe('reify() cycle handling (issue #422)', () => {
     (b.dict as Record<string, unknown>).peer = a;
 
     const di = new PyretDataInstance(a);
-    const out = di.reify();
+    const out = di.reify(di.getAtoms()[0].id);
 
     expect(out).not.toContain('No root atoms found');
-    // Entry point is the first atom that has fields, not a leaf string.
+    // The caller selected the original first node as the observation point.
     expect(out).toBe('N("a", N("b", <cyclic>))');
   });
 
@@ -75,7 +75,7 @@ describe('reify() cycle handling (issue #422)', () => {
     di.addAtom({ id: 'n4', type: 'RBNode', label: 'n4' });
     di.addRelationTuple('next', { atoms: ['n4', 'n4'], types: ['RBNode', 'RBNode'] });
 
-    const out = di.reify();
+    const out = di.reify(di.getAtoms()[0].id);
 
     expect(out).toBe('RBNode(<cyclic>)');
   });

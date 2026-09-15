@@ -6,47 +6,41 @@
  * `canon` produces a stable string with:
  *   - atom ids renamed to integers via a deterministic traversal from the roots,
  *   - primitive atoms keyed by (type, label) — the label IS the data and is kept;
- *     structured atoms retain type and metadata; their display labels are dropped,
- *   - object/container relations keyed by source kind and name; constructor and
- *     legacy relations retain their semantic IDs, with tuples sorted lexicographically.
+ *     structured atoms retain type; their display labels are dropped,
+ *   - relations keyed by name; constructor fields retain their semantic IDs,
+ *     with tuples sorted lexicographically.
  *
- * v6 constructor field IDs include position, and atom metadata includes arity.
- * Canon preserves both. Legacy field IDs encode only names; canonicalizing
- * them cannot recover positional information the producer did not retain.
+ * v6 constructor field IDs include position. Canon preserves those IDs. Legacy
+ * fields retain only names; canonicalizing cannot recover their argument order.
  *
  * This is the substrate for the self-contained (Tier A) fidelity oracles
  * (see tests/pyret/oracles.ts).
  */
 
-import { readValueInfo } from './values';
+import { readFieldId } from './identity';
 import { IDataInstance } from '../interfaces';
 
-const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean']);
+const PRIMITIVE_TYPES = new Set(['Number', 'String', 'Boolean', 'Index']);
 
 interface OutEdge {
   rel: string;
   tuple: string[];
 }
 
-export function canon(di: IDataInstance): string {
+export function canon(di: IDataInstance, rootId?: string): string {
   const atoms = di.getAtoms();
   const relations = di.getRelations();
   const atomsById = new Map(atoms.map((a) => [a.id, a] as const));
 
-  // New container/object relations have opaque IDs. Their source kind and
-  // query name define their meaning; constructor IDs retain their v6 meaning.
-  const relationKey = (rel: typeof relations[number]): string => {
-    const shape = readValueInfo(atomsById.get(rel.tuples[0]?.atoms[0])?.metadata);
-    return shape ? JSON.stringify([shape.kind === 'object' ? 'object-field'
-      : shape.kind === 'reference' ? 'reference-target' : 'element', rel.name]) : rel.id;
-  };
+  // Every relation ID is opaque except the established constructor field IDs.
+  const relationKey = (rel: typeof relations[number]): string => readFieldId(rel.id) ? rel.id : rel.name;
 
   const outBySrc = new Map<string, OutEdge[]>();
   const targetSet = new Set<string>();
 
   for (const rel of relations) {
     for (const tup of rel.tuples) {
-      if (tup.atoms.length < 2) continue;
+      if (tup.atoms.length < 1) continue;
       const src = tup.atoms[0];
       for (let i = 1; i < tup.atoms.length; i++) targetSet.add(tup.atoms[i]);
       const arr = outBySrc.get(src) ?? [];
@@ -58,12 +52,11 @@ export function canon(di: IDataInstance): string {
   const keyOf = (id: string): string => {
     const a = atomsById.get(id);
     if (!a) return `?`;
-    return JSON.stringify([a.type, PRIMITIVE_TYPES.has(a.type) ? a.label : undefined, a.metadata]);
+    return JSON.stringify([a.type, PRIMITIVE_TYPES.has(a.type) ? a.label : undefined]);
   };
 
   // Canonical numbering: DFS from roots, children ordered by (relation, target keys).
-  const marked = atoms.filter(a => a.metadata?.pyretRoot).map(a => a.id);
-  const roots = marked.length ? marked : atoms.map((a) => a.id).filter((id) => !targetSet.has(id));
+  const roots = rootId ? [rootId] : atoms.map((a) => a.id).filter((id) => !targetSet.has(id));
   const seeds = (roots.length ? roots : atoms.map((a) => a.id)).slice().sort((x, y) => {
     const k = keyOf(x).localeCompare(keyOf(y));
     return k !== 0 ? k : x.localeCompare(y);
@@ -106,7 +99,6 @@ export function canon(di: IDataInstance): string {
     .map((a) => ({
       id: num.get(a.id)!,
       type: a.type,
-      metadata: a.metadata,
       label: PRIMITIVE_TYPES.has(a.type) ? a.label : undefined,
     }))
     .sort((x, y) => x.id - y.id);
@@ -114,7 +106,7 @@ export function canon(di: IDataInstance): string {
   const canonRels = relations
     .map((rel) => {
       const tuples = rel.tuples
-        .filter((t) => t.atoms.length >= 2)
+        .filter((t) => t.atoms.length >= 1)
         .map((t) => t.atoms.map((x) => num.get(x) ?? -1));
       tuples.sort((p, q) => {
         const n = Math.min(p.length, q.length);

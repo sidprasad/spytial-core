@@ -21,8 +21,6 @@ export interface IAtom  {
   id: string; // ID might have to be DIFFERENT FROM the NAME (these are the same in Alloy, but different elsewhere.)
   type: string;
   label: string; // Label for the atom, used for display purposes
-  /** JSON-serializable host reconstruction metadata; not a display label. */
-  metadata?: Record<string, unknown>;
   
   /**
    * Optional key-value labels associated with this atom.

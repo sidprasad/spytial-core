@@ -53,7 +53,7 @@ export function fixedPoint(
   PyretDataInstance.clearGlobalConstructorCache();
 
   const di1 = relationalize(v, options); // populates the cache from v's field order
-  const reified = reifyToValue(di1); // reads the cache
+  const reified = reifyToValue(di1, di1.getAtoms()[0]?.id); // reads the cache
   const di2 = relationalize(reified, options); // repopulates with the same order
 
   const canonA = canon(di1);
