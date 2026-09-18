@@ -53,7 +53,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-08-25';
+export const LANGUAGE_VERSION = '2026-09-18';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -684,7 +684,7 @@ const TAG: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'unchecked',
-      description: 'The label shown before the value.',
+      description: 'The literal label shown before the value; this field is not a selector.',
     },
     {
       name: 'value',
@@ -696,7 +696,7 @@ const TAG: LanguageItem = {
           minColumns: 2,
           meaning:
             'One line per tuple whose first atom is the tagged atom: the last column is the value and any ' +
-            'columns between become the key, as `name[k1][k2]: value`. A binary result is the plain ' +
+            'columns between become one comma-separated key tuple, as `name[k1,k2]: value`. A binary result is the plain ' +
             '`name: value` case.',
         },
         {
@@ -711,8 +711,8 @@ const TAG: LanguageItem = {
       required: true,
       enforcement: 'unchecked',
       description:
-        'Evaluated per tagged atom; its result becomes the value. A binary result shows as `name: value`; ' +
-        'a longer tuple shows one line per tuple, as `name[k1][k2]: value`. A unary result tags each ' +
+        'Evaluated once; each tuple is attached to the tagged atom in its first column. A binary result shows as `name: value`; ' +
+        'a longer tuple shows one line per tuple, as `name[k1,k2]: value`. A unary result tags each ' +
         "selected atom with its own label.",
     },
     blockField('textStyle', "This tag line's own styling."),

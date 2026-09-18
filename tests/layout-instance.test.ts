@@ -509,6 +509,29 @@ directives:
     expect(inferredEdge!.label).toBe('route[Bravo]');
   });
 
+  it('inferred edge with multiple middle elements uses one comma-separated tuple', () => {
+    const data: IJsonDataInstance = {
+      atoms: [
+        { id: 'A', type: 'Node', label: 'Alpha' },
+        { id: 'B', type: 'Node', label: 'Bravo' },
+        { id: 'C', type: 'Node', label: 'Charlie' },
+        { id: 'D', type: 'Node', label: 'Delta' },
+      ],
+      relations: [{
+        id: 'path', name: 'path', types: ['Node', 'Node', 'Node', 'Node'],
+        tuples: [{ atoms: ['A', 'B', 'C', 'D'], types: ['Node', 'Node', 'Node', 'Node'] }],
+      }],
+    };
+    const instance = new JSONDataInstance(data);
+    const spec = parseLayoutSpec('directives:\n  - inferredEdge: { name: route, selector: path }');
+    const { layout, selectorErrors } = new LayoutInstance(spec, createEvaluator(instance), 0, true)
+      .generateLayout(instance);
+
+    expect(selectorErrors).toHaveLength(0);
+    const inferredEdge = layout.edges.find(e => e.id.includes('_inferred_') && e.id.includes('route'));
+    expect(inferredEdge?.label).toBe('route[Bravo,Charlie]');
+  });
+
   describe('content-aware default node size (issue #431)', () => {
     const FLOOR_W = 100;
     const FLOOR_H = 60;

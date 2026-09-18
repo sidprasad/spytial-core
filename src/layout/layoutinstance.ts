@@ -1159,9 +1159,8 @@ export class LayoutInstance {
      * Unlike attributes which come from edges, tags are computed from n-ary selectors
      * and added to nodes selected by the toTag selector.
      * 
-     * For n-ary selector results (e.g., x1->y1->z1, x2->y2->z2), the format is:
-     *   name[x1][y1]: z1
-     *   name[x2][y2]: z2
+     * For n-ary selector results, the first atom is the owner and the last is
+     * the value: (owner, x, y, z) displays as name[x,y]: z.
      * 
      * For unary selector results (single atom), it's just:
      *   name: value
@@ -1273,22 +1272,22 @@ export class LayoutInstance {
                             attributes[atomId][attrKey].push(valueLabel);
                             recordStyle(atomId, attrKey, tagStyle);
                         } else {
-                            // N-ary tuple (n > 2): name[mid1][mid2]...: lastValue
-                            // The key includes all middle elements
+                            // N-ary tuple (n > 2): name[mid1,mid2,...]: lastValue.
+                            // The key includes all middle elements as one tuple.
                             const middleElements = tuple.slice(1, -1);
                             const lastValue = tuple[tuple.length - 1];
                             
-                            // Format middle elements with brackets
-                            const middlePart = middleElements
+                            // Match inferred-edge labels: one bracketed, comma-separated tuple.
+                            const middlePart = `[${middleElements
                                 .map(el => {
                                     const elStr = String(el);
                                     // Use node label if it's a graph node
                                     const label = graphNodes.has(elStr)
                                         ? (g.node(elStr)?.label || elStr)
                                         : elStr;
-                                    return `[${label}]`;
+                                    return label;
                                 })
-                                .join('');
+                                .join(',')}]`;
                             
                             const attrKey = `${directive.name}${middlePart}`;
                             if (!attributes[atomId][attrKey]) {

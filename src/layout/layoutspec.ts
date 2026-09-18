@@ -412,11 +412,10 @@ export interface AttributeDirective extends FieldDirective {
  * Unlike AttributeDirective which works with edges/fields, TagDirective is purely selector-based
  * and doesn't remove edges or modify the graph structure.
  * 
- * The value selector is evaluated and for each tuple returned:
- * - For unary results (single atom), the tag appears as: name: value
- * - For n-ary results (x1->y1->z1, x2->y2->z2), tags appear as:
- *   name[x1][y1]: z1
- *   name[x2][y2]: z2
+ * The value selector is evaluated and tuples are attached to selected nodes by
+ * their first atom. A unary result displays the atom's label as `name: value`.
+ * For longer tuples, the last atom is the value and all atoms between the
+ * owner and value form one bracketed key: (owner, x, y, z) -> name[x,y]: z.
  */
 export interface TagDirective extends Operation {
     /** Selector to determine which atoms get this tag */

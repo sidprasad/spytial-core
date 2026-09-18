@@ -840,16 +840,18 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
 | `toTag` | ✅ Yes | string | Unary selector for atoms that receive this tag |
-| `name` | ✅ Yes | string | Attribute name to display |
-| `value` | ✅ Yes | string | N-ary selector returning the attribute values |
+| `name` | ✅ Yes | string | Literal attribute name to display; not a selector |
+| `value` | ✅ Yes | string | Selector whose first column is the tagged atom and last column is the value |
 | `textStyle.size` | ❌ No | `small` \| `normal` \| `large` | Size of this tag's text, relative to the node label. Default `normal`. |
 | `textStyle.color` | ❌ No | string | Text color of this tag's line (any CSS color). Default inherits the node label color. |
 
 **Behavior:**
 - Does NOT remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
-- For n-ary results: displays as `name[key1][key2]: value`
+- For n-ary results: displays as `name[key1,key2]: value`; all intermediate columns form one comma-separated key tuple
 - For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
+- The first column of every result tuple must match an atom selected by `toTag`. An expression such as `Person.age` returns the ages without their owners, so it cannot attach those values as tags; select `age` or return `(owner, ..., value)` tuples instead.
+- In a comprehension, combine conditions with `and`, not `&` (`&` means set intersection).
 - `textStyle` is the same shared block edges and atoms use. `size` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still. `color` sets the line's text color (unset = inherit the node's label color).
 
 **Examples:**
@@ -866,6 +868,12 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
     toTag: Student
     name: score
     value: grades
+
+# Four columns (student, course, exam, grade) - shows as score[Math,Midterm]: 95
+- tag:
+    toTag: Student
+    name: score
+    value: examGrades
 
 # De-emphasize a secondary tag — smaller than the default, muted gray
 - tag:
