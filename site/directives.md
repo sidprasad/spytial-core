@@ -493,9 +493,9 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 
 | Field | Required | Type | Description |
 |-------|----------|------|-------------|
-| `toTag` | Yes | string | Selector for atoms that receive the tag |
-| `name` | Yes | string | Label name to display |
-| `value` | Yes | string | Selector whose result becomes the value |
+| `toTag` | Yes | string | Unary selector for atoms that receive the tag |
+| `name` | Yes | string | Literal label name to display; this is not evaluated as a selector |
+| `value` | Yes | string | Selector whose first column must be a tagged atom; the last column supplies the displayed value |
 | `textStyle.size` | No | `small` \| `normal` \| `large` | Size of the tag text relative to the node label (default `normal`) |
 | `textStyle.color` | No | string | Text color of the tag line (default inherits the node label color) |
 
@@ -503,8 +503,10 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 
 - Does **NOT** remove edges (unlike `attribute`)
 - For binary results: displays as `name: value`
-- For higher-arity results: displays as `name[key1][key2]: value`
+- For higher-arity results: displays as `name[key1,key2]: value`. The intermediate columns form one comma-separated key tuple.
 - For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
+- The first column of every result tuple must match an atom selected by `toTag`. A selector that returns only values (for example, `Person.age`) has lost the owning atom and cannot attach those values as tags; select the relation (`age`) or return `(owner, ..., value)` tuples instead.
+- In a comprehension, combine conditions with `and`, not `&` (`&` means set intersection).
 - `textStyle` is the same shared block edges and atoms use. `size` scales the line's font (`large` bigger than the node label, `normal` default, `small` smaller still); `color` sets its text color (unset = inherit the node label color)
 
 ### Examples
@@ -521,6 +523,19 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
     toTag: Student
     name: score
     value: grades
+
+# Four columns (student, course, exam, grade): shows as score[Math,Midterm]: 95
+- tag:
+    toTag: Student
+    name: score
+    value: examGrades
+
+# A computed four-column selector also works: (interval, low, high, max)
+# displays as f[1,10]: 20 when those are the atom labels.
+- tag:
+    toTag: IntervalNode
+    name: f
+    value: "{n: IntervalNode, l, h, m: Int | n.low = l and n.high = h and n.max = m}"
 ```
 
 <div class="spytial-diagram" data-height="320" data-caption="Live: age shown as a tag on each Person — and the original age edge is still drawn.">

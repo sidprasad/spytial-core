@@ -283,6 +283,7 @@ directives:
       toTag: 'Teacher'
       name: 'graded'
       value: 'graded'
+      textStyle: { size: large }
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -293,8 +294,42 @@ directives:
     
     expect(profNode).toBeDefined();
     
-    // For 4-ary tuples, format is: name[mid1][mid2]: last
-    expect(profNode?.attributes?.['graded[Alice][Math]']).toContain('A+');
+    // For 4-ary tuples, the middle columns form one bracketed key tuple.
+    expect(profNode?.attributes?.['graded[Alice,Math]']).toContain('A+');
+    expect(profNode?.attributes?.['graded[Alice][Math]']).toBeUndefined();
+    expect(profNode?.attributeTextStyles?.['graded[Alice,Math]']).toEqual({ size: 'large' });
+  });
+
+  it('groups the inner columns from a computed IntervalNode selector', () => {
+    const data: IJsonDataInstance = {
+      atoms: [
+        { id: 'interval', type: 'IntervalNode', label: 'interval' },
+        { id: '1', type: 'Int', label: '1' },
+        { id: '10', type: 'Int', label: '10' },
+        { id: '20', type: 'Int', label: '20' },
+      ],
+      relations: [
+        { id: 'low', name: 'low', types: ['IntervalNode', 'Int'],
+          tuples: [{ atoms: ['interval', '1'], types: ['IntervalNode', 'Int'] }] },
+        { id: 'high', name: 'high', types: ['IntervalNode', 'Int'],
+          tuples: [{ atoms: ['interval', '10'], types: ['IntervalNode', 'Int'] }] },
+        { id: 'max', name: 'max', types: ['IntervalNode', 'Int'],
+          tuples: [{ atoms: ['interval', '20'], types: ['IntervalNode', 'Int'] }] },
+      ],
+    };
+    const instance = new JSONDataInstance(data);
+    const spec = parseLayoutSpec(`
+directives:
+  - tag:
+      toTag: IntervalNode
+      name: f
+      value: "{n: IntervalNode, l, h, m: Int | n.low = l and n.high = h and n.max = m}"
+`);
+    const { layout, selectorErrors } = new LayoutInstance(spec, createEvaluator(instance), 0)
+      .generateLayout(instance);
+
+    expect(selectorErrors).toHaveLength(0);
+    expect(layout.nodes.find(n => n.id === 'interval')?.attributes?.['f[1,10]']).toEqual(['20']);
   });
 
   it('should not interfere with edge-based attributes', () => {
