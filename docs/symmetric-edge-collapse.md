@@ -2,7 +2,7 @@
 
 ## Overview
 
-The symmetric edge collapse feature automatically simplifies graph visualizations by combining bidirectional edges with the same label into a single edge with arrows on both ends.
+The symmetric edge collapse feature automatically simplifies graph visualizations by combining reverse edges with identical presentation and relation metadata into a single edge with arrows on both ends.
 
 ## Behavior
 
@@ -14,6 +14,9 @@ Two edges will be collapsed into a single bidirectional edge when **ALL** of the
 2. One edge goes from Node A to Node B
 3. The other edge goes from Node B to Node A
 4. **Both edges have the same label**
+5. Both edges have the same relation name and rendering kind (ordinary, inferred, alignment, or group connector)
+6. Their line color, pattern, weight, highlight, label visibility, and label text size and color match
+7. Their group metadata matches, and their attachment points match after reversing source and target
 
 Example:
 ```
@@ -27,7 +30,7 @@ A <—-"friend"—-> B (single edge with arrows on both ends)
 
 ### When Edges Are NOT Collapsed
 
-Edges with **different labels** are preserved as separate unidirectional edges, even if they connect the same pair of nodes in opposite directions.
+Edges with **different labels, styles, or relation metadata** are preserved as separate unidirectional edges, even if they connect the same pair of nodes in opposite directions. For example, styling only `A → B` red keeps that arrow separate from an unstyled `B → A`; the style is neither discarded nor applied to both directions.
 
 Example:
 ```
@@ -47,7 +50,7 @@ These remain as two separate edges because the labels differ.
 2. **Edge Collapsing Logic** (`src/translators/webcola/webcolatranslator.ts`)
    - Added `collapseSymmetricEdges()` method to WebColaLayout class
    - Method is called during layout construction, after edges are converted to WebCola format
-   - Uses label-based matching to identify symmetric edge pairs
+   - Compares labels, styles, relation metadata, and reversed attachment points to identify compatible pairs
 
 3. **Visual Rendering** (`src/translators/webcola/webcola-cnd-graph.ts`)
    - Added `start-arrow` and `hand-drawn-arrow-reverse` SVG marker definitions
@@ -58,10 +61,11 @@ These remain as two separate edges because the labels differ.
 
 The collapse algorithm:
 1. Iterates through all edges
-2. For each edge, creates a key based on the pair of nodes and the edge label
-3. Searches for a matching reverse edge with the same label
+2. For each unprocessed edge, preserves self-loops as single-direction edges
+3. Searches for an unprocessed reverse edge with matching presentation and relation metadata
 4. If found, marks both edges as processed and creates a single bidirectional edge
 5. If not found, keeps the edge as unidirectional
+6. Retains each result under its own edge identity, so differently styled pairs sharing endpoints and labels cannot overwrite one another
 
 ## Benefits
 
@@ -78,12 +82,13 @@ Comprehensive test suite in `tests/symmetric-edge-collapse.test.ts` covers:
 - Handling unidirectional edges
 - Multiple pairs of symmetric edges
 - Mixed symmetric and asymmetric edges
-
-All tests pass with 100% coverage of the feature.
+- Style and metadata differences in either node order
+- Matching label styles compared by value and reversed group attachments
+- Multiple differently styled pairs with the same endpoints and label
 
 ## Usage
 
-The feature is automatic and requires no configuration. Simply create your graph layout as usual:
+The feature is automatic in read-only graphs and requires no configuration. Editable graphs disable it so each direction remains independently editable. Simply create your graph layout as usual:
 
 ```typescript
 const instanceLayout: InstanceLayout = {
