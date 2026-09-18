@@ -8,7 +8,7 @@
     Alice <--[friend]---- Bob
 ```
 
-Two separate edges, both labeled "friend"
+Two separate edges, both labeled "friend", with matching styles and relation metadata
 
 ### After Collapse:
 ```
@@ -61,7 +61,7 @@ Node A ---[knows]----> Node C   (unidirectional - single edge)
 - `→` = Unidirectional edge (one arrow)
 - `↔` = Bidirectional edge (arrows on both ends)
 
-The bidirectional arrow indicates that the relationship exists in both directions with the same meaning (same label).
+The bidirectional arrow indicates that the relationship exists in both directions with the same label, styles, and relation metadata. If only one direction is styled (for example, red or dashed), both arrows remain separate so the distinction stays visible.
 
 ---
 

@@ -488,7 +488,7 @@ export class WebColaLayout {
     }
     this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
 
-    // Collapse symmetric edges with the same label into one double-headed edge.
+    // Collapse symmetric edges with identical presentation into one double-headed edge.
     // Editable graphs disable this so each direction stays an independent,
     // individually-editable arrow (see collapseSymmetricEdges option).
     if (this.collapseSymmetric) {
@@ -887,11 +887,30 @@ export class WebColaLayout {
     }
   }
 
+  /** Whether reversing an edge preserves its presentation and relation metadata. */
+  private canCollapseReverseEdges(a: EdgeWithMetadata, b: EdgeWithMetadata): boolean {
+    return a.label === b.label &&
+      a.relName === b.relName &&
+      a.color === b.color &&
+      a.style === b.style &&
+      a.weight === b.weight &&
+      a.highlight === b.highlight &&
+      a.showLabel === b.showLabel &&
+      a.textStyle?.size === b.textStyle?.size &&
+      a.textStyle?.color === b.textStyle?.color &&
+      a.groupId === b.groupId &&
+      a.keyNodeId === b.keyNodeId &&
+      a.sourceGroupId === b.targetGroupId &&
+      a.targetGroupId === b.sourceGroupId &&
+      // These ID conventions select different rendering behavior.
+      a.id.includes('_inferred_') === b.id.includes('_inferred_') &&
+      a.id.startsWith('_alignment_') === b.id.startsWith('_alignment_') &&
+      a.id.startsWith('_g_') === b.id.startsWith('_g_');
+  }
+
   /**
-   * Collapses symmetric edges with the same label into bidirectional edges.
-   * If two nodes have edges between them with the same label (A->B and B->A),
-   * they should be collapsed into a single bidirectional edge.
-   * Edges with different labels should NOT be collapsed.
+   * Collapses reverse edges only when their labels, styles, relation metadata,
+   * and attachment points match. Differences must remain visible as two edges.
    * 
    * @param edges - Array of edges to process
    * @returns Array of edges with symmetric edges collapsed
@@ -915,28 +934,23 @@ export class WebColaLayout {
         continue;
       }
 
-      // Create a key for the edge pair (always use lower source/target index first for consistency)
-      const sourceIndex = edgeEndpointToIndex(edge.source);
-      const targetIndex = edgeEndpointToIndex(edge.target);
-      const minIndex = Math.min(sourceIndex, targetIndex);
-      const maxIndex = Math.max(sourceIndex, targetIndex);
-      const pairKey = `${minIndex}-${maxIndex}-${edge.label}`;
-
-      // Look for the reverse edge with the same label (never the edge itself)
+      // Look for a compatible reverse edge (never the edge itself).
       const reverseEdge = edges.find(e =>
         e.id !== edge.id &&
         e.source === edge.target &&
         e.target === edge.source &&
-        e.label === edge.label &&
+        this.canCollapseReverseEdges(edge, e) &&
         !processed.has(e.id)
       );
 
       if (reverseEdge) {
-        // Found a symmetric pair with the same label - collapse them
+        // Found a symmetric pair with identical presentation - collapse them
         // Keep the edge with the lower source index as the canonical direction
         const canonicalEdge = edge.source < edge.target ? edge : reverseEdge;
         
-        edgeMap.set(pairKey, {
+        // Distinct pairs can share endpoints and a label but differ in style.
+        // Keep each pair under its own identity so none overwrites another.
+        edgeMap.set(canonicalEdge.id, {
           ...canonicalEdge,
           bidirectional: true
         });

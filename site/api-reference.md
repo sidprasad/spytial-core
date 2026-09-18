@@ -306,7 +306,7 @@ CDN URLs:
 - jsDelivr: `https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`
 - unpkg:    `https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`
 
-For reproducibility, pin a version (`spytial-core@6.1.0`).
+For reproducibility, pin a version (`spytial-core@6.2.0`).
 
 ---
 
