@@ -1199,6 +1199,8 @@ export class WebColaLayout {
           ...duplicateGroups[0],
           // Combine names with separator for clarity
           name: duplicateGroups.map(g => g.name).join(' / '),
+          // Hidden captions must stay hidden when another group shares the hull.
+          label: duplicateGroups.filter(g => g.showLabel).map(g => g.label ?? g.name).join(' / '),
           // Show label if ANY of the duplicate groups wanted to show it
           showLabel: duplicateGroups.some(g => g.showLabel)
         };
@@ -1243,6 +1245,7 @@ export class WebColaLayout {
         let keyIndex = this.getNodeIndex(keyNode);
         group['keyNode'] = keyIndex;
         group['id'] = grp.name;
+        group['label'] = grp.label ?? grp.name;
         group['showLabel'] = grp.showLabel;
         // Match the renderer's label clearance before translating boundaries.
         if (grp.showLabel) group.padding = Math.max(group.padding, 20);

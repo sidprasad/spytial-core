@@ -471,7 +471,7 @@
               "minLength": 1
             },
             "name": {
-              "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Required unless the constraint is negated (`hold: never`), where a name is generated.",
+              "description": "Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. Keyed captions use `<name>[<key label>]`, adding the key ID only to distinguish duplicate captions. Required unless the constraint is negated (`hold: never`), where a name is generated.",
               "type": "string",
               "minLength": 1
             },
@@ -516,6 +516,10 @@
                   "description": "Legacy spelling of `togroup`."
                 }
               ]
+            },
+            "showLabel": {
+              "description": "Whether the group caption and its background pill are drawn. The group hull remains visible. Default when omitted: true.",
+              "type": "boolean"
             },
             "textStyle": {
               "description": "The group's own label. Only `color` applies today — group labels auto-fit their box, so `size` is reserved.",

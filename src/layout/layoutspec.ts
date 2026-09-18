@@ -257,6 +257,8 @@ export class GroupBySelector extends ConstraintOperation{
     connectorTextStyle?: TextStyle;
     /** Styling for the group's own label, from the group's top-level `textStyle`. */
     labelTextStyle?: TextStyle;
+    /** Whether the group's caption and its backing pill are drawn. */
+    showLabel: boolean = true;
 
     constructor(selector : string, name: string, addEdge: GroupEdgeDirection | boolean = 'none', negated: boolean = false) {
         super(selector, negated);
@@ -954,6 +956,7 @@ function parseConstraints(constraints: unknown[], _warnings: ParseWarning[] = []
             }
             // The group's own label styling (top-level `textStyle`).
             gbs.labelTextStyle = parseTextStyle(c.group.textStyle);
+            if (typeof c.group.showLabel === 'boolean') gbs.showLabel = c.group.showLabel;
             return gbs;
         });
 

@@ -191,6 +191,7 @@ Groups elements based on a selector expression.
 - group:
     selector: <n-ary-selector>   # Required: Selector returning elements to group
     name: <group-name>           # Required: Display name for the group
+    showLabel: <boolean>        # Optional: show the caption and its pill (default true)
     addEdge: <direction>         # Optional: none | togroup | fromgroup (default none)
     textStyle:                   # Optional: style the group's own label
       color: <color>
@@ -215,11 +216,14 @@ A group has two style surfaces: its **own label** (top-level `textStyle`) and �
 |-------|----------|------|---------|-------------|
 | `selector` | ✅ Yes | string | - | Selector returning atoms to include in group |
 | `name` | ✅ Yes | string | - | Display name shown on the group box |
+| `showLabel` | ❌ No | boolean | `true` | Draw the caption and its background pill. `false` hides both while keeping the group boundary. |
 | `addEdge` | ❌ No | direction *or* block | `none` | The connector between the group key and the group. As a bare string it is just the direction (`none` / `togroup` / `fromgroup`; legacy `true` = `togroup`). As a **block** it also styles the connector: `points` (the direction) plus `lineStyle` and `textStyle` (same blocks as `edgeStyle`). `togroup` points key → group; `fromgroup` points group → key. |
 | `textStyle.color` | ❌ No | string | - | Color of the group's own label |
 | `textStyle.size` | ❌ No | enum | - | `small` / `normal` / `large` — *reserved; group labels currently auto-fit their box* |
 
 For a binary selector with tuples `(a, b), (a, c), (a, d)`, the group is keyed by `a` and contains `{b, c, d}`. `addEdge: togroup` draws an edge from `a` into that group; `addEdge: fromgroup` draws it from the group back to `a`.
+
+Keyed captions use `name[key label]`, such as `Team[Alice]`. IDs are added only to distinguish duplicate captions, such as `Team[Alice:k1]` and `Team[Alice:k2]`. Blank labels fall back to key IDs; unary groups display only `name`. The caption is separate from internal group identity, so changing or hiding it preserves connector attachments and inferred-edge references. `showLabel: false` hides the group's caption and pill, independently of connector-edge labels.
 
 **Examples:**
 

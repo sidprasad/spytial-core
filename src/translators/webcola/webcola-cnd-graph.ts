@@ -4158,12 +4158,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
     layout: D3Layout
   ): d3.Selection<SVGTextElement, any, any, unknown> {
     const allNodes = this.currentLayout?.nodes || [];
+    const labeledGroups = groups.filter(group => group.showLabel);
 
     // Pill backings sit between the group rect and the text. Append before
     // the text so document order keeps text on top.
     this.svgGroupLabelBgs = this.container
       .selectAll(".groupLabelBg")
-      .data(groups)
+      .data(labeledGroups)
       .enter()
       .append("rect")
       .attr("class", "groupLabelBg")
@@ -4182,7 +4183,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     return this.container
       .selectAll(".groupLabel")
-      .data(groups)
+      .data(labeledGroups)
       .enter()
       .append("text")
       .attr("class", "groupLabel")
@@ -4207,7 +4208,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
           if (d.padding) {
             d.padding = Math.max(d.padding, WebColaCnDGraph.GROUP_LABEL_PADDING);
           }
-          return d.name || "";
+          return d.label ?? d.name ?? "";
         }
 
         return "";
