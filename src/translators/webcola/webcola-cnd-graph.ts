@@ -16,6 +16,7 @@ import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, res
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
+import { syncArrowheadLayer } from './arrowheads';
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
@@ -589,6 +590,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       this.svgLinkGroups.selectAll('path.link, path.inferredLink, path.alignmentLink')
         .attr('stroke', (d: any) => this.edgeStrokeColor(d));
     }
+    this.updateArrowheads();
   }
 
   static get observedAttributes(): string[] {
@@ -1507,7 +1509,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         <marker id="end-arrow" markerWidth="12" markerHeight="8" refX="12" refY="4" orient="auto" markerUnits="userSpaceOnUse">
           <polygon points="0 0, 12 4, 0 8, 3 4" fill="context-stroke" />
         </marker>
-        <marker id="start-arrow" markerWidth="12" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <marker id="start-arrow" markerWidth="12" markerHeight="8" refX="0" refY="4" orient="auto" markerUnits="userSpaceOnUse">
           <polygon points="12 0, 0 4, 12 8, 9 4" fill="context-stroke" />
         </marker>
         </defs>
@@ -3006,9 +3008,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
         })
         .attr('opacity', 0);
     }
+    this.updateArrowheads();
   }
 
   private applyMorphEnterTransition(): void {
+    const graph = this;
     const enterNodeIds = this.morphEnteringNodeIds;
     const enterEdgeIds = this.morphEnteringEdgeIds;
 
@@ -3056,6 +3060,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
             .attr('stroke-dasharray', totalLength)
             .attr('stroke-dashoffset', totalLength);
 
+          this.setAttribute('data-arrowheads-hidden', 'true');
           // Also hide the link label and arrowheads during draw-in
           d3.select(this).selectAll('.linklabel, .arrowhead')
             .attr('opacity', 0);
@@ -3076,6 +3081,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
           };
         })
         .on('end', function(this: SVGGElement) {
+          this.removeAttribute('data-arrowheads-hidden');
           // Clean up dash attributes and show labels/arrows
           const pathEl = this.querySelector('path[data-link-id]');
           if (pathEl) {
@@ -3084,8 +3090,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
           }
           d3.select(this).selectAll('.linklabel, .arrowhead')
             .attr('opacity', 1);
+          graph.updateArrowheads();
         });
     }
+
+    this.updateArrowheads();
 
     // Fade in entering groups
     if (this.svgGroups && this.svgGroupLabels) {
@@ -4911,9 +4920,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.svgGroupLabels.raise();
 
     // Ensure proper layering - raise important elements
-    this.svgLinkGroups.selectAll('marker').raise();
     this.svgLinkGroups.selectAll('.linklabel').raise();
     this.svgNodes.selectAll('.error-node').raise();
+    this.updateArrowheads();
   }
 
   /**
@@ -4983,6 +4992,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
     } catch {
       return null;
     }
+  }
+
+  private updateArrowheads(): void {
+    const container = this.container?.node() as SVGGElement | null;
+    if (container) syncArrowheadLayer(container);
   }
 
   private gridUpdatePositions() {
@@ -5156,6 +5170,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
             return (sourceY + targetY) / 2;
         })
         .raise();
+    this.updateArrowheads();
   }
 
   /**
@@ -5220,6 +5235,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     } finally {
       // Drop the per-pass obstacle cache so it can't go stale across renders.
       this.routerObstacleCache = null;
+      this.updateArrowheads();
     }
   }
 
@@ -5478,6 +5494,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     } finally {
       // Always reset the guard flag, even if an error occurred
       this.isGridifyingInProgress = false;
+      this.updateArrowheads();
     }
   }
 
@@ -6801,7 +6818,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
       .selectAll('path')
       .classed('highlighted', true);
-    
+    this.updateArrowheads();
     return true;
   }
 
@@ -6817,7 +6834,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .filter((d) => d.relName === relName && !this.isAlignmentEdge(d))
       .selectAll('path')
       .classed('highlighted', false);
-    
+    this.updateArrowheads();
     return true;
   }
 
