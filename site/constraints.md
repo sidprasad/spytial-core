@@ -184,6 +184,7 @@ Draws a visual bounding box around nodes matched by a selector.
 - group:
     selector: <n-ary-selector>   # Required
     name: <group-name>           # Required
+    showLabel: <boolean>        # Optional: false hides the caption and its pill (default: true)
     addEdge: <direction>         # Optional: none | togroup | fromgroup (default: none)
     textStyle: { color: <color> }  # Optional: style the group's own label
 ```
@@ -205,8 +206,11 @@ A group has two style surfaces: its **own label** (top-level `textStyle`) and �
 |-------|----------|------|---------|-------------|
 | `selector` | Yes | string | — | Selector returning atoms to include in the group. This could be a unary or binary selector. If a binary selector, the first element is a group key, while the second element is added to groups associated with that key. |
 | `name` | Yes | string | — | Display name shown on the group box |
+| `showLabel` | No | boolean | `true` | Draw the group caption and its background pill. `false` keeps the boundary but hides both. |
 | `addEdge` | No | direction *or* block | `none` | The connector between the group key and the group. As a bare string, just the direction (`none` / `togroup` / `fromgroup`; legacy `true` = `togroup`). As a block, also styles the connector (`points` + `lineStyle` + `textStyle`). For tuples `(a, b), (a, c), (a, d)` the group is keyed by `a`: `togroup` draws `a` → group, `fromgroup` draws group → `a`. |
 | `textStyle.color` | No | string | — | Color of the group's own label (`size` is reserved — group labels auto-fit) |
+
+Keyed groups display `name[key label]`, for example `Team[Alice]`. An ID is added only when needed to distinguish duplicate captions (`Team[Alice:k1]`, `Team[Alice:k2]`). Blank key labels fall back to the key ID. Unary groups display only `name`. Captions are separate from group identity, so shortening or hiding them preserves connector attachments and inferred-edge references. To hide a caption, add `showLabel: false` to the group constraint.
 
 ### Examples
 

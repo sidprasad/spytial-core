@@ -982,9 +982,10 @@ export class LayoutInstance {
                         let newGroup: LayoutGroup =
                         {
                             name: groupName,
+                            label: `${gc.name}[${this.normalizeComparableGroupToken(keyNodeLabel || '') || this.normalizeComparableGroupToken(groupOn)}]`,
                             nodeIds: [addToGroup],
                             keyNodeId: groupOn,
-                            showLabel: !gc.negated,
+                            showLabel: !gc.negated && gc.showLabel,
                             labelTextStyle: gc.labelTextStyle,
                             sourceConstraint: gc,
                             negated: gc.negated,
@@ -1027,9 +1028,10 @@ export class LayoutInstance {
                 // Question: Does **just** having LayoutGroup work? Like what does a keyNode even mean?
                 let newGroup: LayoutGroup = {
                     name: gc.name,
+                    label: gc.name,
                     nodeIds: selectedElements,
                     keyNodeId: keyNode, //// TODO: I think introducing this random keynode could be a problem. Not sure why or when though.
-                    showLabel: !gc.negated,
+                    showLabel: !gc.negated && gc.showLabel,
                     labelTextStyle: gc.labelTextStyle,
                     sourceConstraint: gc,
                     negated: gc.negated,
@@ -1038,8 +1040,26 @@ export class LayoutInstance {
                 groups.push(newGroup);
             }
         }
-
-
+        // Captions favor readable key labels. Identity stays in `name`, so
+        // shortening a caption cannot merge groups or redirect connectors.
+        // Recheck after expanding: a literal label may itself contain `label:id`.
+        // Each group can expand only once, so this always terminates.
+        let expanded: boolean;
+        do {
+            expanded = false;
+            const captionCounts = new Map<string, number>();
+            for (const group of groups) {
+                const caption = group.label ?? group.name;
+                captionCounts.set(caption, (captionCounts.get(caption) ?? 0) + 1);
+            }
+            for (const group of groups) {
+                const caption = group.label ?? group.name;
+                if ((captionCounts.get(caption) ?? 0) > 1 && caption !== group.name) {
+                    group.label = group.name;
+                    expanded = true;
+                }
+            }
+        } while (expanded);
         return groups;
     }
 
@@ -2881,6 +2901,7 @@ export class LayoutInstance {
         // of which way round the underlying graphlib edge was created (the key is
         // the source for 'togroup', the target for 'fromgroup').
         const keyNodeByGroupName = new Map<string, string>();
+        const labelByGroupName = new Map(groups.map(group => [group.name, group.label ?? group.name]));
         // Map each group's name → the connector styling authored on its
         // `addEdge` block (the connector is an edge, so it carries a lineStyle +
         // textStyle). Sourced from the GroupBySelector that created the group.
@@ -2941,7 +2962,7 @@ export class LayoutInstance {
             let e: LayoutEdge = {
                 source: source,
                 target: target,
-                label: edgeLabel,
+                label: isGroupEdge ? labelByGroupName.get(edgeLabel) ?? edgeLabel : edgeLabel,
                 relationName: relName,
                 id: edgeId,
                 color: color,

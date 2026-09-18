@@ -433,6 +433,7 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       enforcement: 'parse-error',
       description:
         'Display name on the group, and the handle an `inferredEdge` `draw` endpoint refers to. ' +
+        'Keyed captions use `<name>[<key label>]`, adding the key ID only to distinguish duplicate captions. ' +
         'Required unless the constraint is negated (`hold: never`), where a name is generated.',
     },
     {
@@ -463,6 +464,7 @@ const GROUP_BY_SELECTOR: LanguageItem = {
       },
       note: 'The legacy boolean `true` is still accepted and means `togroup`.',
     },
+    { name: 'showLabel', type: 'boolean', default: true, description: 'Whether the group caption and its background pill are drawn. The group hull remains visible.' },
     blockField('textStyle', "The group's own label. Only `color` applies today — group labels auto-fit their box, so `size` is reserved."),
   ],
   example: { selector: 'Team.members', name: 'Team' },

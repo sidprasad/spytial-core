@@ -5,8 +5,10 @@ import type { IconPlacement } from "./style/atom-style-spec";
 import type { LayoutWarning } from "./error-state";
 
 export interface LayoutGroup {
-    // The name of the group
+    // The internal name of the group, used for identity and edge attachments.
     name : string;
+    /** Display caption. Absent on older/custom layouts: render `name`. */
+    label?: string;
 
     // The nodes that are in the group
     nodeIds : string[];

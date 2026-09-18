@@ -15,7 +15,7 @@
  *     - orientation: { selector, directions: [...], hold? }
  *     - cyclic:      { selector, direction, hold? }
  *     - align:       { selector, direction, hold? }
- *     - group:       { selector, name, addEdge?: none|togroup|fromgroup | {points,lineStyle,textStyle}, textStyle?:{color}, hold? }  (groupselector)
+ *     - group:       { selector, name, showLabel?, addEdge?: none|togroup|fromgroup | {points,lineStyle,textStyle}, textStyle?:{color}, hold? }  (groupselector)
  *     - size:        { selector, width, height }
  *     - hideAtom:    { selector }
  *   directives:
@@ -289,6 +289,7 @@ const groupselector: ItemDefinition = {
       label: 'Group name',
       placeholder: 'e.g. cluster',
     },
+    { key: 'showLabel', kind: 'boolean', label: 'Show label', default: true },
     {
       key: 'addEdge',
       kind: 'enum',
@@ -317,6 +318,7 @@ const groupselector: ItemDefinition = {
       node.name = asString(params.name);
     }
     const edge = normGroupEdge(params.addEdge);
+    if (typeof params.showLabel === 'boolean') node.showLabel = params.showLabel;
     if (edge !== 'none') {
       node.addEdge = edge;
     }
@@ -352,6 +354,7 @@ const groupselector: ItemDefinition = {
     if (group.name !== undefined) {
       params.name = asString(group.name);
     }
+    if (typeof group.showLabel === 'boolean') params.showLabel = group.showLabel;
     // Preserve the group's own label styling (whatever leaves were authored).
     if (isRecord(group.textStyle)) {
       params.textStyle = { ...group.textStyle };
