@@ -251,6 +251,8 @@ describe('tick paths keep the icon on its node', () => {
 
         proto.updatePositions.call({
             ...geometry,
+            container: d3.select(svg),
+            updateArrowheads: proto.updateArrowheads,
             svgNodes,
             svgGroups: empty,
             svgLinkGroups: empty,
@@ -273,6 +275,7 @@ describe('tick paths keep the icon on its node', () => {
         proto.gridUpdatePositions.call({
             ...geometry,
             container: d3.select(svg),
+            updateArrowheads: proto.updateArrowheads,
             ensureNodeBounds: () => undefined,
         });
 
