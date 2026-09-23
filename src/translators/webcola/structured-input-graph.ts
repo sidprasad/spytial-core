@@ -143,6 +143,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
       this.controlsContainer.style.display = 'contents'; // wrapper for querying
       this.controlsContainer.innerHTML = this.getControlsHTML();
       toolbar.appendChild(this.controlsContainer);
+      this.syncViewOptions();
     }
 
     // Bind event handlers
@@ -150,6 +151,14 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
     // Set up canvas interactions (context menu, click-to-select)
     this.setupCanvasInteractions();
+  }
+
+  protected syncViewOptions(): void {
+    if (this.controlsContainer) {
+      this.controlsContainer.hidden = this.structuralEditingDisabled || !this.isControlVisible('editing');
+    }
+    if (this.structuralEditingDisabled) this.dismissOverlays();
+    super.syncViewOptions();
   }
 
   /**
@@ -349,6 +358,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Show add-atom popover anchored to a toolbar button
    */
   private showAddAtomPopover(anchor: HTMLElement): void {
+    if (this.structuralEditingDisabled) return;
     const allTypes = new Set<string>();
     this.getAvailableAtomTypes().forEach(t => allTypes.add(t));
     this.customTypes.forEach(t => allTypes.add(t));
@@ -425,6 +435,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Show add-relation popover anchored to a toolbar button
    */
   private showAddRelationPopover(anchor: HTMLElement): void {
+    if (this.structuralEditingDisabled) return;
     const popover = document.createElement('div');
     popover.className = 'si-popover';
 
@@ -516,6 +527,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Handle delete toolbar action — deletes selected node or shows a popover to select one
    */
   private handleDeleteAction(): void {
+    if (this.structuralEditingDisabled) return;
     if (this.selectedNodeId) {
       const id = this.selectedNodeId;
       this.selectedNodeId = null;
@@ -651,6 +663,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
 
     // ── Right-click context menu on nodes ──
     svgEl.addEventListener('contextmenu', (e: MouseEvent) => {
+      if (this.structuralEditingDisabled) return;
       const target = e.target as SVGElement;
       const nodeGroup = target.closest('.node') || target.closest('.error-node');
       if (!nodeGroup) return;
@@ -676,7 +689,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         return;
       }
 
-      if (!this.selectedNodeId) return;
+      if (this.structuralEditingDisabled || !this.selectedNodeId) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         // Don't delete if user is typing in an input
         const active = this.shadowRoot?.activeElement;
@@ -695,6 +708,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Show a context menu for a node
    */
   private showNodeContextMenu(container: HTMLElement, nodeData: any, x: number, y: number): void {
+    if (this.structuralEditingDisabled) return;
     this.dismissOverlays();
 
     const menu = document.createElement('div');
@@ -771,6 +785,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * needs adjusting here.
    */
   private async handleEdgeCreationRequest(event: CustomEvent): Promise<void> {
+    if (this.structuralEditingDisabled) {
+      event.preventDefault();
+      return;
+    }
     const { tuple } = event.detail;
 
     try {
@@ -789,6 +807,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge label is edited
    */
   private async handleEdgeModificationRequest(event: CustomEvent): Promise<void> {
+    if (this.structuralEditingDisabled) {
+      event.preventDefault();
+      return;
+    }
     const { tuple, tuples } = event.detail;
 
     // Support both single `tuple` and array `tuples` (group edges send multiple).
@@ -850,6 +872,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * This updates the data instance when an edge endpoint is dragged to a new node
    */
   private async handleEdgeReconnectionRequest(event: CustomEvent): Promise<void> {
+    if (this.structuralEditingDisabled) {
+      event.preventDefault();
+      return;
+    }
     const { oldTuple, newTuple } = event.detail;
 
     try {
@@ -1041,6 +1067,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Add an atom from the form inputs
    */
   private async addAtomFromForm(type: string, label: string): Promise<IAtom | null> {
+    if (this.structuralEditingDisabled) return null;
     if (!type || !label) return null;
 
     try {
@@ -1070,6 +1097,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Add a relation from the form inputs
    */
   private async addRelationFromForm(relationName?: string): Promise<boolean> {
+    if (this.structuralEditingDisabled) return false;
     try {
       const relationType = relationName?.trim() ||
         (this.shadowRoot?.querySelector('.si-rel-name') as HTMLInputElement)?.value?.trim() || '';
@@ -1153,6 +1181,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Delete an atom by ID
    */
   private async deleteAtom(atomId: string): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     if (!atomId) return;
 
     try {
@@ -1176,6 +1205,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Delete a specific relation tuple by relation ID and tuple index within that relation
    */
   private async deleteRelationTuple(relationId: string, tupleIndex: number): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     try {
       const relations = this.dataInstance.getRelations();
       const relation = relations.find(r => r.id === relationId);
@@ -1197,6 +1227,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Clear all atoms and relations
    */
   private async clearAllItems(): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     try {
       this.setDataInstance(new JSONDataInstance({
         atoms: [],

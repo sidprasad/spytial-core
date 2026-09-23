@@ -1,3 +1,4 @@
+import { defaultGraphViewOptions } from '../src/translators/webcola/graph-view-options';
 import { describe, expect, it } from 'vitest';
 import * as d3 from 'd3';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
@@ -97,7 +98,7 @@ describe('group caption SVG', () => {
     const proto = WebColaCnDGraph.prototype as any;
     const container = d3.select(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
     const graph: any = {
-      container, currentLayout: { nodes: [] },
+      container, currentLayout: { nodes: [] }, viewOptions: defaultGraphViewOptions(),
       getCanvasBackground: () => 'white', getFontFamily: () => 'sans-serif',
       calculateGroupLabelFontSize: () => 12, groupLabelColor: () => null,
     };

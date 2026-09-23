@@ -185,6 +185,15 @@ These register themselves automatically when the bundle loads in a browser.
 | `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
 | `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
 
+### Embedded graph options
+
+`setViewOptions(options)` / `getViewOptions()` configure toolbar presets, individual
+controls, interaction permissions, and typography per
+instance. `zoomIn()`, `zoomOut()`, and `setRoutingMode(mode)` join the existing fit,
+theme, and PNG export actions for host-owned controls. All defaults are unchanged.
+See [Configuring embedded graphs](embedding.md) for live updates, theme
+synchronization, and diagnostic integration.
+
 ### Events from `<webcola-cnd-graph>`
 
 The element draws into its own shadow root, so anything it shows about a render

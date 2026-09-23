@@ -63,3 +63,5 @@ export {
   getSequencePolicy,
   registerSequencePolicy,
 } from './webcola/sequence-policy';
+
+export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './webcola/graph-view-options';

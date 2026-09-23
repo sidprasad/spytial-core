@@ -9,6 +9,7 @@
   * [New Language Integration](new-language-integration.md)
   * [The Integration Pipeline](pipeline.md)
   * [Custom Data Instances](custom-data-instance.md)
+  * [Configuring Embedded Graphs](embedding.md)
   * [Testing an Integration](testing-integrations.md)
 
 * **Data**

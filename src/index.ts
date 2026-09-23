@@ -308,3 +308,5 @@ export type {
   DocumentRules,
   HoldRules,
 } from './language';
+
+export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './translators/webcola/graph-view-options';

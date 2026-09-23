@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Full and quiet Spytial embeds</title>
+  <style>
+    body { margin: 2rem auto; padding: 0 1rem; max-width: 1100px; font: 16px/1.5 system-ui, sans-serif; color: #263445; background: #fffff8; }
+    body.dark { color: #e6e6e6; background: #1e1e1e; color-scheme: dark; }
+    .examples { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 2rem; }
+    webcola-cnd-graph { height: 360px; }
+    #quiet { --cnd-canvas-border: none; --cnd-canvas-radius: 0; }
+    button, select { font: inherit; margin: .25rem; }
+    .diagnostics { color: #b45309; white-space: pre-wrap; }
+  </style>
+  <script src="../dist/browser/spytial-core-complete.global.js"></script>
+</head>
+<body>
+  <h1>One graph, two reading experiences</h1>
+  <p>The same data and spatial constraints appear in both views. Drag nodes to explore; the ordering constraint remains in force.</p>
+  <button id="theme">Switch document theme</button>
+  <div class="examples">
+    <section>
+      <h2>Full controls</h2>
+      <p>The existing default configuration.</p>
+      <webcola-cnd-graph id="full" aria-label="Full graph"></webcola-cnd-graph>
+      <div id="full-diagnostics" class="diagnostics" role="status"></div>
+    </section>
+    <section>
+      <h2>Quiet document embed</h2>
+      <p>Labels, attributes, constrained dragging, and a theme supplied by this page.</p>
+      <webcola-cnd-graph id="quiet" aria-label="Quiet graph"></webcola-cnd-graph>
+      <label>Built-in controls <select id="toolbar"><option value="compact">Compact</option><option value="none">None</option><option value="full">Full</option></select></label>
+      <button id="fit">Fit diagram</button>
+      <button id="download">Download PNG</button>
+      <div id="quiet-diagnostics" class="diagnostics" role="status"></div>
+    </section>
+  </div>
+  <script>
+    (async () => {
+      await customElements.whenDefined('webcola-cnd-graph');
+      const { JSONDataInstance, SGraphQueryEvaluator, LayoutInstance, parseLayoutSpec } = spytialcore;
+      const instance = new JSONDataInstance({
+        atoms: ['Draft', 'Review', 'Published'].map(id => ({ id, type: 'Stage', label: id })),
+        relations: [{ id: 'next', name: 'next', types: ['Stage', 'Stage'], tuples: [
+          { atoms: ['Draft', 'Review'], types: ['Stage', 'Stage'] },
+          { atoms: ['Review', 'Published'], types: ['Stage', 'Stage'] },
+        ] }],
+      });
+      const evaluator = new SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: instance });
+      const spec = parseLayoutSpec(`constraints:
+  - orientation:
+      selector: next
+      directions: [right]
+directives:
+  - tag:
+      toTag: Stage
+      name: successor
+      value: next`);
+      const result = new LayoutInstance(spec, evaluator).generateLayout(instance);
+      const full = document.getElementById('full');
+      const quiet = document.getElementById('quiet');
+      for (const graph of [full, quiet]) {
+        const diagnostics = document.getElementById(graph.id + '-diagnostics');
+        diagnostics.textContent = result.error ? JSON.stringify(result.error) : '';
+        graph.addEventListener('layout-error', event => diagnostics.textContent = event.detail.message);
+        graph.addEventListener('layout-warnings', event => diagnostics.textContent = event.detail.warnings.map(w => w.message).join('\n'));
+      }
+      await quiet.setViewOptions({ toolbar: 'compact', interaction: { structuralEditing: false } });
+      await Promise.all([full.renderLayout(result.layout), quiet.renderLayout(result.layout)]);
+      document.getElementById('toolbar').onchange = event => quiet.setViewOptions({ toolbar: event.target.value });
+      document.getElementById('fit').onclick = () => quiet.resetViewToFitContent();
+      document.getElementById('download').onclick = () => quiet.takeScreenshot('quiet-diagram.png');
+      document.getElementById('theme').onclick = () => {
+        const dark = document.body.classList.toggle('dark');
+        [full, quiet].forEach(graph => graph.setTheme(dark ? 'dark' : 'light'));
+      };
+    })().catch(error => { document.getElementById('quiet-diagnostics').textContent = error.message; });
+  </script>
+</body>
+</html>

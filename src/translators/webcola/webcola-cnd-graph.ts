@@ -12,9 +12,12 @@ import * as d3VendorModule from '../../vendor/d3.v4.min.js';
  */
 type D3Layout = Layout & ID3StyleLayoutAdaptor;
 import { ITuple } from '../../data-instance/interfaces';
-import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize } from '../../layout/text-extent';
+import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, resolveAttrFontSize, estimateLabelBox, type SecondaryLine } from '../../layout/text-extent';
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
+import { isAutoSizedNode } from '../../layout/auto-sized-nodes';
+import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewOptions, type GraphControl } from './graph-view-options';
+export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
 import {
@@ -183,6 +186,119 @@ const HTMLElementBase = (typeof HTMLElement !== 'undefined'
   : (class {} as unknown as typeof HTMLElement));
 
 export class WebColaCnDGraph extends HTMLElementBase {
+  private viewOptions = defaultGraphViewOptions();
+  private viewOptionsConfigured = false;
+  private readonly presentationRenders = new WeakSet<WebColaLayoutOptions>();
+  private sourceLayout: InstanceLayout | null = null;
+
+  /** A detached snapshot. Modify options through setViewOptions(). */
+  public getViewOptions(): ResolvedGraphViewOptions {
+    return { ...this.viewOptions, controls: { ...this.viewOptions.controls },
+      interaction: { ...this.viewOptions.interaction } };
+  }
+
+  /**
+   * Merge a presentation patch before or after mounting. Controls/permissions
+   * update synchronously. Await for font remeasurement and constrained
+   * relayout; the data, spec, and live viewport are preserved.
+   */
+  public async setViewOptions(options: GraphViewOptions): Promise<void> {
+    this.viewOptionsConfigured = true;
+    const previous = this.viewOptions;
+    this.viewOptions = {
+      toolbar: options.toolbar ?? previous.toolbar,
+      controls: { ...previous.controls, ...options.controls },
+      interaction: { ...previous.interaction, ...options.interaction },
+      fontFamily: options.fontFamily === undefined ? previous.fontFamily : options.fontFamily,
+    };
+    this.syncViewOptions();
+    if (options.fontFamily !== undefined) {
+      const style = this.root.querySelector('style');
+      if (style) style.textContent = this.getCSS();
+      if (this.sourceLayout) {
+        const renderOptions: WebColaLayoutOptions = {
+          priorPositions: this.getLayoutState(), transitionMode: 'replace',
+        };
+        this.presentationRenders.add(renderOptions);
+        await this.renderLayout(this.sourceLayout, renderOptions);
+      }
+    }
+  }
+
+  protected get structuralEditingDisabled(): boolean {
+    return !this.viewOptions.interaction.structuralEditing;
+  }
+
+  protected isControlVisible(control: GraphControl): boolean {
+    return this.viewOptions.controls[control] ?? (this.viewOptions.toolbar === 'full' ||
+      (this.viewOptions.toolbar === 'compact' && (control === 'zoom' || control === 'fit')));
+  }
+
+  /** Subclasses synchronize their own controls without replacing the toolbar. */
+  protected syncViewOptions(): void {
+    if (!this.viewOptionsConfigured) return;
+    (this.root.getElementById('graph-toolbar') as HTMLElement).dataset.presentation = this.viewOptions.toolbar;
+    const visibility: Record<string, boolean> = {
+      'zoom-in': this.isControlVisible('zoom'), 'zoom-out': this.isControlVisible('zoom'),
+      'zoom-fit': this.isControlVisible('fit'),
+      'zoom-controls': this.isControlVisible('zoom') || this.isControlVisible('fit'),
+      'routing-control': this.isControlVisible('routing'),
+      'mode-control': this.isControlVisible('theme'), 'screenshot-control': this.isControlVisible('export'),
+    };
+    for (const [id, visible] of Object.entries(visibility)) {
+      const element = this.root.getElementById(id) as HTMLElement | null;
+      if (element) element.hidden = !visible;
+    }
+    this.syncToolbarVisibility();
+    if (this.structuralEditingDisabled) {
+      this.detachInputModeListeners();
+      if (this.isInputModeActive) this.deactivateInputMode();
+      this.cleanupEdgeCreation();
+      this.edgeDragState = { isDragging: false, edge: null, endpoint: null, dragMarker: null };
+      this.svg?.on('mousemove.edgecreation', null);
+      this.root.querySelectorAll<HTMLButtonElement>('.modal-overlay [data-action=cancel]').forEach(button => button.click());
+    } else if (this.inputModeEnabled) {
+      this.attachInputModeListeners();
+    }
+    if (this.viewOptions.interaction.nodeDrag && !this.isInputModeActive) this.enableNodeDragging();
+    else this.disableNodeDragging();
+    if (this.viewOptions.interaction.panZoom && !this.isInputModeActive) this.enableZoom();
+    else this.disableZoom();
+  }
+
+  protected syncToolbarVisibility(): void {
+    const toolbar = this.root.querySelector('#graph-toolbar')!;
+    (toolbar as HTMLElement).hidden = !Array.from(toolbar.children).some(child => !(child as HTMLElement).hidden);
+  }
+
+  /** Remeasure a copy, leaving semantic node metadata and the host layout intact. */
+  private layoutForPresentation(layout: InstanceLayout): InstanceLayout {
+    if (!this.viewOptions.fontFamily) return layout;
+    return { ...layout, nodes: layout.nodes.map(node => {
+      if (!isAutoSizedNode(node)) return node;
+      const secondary: SecondaryLine[] = [
+        ...Object.values(node.labels ?? {}).map(values => values.join(', ')),
+        ...Object.entries(node.attributes ?? {}).map(([key, values]) => ({
+          text: `${key}: ${values}`, fontSize: resolveAttrFontSize(node.attributeTextStyles?.[key]?.size),
+        })),
+      ];
+      const size = estimateLabelBox(node.label, secondary);
+      if (this.viewOptions.fontFamily) {
+        const context = this.getTextMeasurementContext();
+        const lines = [{ text: node.label, fontSize: MAIN_LABEL_FONT_SIZE, bold: true },
+          ...secondary.map(line => typeof line === 'string'
+            ? { text: line, fontSize: SECONDARY_FONT_SIZE, bold: false }
+            : { ...line, bold: false })];
+        const width = Math.max(...lines.map(line => {
+          context.font = `${line.bold ? 'bold ' : ''}${line.fontSize}px ${this.getFontFamily()}`;
+          return context.measureText(line.text).width;
+        }));
+        size.width = Math.round(Math.max(100, Math.min(280, width + 32)));
+      }
+      return { ...node, ...size };
+    }) };
+  }
+
   private svg!: any;
   private container!: any;
   private currentLayout!: WebColaLayout;
@@ -646,7 +762,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * set, otherwise the Atkinson Hyperlegible default.
    */
   private getFontFamily(): string {
-    return this.getAttribute('font-family') ?? WebColaCnDGraph.DEFAULT_FONT_FAMILY;
+    return this.viewOptions.fontFamily ?? this.getAttribute('font-family') ?? WebColaCnDGraph.DEFAULT_FONT_FAMILY;
   }
 
   /**
@@ -655,7 +771,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * users with their own font shouldn't pay for an unused download.
    */
   private getFontImports(): string {
-    if (this.hasAttribute('font-family')) return '';
+    if (this.viewOptions.fontFamily || this.hasAttribute('font-family')) return '';
     return "@import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap');";
   }
 
@@ -1466,7 +1582,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       ${this.getCSS()}
       </style>
       <div id="graph-shell">
-      <div id="graph-toolbar">
+      <div id="graph-toolbar" role="group" aria-label="Graph controls">
         <div id="zoom-controls">
           <button id="zoom-in" title="Zoom In" aria-label="Zoom in">+</button>
           <button id="zoom-out" title="Zoom Out" aria-label="Zoom out">−</button>
@@ -1594,7 +1710,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       this.updateRoutingModeDropdown();
 
       routingModeSelect.addEventListener('change', () => {
-        this.handleRoutingModeChange(routingModeSelect.value);
+        this.setRoutingMode(routingModeSelect.value);
       });
     }
 
@@ -1626,9 +1742,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Handle routing mode change from dropdown
    */
-  private handleRoutingModeChange(mode: string): void {
+  public setRoutingMode(mode: string): void {
+    if (mode !== 'default' && !getRoutingMode(mode)) throw new Error(`Unknown routing mode: ${mode}`);
     // Update the layoutFormat attribute
     this.setAttribute('layoutFormat', mode);
+    this.updateRoutingModeDropdown();
     
     // Trigger re-routing if layout is already rendered
     if (this.currentLayout && this.colaLayout) {
@@ -1708,6 +1826,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Activate input mode for edge creation and modification
    */
   private activateInputMode(): void {
+    if (!this.inputModeEnabled || this.structuralEditingDisabled) return;
     this.isInputModeActive = true;
     
     // Add input-mode class to SVG for styling
@@ -1762,16 +1881,19 @@ export class WebColaCnDGraph extends HTMLElementBase {
     if (this.svgNodes && this.colaLayout) {
       this.svgNodes.on('.drag', null);
     }
+    if (this.viewOptionsConfigured) this.container?.selectAll('.group, .groupLabel').on('.drag', null);
   }
 
   /**
    * Re-enable node dragging when exiting input mode
    */
   private enableNodeDragging(): void {
+    if (!this.viewOptions.interaction.nodeDrag || this.isInputModeActive) return;
     if (this.svgNodes && this.colaLayout && this.colaLayout.drag) {
       const nodeDrag = this.colaLayout.drag();
       this.setupNodeDragHandlers(nodeDrag);
       this.svgNodes.call(nodeDrag);
+      if (this.viewOptionsConfigured) this.container?.selectAll('.group, .groupLabel').call(this.colaLayout.drag);
     }
   }
 
@@ -1780,8 +1902,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    */
   private disableZoom(): void {
     if (this.svg && this.zoomBehavior) {
-      // Store current transform before disabling
-      this.storedTransform = d3.zoomTransform(this.svg.node());
+      if (!this.viewOptionsConfigured) this.storedTransform = d3.zoomTransform(this.svg.node());
       // Disable zoom events but preserve the behavior
       this.svg.on('.zoom', null);
     }
@@ -1791,11 +1912,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Re-enable zoom/translate functionality when exiting input mode
    */
   private enableZoom(): void {
+    if (!this.viewOptions.interaction.panZoom || this.isInputModeActive) return;
     if (this.svg && this.zoomBehavior) {
       // Re-enable zoom behavior
       this.svg.call(this.zoomBehavior);
-      // Restore the previous transform if we had one
-      if (this.storedTransform) {
+      if (!this.viewOptionsConfigured && this.storedTransform) {
         this.svg.call(this.zoomBehavior.transform, this.storedTransform);
       }
     }
@@ -1804,7 +1925,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Zoom in by a fixed scale factor
    */
-  private zoomIn(): void {
+  public zoomIn(): void {
+    this.userHasManuallyZoomed = true;
     if (this.svg && this.zoomBehavior) {
       this.svg.transition().duration(200).call(
         this.zoomBehavior.scaleBy, 1.5
@@ -1815,7 +1937,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Zoom out by a fixed scale factor
    */
-  private zoomOut(): void {
+  public zoomOut(): void {
+    this.userHasManuallyZoomed = true;
     if (this.svg && this.zoomBehavior) {
       this.svg.transition().duration(200).call(
         this.zoomBehavior.scaleBy, 1 / 1.5
@@ -1895,7 +2018,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Start edge creation from a source node
    */
   private startEdgeCreation(sourceNode: NodeWithMetadata): void {
-    if (!this.isInputModeActive) return;
+    if (!this.isInputModeActive || this.structuralEditingDisabled) return;
 
     // Clean up any existing edge creation
     this.cleanupEdgeCreation();
@@ -1943,7 +2066,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const confirmSelfLoop = await this.showConfirmDialog(
         `Are you sure you want to create a self-loop edge on "${sourceNode.label || sourceNode.id}"?`
       );
-      if (!confirmSelfLoop) {
+      if (!confirmSelfLoop || this.structuralEditingDisabled) {
         this.cleanupEdgeCreation();
         return;
       }
@@ -1960,6 +2083,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Show edge label input dialog and create the edge
    */
   private async showEdgeLabelInput(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     const label = await this.showPromptDialog(
       `Enter label for edge from "${sourceNode.label || sourceNode.id}" to "${targetNode.label || targetNode.id}":`,
       ''
@@ -1977,6 +2101,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Create a new edge between two nodes
    */
   private async createNewEdge(sourceNode: NodeWithMetadata, targetNode: NodeWithMetadata, label: string): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     if (!this.currentLayout) return;
 
     // Find node indices in the current layout
@@ -2115,12 +2240,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Edit the label of an existing edge
    */
   private async editEdgeLabel(edgeData: EdgeWithMetadata): Promise<void> {
-    if (!this.isInputModeActive) return;
+    if (!this.isInputModeActive || this.structuralEditingDisabled) return;
 
     // Use relName for data-instance lookups; fall back to label for display.
     const currentRelName = edgeData.relName || edgeData.label || '';
     const displayLabel = edgeData.label || edgeData.relName || '';
     const result = await this.showEdgeEditDialog(`Edit edge label:`, displayLabel);
+
+    if (this.structuralEditingDisabled) return;
 
     // Handle deletion request
     if (result === 'DELETE') {
@@ -2285,6 +2412,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // then race the new render's (the wedged-overlay / never-routed-edges /
     // never-revealed-morph failures).
     this.teardownInflightRender();
+    this.sourceLayout = instanceLayout;
 
     // Surface the advisory warnings this layout carries. Done before the solve
     // rather than after because the badge describes the *spec*, not the geometry,
@@ -2350,12 +2478,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const hasPriorPositions = !!(resolvedState && resolvedState.positions.length > 0);
     const hasPriorTransform = this.hasValidTransform(resolvedState?.transform);
     // Build the options the translator will see.
-    // lockUnconstrainedNodes is gated on useReducedIterations so that only
-    // stability-mode layouts lock nodes; morph transitions keep nodes free.
+    // Preserve the historical continuity default; presentation changes opt out
+    // of locking so resized boxes can separate while retaining their warm start.
     const translatorOptions: WebColaLayoutOptions = hasPriorPositions
       ? {
           priorPositions: resolvedState,
-          lockUnconstrainedNodes: useReducedIterations,
+          lockUnconstrainedNodes: options && this.presentationRenders.has(options) ? false : useReducedIterations,
           collapseSymmetricEdges: this.shouldCollapseSymmetricEdges()
         }
       : { collapseSymmetricEdges: this.shouldCollapseSymmetricEdges() };
@@ -2410,6 +2538,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       const containerHeight = containerRect.height || 600; // fallback to default
 
       // Translate to WebCola format with actual container dimensions
+      instanceLayout = this.layoutForPresentation(instanceLayout);
       const translator = new WebColaTranslator();
       const webcolaLayout = await translator.translate(instanceLayout, containerWidth, containerHeight, translatorOptions);
 
@@ -3287,6 +3416,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * This is useful when switching between temporal states to ensure a clean slate.
    */
   public clear(): void {
+    this.sourceLayout = null;
     // Stop the solver, morph timers/layers, and stale handlers.
     this.teardownInflightRender();
 
@@ -3409,6 +3539,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const toolbar = this.shadowRoot?.querySelector('#graph-toolbar');
     if (toolbar) {
       toolbar.appendChild(element);
+      this.syncToolbarVisibility();
     }
   }
 
@@ -3690,6 +3821,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Start dragging an edge endpoint
    */
   private startEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): void {
+    if (this.structuralEditingDisabled || (this.viewOptionsConfigured && !this.isInputModeActive)) return;
     d3.event.sourceEvent.stopPropagation();
     
     this.edgeDragState.isDragging = true;
@@ -3720,6 +3852,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * End dragging an edge endpoint - reconnect or delete edge
    */
   private async endEdgeEndpointDrag(edgeData: EdgeWithMetadata, endpoint: 'source' | 'target'): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     if (!this.edgeDragState.isDragging) return;
 
     const [mouseX, mouseY] = d3.mouse(this.container.node());
@@ -3775,6 +3908,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     endpoint: 'source' | 'target',
     newNode: NodeWithMetadata
   ): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     const oldSourceNode = this.getNodeFromEdge(edgeData, 'source');
     const oldTargetNode = this.getNodeFromEdge(edgeData, 'target');
     
@@ -3866,6 +4000,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Delete an edge from the graph
    */
   private async deleteEdge(edgeData: EdgeWithMetadata): Promise<void> {
+    if (this.structuralEditingDisabled) return;
     const sourceNode = this.getNodeFromEdge(edgeData, 'source');
     const targetNode = this.getNodeFromEdge(edgeData, 'target');
 
@@ -4050,7 +4185,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
         if (this.isDisconnectedGroup(d) || this.isErrorGroup(d)) return 1;
         return WebColaCnDGraph.GROUP_STROKE_OPACITY;
       })
-      .call((layout as any).drag);
+      .call((selection: any) => {
+        if (this.viewOptions.interaction.nodeDrag && (!this.viewOptionsConfigured || !this.isInputModeActive)) selection.call((layout as any).drag);
+      });
 
 
     return groupRects;
@@ -4221,7 +4358,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
         }
 
         return "";
-      }).call((layout as any).drag);
+      }).call((selection: any) => {
+        if (this.viewOptions.interaction.nodeDrag && (!this.viewOptionsConfigured || !this.isInputModeActive)) selection.call((layout as any).drag);
+      });
   }
 
   /**
@@ -4298,6 +4437,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     // Add icons for nodes that have them
     this.setupNodeIcons(nodeSelection);
+
+    if (!this.viewOptions.interaction.nodeDrag || (this.viewOptionsConfigured && this.isInputModeActive)) nodeSelection.on('.drag', null);
 
     // Add most specific type labels
     this.setupMostSpecificTypeLabels(nodeSelection);

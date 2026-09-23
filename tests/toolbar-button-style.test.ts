@@ -70,7 +70,7 @@ describe('toolbar button style', () => {
         const root = shadow();
         const button = document.createElement('button');
         button.textContent = 'Full screen';
-        proto.addToolbarControl.call({ shadowRoot: root }, button);
+        proto.addToolbarControl.call({ shadowRoot: root, root, syncToolbarVisibility: proto.syncToolbarVisibility }, button);
 
         const toolbar = root.querySelector('#graph-toolbar')!;
         expect(button.parentElement).toBe(toolbar);
