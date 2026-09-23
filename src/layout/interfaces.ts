@@ -64,6 +64,9 @@ export enum ColorSource {
 }
 
 export interface LayoutNode {
+    /** Host opt-in to font remeasurement for custom nodes. Generated automatic
+     * boxes are tracked internally; explicit size constraints remain exact. */
+    autoSize?: boolean;
     id: string;
     label: string;
     /**

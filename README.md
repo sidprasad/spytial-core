@@ -21,6 +21,7 @@ The structure mirrors the integrator's job:
 - **Integrating Spytial Into a Language** — [New Language Integration](./site/new-language-integration.md) · [Custom Data Instances](./site/custom-data-instance.md)
 - **Data** — [JSON Data Format](./site/json-data.md) · [Built-in Adapters](./site/data-adapters.md)
 - **The YAML Spec Language** — [YAML Reference](./site/yaml-reference.md) · [Constraints](./site/constraints.md) · [Directives](./site/directives.md) · [Selector Syntax](./site/selectors.md)
+- **Embedding** — [Controls, interactions, and document themes](./site/embedding.md)
 - **Sequences of States** — [Sequence Layouts](./site/sequences.md)
 - **API Reference** — [Exported API](./site/api-reference.md)
 - **Cookbook** — [Examples](https://github.com/sidprasad/spytial-clrs)

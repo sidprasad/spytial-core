@@ -34,6 +34,7 @@ import type { IEvaluatorResult } from '../evaluator-contracts';
 import { ColorPicker } from './colorpicker';
 import { type ConstraintError, type ErrorMessages } from './constraint-types';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
+import { markAutoSizedNode } from './auto-sized-nodes';
 import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
 
 /** The strings the renderer will draw inside a node's box. Used to size the box. */
@@ -1654,7 +1655,7 @@ export class LayoutInstance {
             let colorSource = explicitlyColored.has(nodeId)
                 ? ColorSource.Directive
                 : ColorSource.DefaultPalette;
-            let { height, width } = nodeSizeMap[nodeId];
+            let { height, width, autoSize } = nodeSizeMap[nodeId];
 
             const mostSpecificType = this.getMostSpecificType(nodeId, a);
             const allTypes = this.getNodeTypes(nodeId, a);
@@ -1685,7 +1686,7 @@ export class LayoutInstance {
             // default so a bare `iconStyle: { path }` reads as "this icon IS the atom".
             const iconPlacement = iconStyle?.placement ?? 'full';
 
-            return {
+            const layoutNode = {
                 id: nodeId,
                 label: label,
                 name: label,
@@ -1708,6 +1709,8 @@ export class LayoutInstance {
                 showLabels: showLabels,
                 disconnected: dcN.includes(nodeId)
             };
+            if (autoSize) markAutoSizedNode(layoutNode);
+            return layoutNode;
         });
 
         ///////////// CONSTRAINTS ////////////
@@ -3107,8 +3110,8 @@ export class LayoutInstance {
     private getNodeSizeMap(
         g: Graph,
         contentByNode: Record<string, NodeDisplayContent>
-    ): Record<string, { width: number; height: number }> {
-        let nodeSizeMap: Record<string, { width: number; height: number }> = {};
+    ): Record<string, { width: number; height: number; autoSize?: boolean }> {
+        let nodeSizeMap: Record<string, { width: number; height: number; autoSize?: boolean }> = {};
 
         // Apply size directives first. These come from `size` constraints in
         // the layout spec and must produce exactly the requested dimensions
@@ -3163,7 +3166,7 @@ export class LayoutInstance {
                     ...c.skolemLines,
                 ]
                 : [];
-            nodeSizeMap[nodeId] = estimateLabelBox(main, secondary, { min: floor });
+            nodeSizeMap[nodeId] = { ...estimateLabelBox(main, secondary, { min: floor }), autoSize: true };
         }
 
         return nodeSizeMap;

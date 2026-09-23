@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { defaultGraphViewOptions } from '../src/translators/webcola/graph-view-options';
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
@@ -23,6 +24,7 @@ function editor(dataInstance: IInputDataInstance) {
     addEventListener: { value: target.addEventListener.bind(target) },
   });
   Object.assign(graph, {
+    viewOptions: defaultGraphViewOptions(),
     dataInstance, currentLayout: { nodes, links: [], groups: [] },
     isInputModeActive: true, selectedNodeId: null,
     enforceConstraintsAndRegenerate: vi.fn().mockResolvedValue(undefined),

@@ -37,6 +37,10 @@ export function getGraphCSS({
          webcola-cnd-graph) beats anything :host says, and that would leave the
          canvas with no height at all. Nothing outside can restyle a shadow
          child. */
+      /* Hidden controls must not retain layout space or keyboard targets. */
+      #graph-toolbar[data-presentation][hidden],
+      #graph-toolbar[data-presentation] [hidden] { display: none !important; }
+
       #graph-shell {
         display: flex;
         flex-direction: column;
@@ -52,8 +56,8 @@ export function getGraphCSS({
            overflow this replaced. */
         flex: 1 1 auto;
         min-height: 0;
-        border: 1px solid rgba(0, 0, 0, 0.08);
-        border-radius: 8px;
+        border: var(--cnd-canvas-border, 1px solid rgba(0, 0, 0, 0.08));
+        border-radius: var(--cnd-canvas-radius, 8px);
         background-color: var(--cnd-canvas-bg, ${canvasBackground}); /* light: warm-white / background attr; dark: --cnd-canvas-bg */
         overflow: hidden;
       }
@@ -498,6 +502,20 @@ export function getGraphCSS({
         margin-bottom: 8px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         backdrop-filter: blur(4px);
+      }
+
+      #graph-toolbar[data-presentation] {
+        flex-wrap: wrap;
+        row-gap: 6px;
+      }
+
+      #graph-toolbar[data-presentation="compact"] {
+        padding: 4px 0;
+        margin-bottom: 4px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
       }
 
       /* Zoom controls styling */
