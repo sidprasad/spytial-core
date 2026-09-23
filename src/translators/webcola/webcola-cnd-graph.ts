@@ -20,6 +20,7 @@ import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewO
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
+import { placeRenderedEdgeLabels } from './edge-labels';
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
@@ -52,11 +53,9 @@ import {
   calculateCurvatureWithIndex,
   clampCurvature,
   applyCurvatureToRoute,
-  applyLabelDisplacement,
   buildGridRouter,
   touchDirection,
   perpendicularRoute,
-  gridRouteMidpoint,
 } from './routing';
 
 // The vendored d3 v4 is imported here, NOT read off `window`.
@@ -86,27 +85,6 @@ const d3Vendor: any = (d3VendorModule as any).default ?? d3VendorModule;
 
 const d3: any = (typeof window !== 'undefined' && window.d3v4) || d3Vendor;
 
-
-/**
- * Checks if two SVG elements are overlapping.
- * 
- * @param element1 - First element
- * @param element2 - Second element
- * @returns True if elements overlap
- */
-function isOverlapping(element1: SVGElement, element2: SVGElement): boolean {
-  function hasgetBBox(target: any): target is { getBBox: any } {
-    return target && typeof target === 'object' && 'getBBox' in target;
-  }
-
-  const bbox1 = hasgetBBox(element1) ? element1.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
-  const bbox2 = hasgetBBox(element2) ? element2.getBBox() : { x: 0, y: 0, width: 0, height: 0 };
-  
-  return !(bbox2.x > bbox1.x + bbox1.width ||
-           bbox2.x + bbox2.width < bbox1.x ||
-           bbox2.y > bbox1.y + bbox1.height ||
-           bbox2.y + bbox2.height < bbox1.y);
-}
 
 const DEFAULT_SCALE_FACTOR = 5;
 
@@ -5820,10 +5798,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       // Node positions are set by the layout algorithm (cola) and should not change when switching routing modes.
       // The edges use the same node.x/y coordinates as default mode, ensuring consistency.
       
-      // NOTE: Do NOT update group or label positions either - keep them consistent with default mode.
-      
-      // Position link labels at route midpoints
-      this.gridUpdateLinkLabels(edges, routesByEdgeId);
+      // Keep group positions; place edge labels against the final routed paths.
+      this.updateLinkLabelsAfterRouting();
 
       this.fitViewportToContent();
 
@@ -5878,49 +5854,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
         }
       });
 
+    this.updateLinkLabelsAfterRouting();
     this.fitViewportToContent();
-  }
-
-  private gridUpdateLinkLabels(edges: any[], routesByEdgeId: Map<string, any>) {
-    const linkGroups = this.container.selectAll(".link-group");
-
-    linkGroups
-      .filter((d: any) => !this.isAlignmentEdge(d))
-      .select("text.linklabel")
-      .attr("x", (edgeData: any, i: number, nodes: any) => {
-        // Use the actual rendered path element to find the true midpoint
-        const pathElement = this.getLinkPathElement(nodes[i]);
-        if (pathElement) {
-          try {
-            const pathLength = pathElement.getTotalLength();
-            const midpoint = pathElement.getPointAtLength(pathLength / 2);
-            return midpoint.x;
-          } catch (e) {
-            // Fallback if path is not yet rendered
-          }
-        }
-        const midpoint = gridRouteMidpoint(edgeData, routesByEdgeId);
-        // Use node.x/y as primary source (same as default mode)
-        return midpoint?.x ?? (edgeData.source?.x ?? edgeData.source?.bounds?.cx() ?? 0);
-      })
-      .attr("y", (edgeData: any, i: number, nodes: any) => {
-        // Use the actual rendered path element to find the true midpoint
-        const pathElement = this.getLinkPathElement(nodes[i]);
-        if (pathElement) {
-          try {
-            const pathLength = pathElement.getTotalLength();
-            const midpoint = pathElement.getPointAtLength(pathLength / 2);
-            return midpoint.y;
-          } catch (e) {
-            // Fallback if path is not yet rendered
-          }
-        }
-        const midpoint = gridRouteMidpoint(edgeData, routesByEdgeId);
-        // Use node.x/y as primary source (same as default mode)
-        return midpoint?.y ?? (edgeData.source?.y ?? edgeData.source?.bounds?.cy() ?? 0);
-      })
-      .attr("text-anchor", "middle")
-      .attr("dominant-baseline", "middle");
   }
 
   private adjustGridRouteForEdge(edgeData: any, route: any[]) {
@@ -6548,118 +6483,11 @@ export class WebColaCnDGraph extends HTMLElementBase {
     });
   }
 
-  /**
-   * Updates link label positions after edge routing is complete.
-   *
-   * Pipeline:
-   *   1. Position each label at the midpoint of its routed path.
-   *   2. Run a batch overlap-resolution pass that pushes overlapping labels
-   *      apart along the smaller-overlap axis (Tier 1.1 of the visual-polish
-   *      plan — see resolveLinkLabelOverlaps).
-   *   3. Raise labels above edges so the white halo from `paint-order: stroke
-   *      fill` reads correctly.
-   */
+  /** Choose readable label positions on the final routes without moving nodes. */
   private updateLinkLabelsAfterRouting(): void {
-    this.container.selectAll('.link-group .linklabel')
-      .attr('x', (d: any, i: number, nodes: any) => {
-        const pathElement = this.getLinkPathElement(nodes[i]);
-        if (!pathElement) return 0;
-
-        const pathLength = pathElement.getTotalLength();
-        const midpoint = pathElement.getPointAtLength(pathLength / 2);
-        return midpoint.x;
-      })
-      .attr('y', (d: any, i: number, nodes: any) => {
-        const pathElement = this.getLinkPathElement(nodes[i]);
-        if (!pathElement) return 0;
-
-        const pathLength = pathElement.getTotalLength();
-        const midpoint = pathElement.getPointAtLength(pathLength / 2);
-        return midpoint.y;
-      })
-      .attr('text-anchor', 'middle');
-
-    this.resolveLinkLabelOverlaps();
-
+    const container = this.container?.node() as SVGGElement | null;
+    if (container) placeRenderedEdgeLabels(container);
     this.container.selectAll('.link-group .linklabel').raise();
-  }
-
-  /**
-   * Pushes overlapping link labels apart so they don't stack on top of each
-   * other when multiple parallel edges or dense regions place several labels
-   * at the same midpoint (Tier 1.1 of the visual-polish plan).
-   *
-   * Algorithm: minimum-translation-vector (MTV) pairwise pushaway, repeated
-   * for up to MAX_LABEL_OVERLAP_PASSES passes. For each overlapping pair, both
-   * labels move half the overlap (plus a small margin) along the *smaller*
-   * overlap axis — the axis where moving disrupts position the least.
-   *
-   * Per-label cumulative displacement is capped at MAX_LABEL_DISPLACEMENT_PX
-   * so labels never drift far from their edge midpoints. If an overlap can't
-   * be resolved within the cap, we accept the residual rather than fly the
-   * label off the canvas.
-   *
-   * Cost: O(N² × passes) where N = number of labels. Called once per layout
-   * after routing, not per-tick — fine for typical graphs (≤ a few hundred
-   * labels). For sparse graphs the inner loop short-circuits on `isOverlapping`.
-   */
-  private resolveLinkLabelOverlaps(): void {
-    // `container` is the untyped vendored d3, so selectAll takes no type args —
-    // assert the element type on the way out instead.
-    const labels = Array.from(
-      this.container.selectAll('.link-group .linklabel').nodes()
-    ) as SVGTextElement[];
-    if (labels.length < 2) return;
-
-    const MAX_PASSES = 4;
-    const MAX_DISPLACEMENT_PX = 28;
-    const MARGIN_PX = 2;
-
-    // Track cumulative displacement per label so we can clamp to MAX_DISPLACEMENT_PX.
-    const dxMap = new Map<SVGTextElement, number>();
-    const dyMap = new Map<SVGTextElement, number>();
-
-    for (let pass = 0; pass < MAX_PASSES; pass++) {
-      let resolvedAny = false;
-
-      for (let i = 0; i < labels.length; i++) {
-        const a = labels[i];
-        for (let j = i + 1; j < labels.length; j++) {
-          const b = labels[j];
-          if (!isOverlapping(a, b)) continue;
-
-          const ba = a.getBBox();
-          const bb = b.getBBox();
-
-          const cax = ba.x + ba.width / 2;
-          const cay = ba.y + ba.height / 2;
-          const cbx = bb.x + bb.width / 2;
-          const cby = bb.y + bb.height / 2;
-
-          const overlapX = (ba.width + bb.width) / 2 - Math.abs(cax - cbx);
-          const overlapY = (ba.height + bb.height) / 2 - Math.abs(cay - cby);
-          if (overlapX <= 0 || overlapY <= 0) continue;
-
-          // Push along the axis with the smaller overlap (less movement).
-          // For identical-position labels the sign falls out of the >= compare,
-          // giving a deterministic split.
-          if (overlapY <= overlapX) {
-            const push = (overlapY + MARGIN_PX) / 2;
-            const sign = cay >= cby ? 1 : -1;
-            applyLabelDisplacement(a, 0, sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-            applyLabelDisplacement(b, 0, -sign * push, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-          } else {
-            const push = (overlapX + MARGIN_PX) / 2;
-            const sign = cax >= cbx ? 1 : -1;
-            applyLabelDisplacement(a, sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-            applyLabelDisplacement(b, -sign * push, 0, dxMap, dyMap, MAX_DISPLACEMENT_PX);
-          }
-          resolvedAny = true;
-        }
-      }
-
-      if (!resolvedAny) break;
-    }
   }
 
   /**
