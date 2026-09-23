@@ -33,6 +33,7 @@ function measuredBox(element: SVGGraphicsElement): LabelRect | null {
  * Labels remain in their edge groups, preserving lookup, theming and morphs.
  */
 export function placeRenderedEdgeLabels(container: SVGGElement): void {
+  container.querySelectorAll('.edge-label-attachment').forEach(element => element.remove());
   const obstacles: LabelRect[] = [];
   // Protect complete node content, including icons and overflowing text. Group
   // interiors are usable whitespace; protect captions and border strips only.
@@ -68,7 +69,11 @@ export function placeRenderedEdgeLabels(container: SVGGElement): void {
         return { x: p.x, y: p.y };
       });
       if (!points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) continue;
-      const route = { id, points: simplifyCollinear(points) };
+      const data = (path as SVGPathElement & { __data__?: { source?: { id?: string }; target?: { id?: string } } }).__data__;
+      const endpoints = [data?.source?.id, data?.target?.id];
+      const bundleId = endpoints[0] !== endpoints[1] && endpoints.every(endpoint => typeof endpoint === 'string')
+        ? JSON.stringify(endpoints.sort()) : undefined;
+      const route = { id, points: simplifyCollinear(points), bundleId };
       routes.push(route);
       // Marker attributes remain authoritative even after the arrowhead layer
       // suppresses the lower marker copy using inline styles.
@@ -99,5 +104,24 @@ export function placeRenderedEdgeLabels(container: SVGGElement): void {
     const { element, offset } = elements.get(id)!;
     element.setAttribute('x', String(placement.x - offset.x));
     element.setAttribute('y', String(placement.y - offset.y));
+    if (placement.leader) {
+      const { from, to } = placement.leader;
+      const create = (tag: string) => container.ownerDocument.createElementNS('http://www.w3.org/2000/svg', tag);
+      const attachment = create('g');
+      attachment.setAttribute('class', 'edge-label-attachment');
+      attachment.setAttribute('aria-hidden', 'true');
+      attachment.setAttribute('pointer-events', 'none');
+      attachment.setAttribute('opacity', element.getAttribute('opacity') ?? '1');
+      const line = create('line');
+      for (const [name, value] of Object.entries({ x1: from.x, y1: from.y, x2: to.x, y2: to.y })) {
+        line.setAttribute(name, String(value));
+      }
+      const dot = create('circle');
+      dot.setAttribute('cx', String(from.x));
+      dot.setAttribute('cy', String(from.y));
+      dot.setAttribute('r', '1.8');
+      attachment.append(line, dot);
+      element.parentElement!.insertBefore(attachment, element);
+    }
   }
 }

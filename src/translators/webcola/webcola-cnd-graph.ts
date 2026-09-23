@@ -3058,7 +3058,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
         pathEl.setAttribute('stroke-dasharray', String(totalLength));
         pathEl.setAttribute('stroke-dashoffset', '0');
 
-        d3.select(this).selectAll('.linklabel, .arrowhead').attr('opacity', 0);
+        d3.select(this).selectAll('.linklabel, .arrowhead, .edge-label-attachment').attr('opacity', 0);
 
         d3.select(pathEl)
           .transition()
@@ -3169,7 +3169,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
           this.setAttribute('data-arrowheads-hidden', 'true');
           // Also hide the link label and arrowheads during draw-in
-          d3.select(this).selectAll('.linklabel, .arrowhead')
+          d3.select(this).selectAll('.linklabel, .arrowhead, .edge-label-attachment')
             .attr('opacity', 0);
         })
         .attr('opacity', 1) // edge group visible — dash hides the stroke
@@ -3195,7 +3195,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
             pathEl.removeAttribute('stroke-dasharray');
             pathEl.removeAttribute('stroke-dashoffset');
           }
-          d3.select(this).selectAll('.linklabel, .arrowhead')
+          d3.select(this).selectAll('.linklabel, .arrowhead, .edge-label-attachment')
             .attr('opacity', 1);
           graph.updateArrowheads();
         });
@@ -4877,8 +4877,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private updatePositions(): void {
-
-    
+    this.container.selectAll('.edge-label-attachment').remove();
     // Update group positions and sizes first (lower layer)
     this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
@@ -5119,6 +5118,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private gridUpdatePositions() {
+    this.container.selectAll('.edge-label-attachment').remove();
 
     // Force recompute node bounds from current positions
     // This is critical for grid mode to work correctly with all node types

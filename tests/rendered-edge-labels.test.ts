@@ -118,4 +118,49 @@ describe('measured SVG edge labels', () => {
     expect(arrowheadBounds({ x: 0, y: 0 }, { x: -1, y: 0 })).toEqual({ x: -13, y: -5, width: 14, height: 10 });
     expect(arrowheadBounds({ x: 0, y: 0 }, { x: 0, y: 0 })).toBeNull();
   });
+
+  it('draws one non-interactive attachment for a displaced label and removes it when space clears', () => {
+    const { container, edge, obstacle } = fixture();
+    const { path, text, group } = edge('short');
+    path.getTotalLength = () => 18;
+    path.getPointAtLength = distance => ({ x: 0, y: distance }) as DOMPoint;
+    text.getBBox = () => ({ x: Number(text.getAttribute('x')) - 50,
+      y: Number(text.getAttribute('y')) - 11, width: 100, height: 22 }) as DOMRect;
+    const first = obstacle('node', { x: -40, y: -40, width: 80, height: 40 });
+    const second = obstacle('node', { x: -40, y: 18, width: 80, height: 40 });
+    text.setAttribute('opacity', '0'); // draw-in transitions hide attachments with their label
+    placeRenderedEdgeLabels(container);
+    placeRenderedEdgeLabels(container);
+    const attachments = group.querySelectorAll('.edge-label-attachment');
+    expect(attachments).toHaveLength(1);
+    const attachment = attachments[0];
+    expect(attachment.getAttribute('aria-hidden')).toBe('true');
+    expect(attachment.getAttribute('pointer-events')).toBe('none');
+    expect(attachment.getAttribute('opacity')).toBe('0');
+    expect(attachment.querySelector('path')).toBeNull(); // cannot be mistaken for an edge by routing
+    expect(attachment.querySelector('circle')!.getAttribute('cx')).toBe('0');
+    expect(group.querySelectorAll('path[data-link-id]')).toHaveLength(1);
+    first.remove(); second.remove();
+    path.getTotalLength = () => 200;
+    path.getPointAtLength = distance => ({ x: distance, y: 0 }) as DOMPoint;
+    placeRenderedEdgeLabels(container);
+    expect(group.querySelector('.edge-label-attachment')).toBeNull();
+    expect(Number(text.getAttribute('x'))).toBe(100);
+  });
+
+  it('recognizes opposite-direction siblings from the renderer edge data', () => {
+    const { container, edge } = fixture();
+    const siblings = [0, 7, 14].map((y, i) => {
+      const result = edge(`sibling-${i}`, `label ${i}`, y);
+      const reverse = i === 1;
+      (result.path as any).__data__ = { source: { id: reverse ? 'b' : 'a' }, target: { id: reverse ? 'a' : 'b' } };
+      result.path.getTotalLength = () => 280;
+      result.path.getPointAtLength = distance => ({ x: reverse ? 280 - distance : distance, y }) as DOMPoint;
+      return result;
+    });
+    placeRenderedEdgeLabels(container);
+    const xs = siblings.map(({ text }) => Number(text.getAttribute('x')));
+    expect(xs[0]).toBeLessThan(xs[1]);
+    expect(xs[1]).toBeLessThan(xs[2]);
+  });
 });

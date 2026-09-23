@@ -421,6 +421,21 @@ export function getGraphCSS({
         paint-order: stroke fill;
       }
 
+      .edge-label-attachment {
+        pointer-events: none;
+      }
+
+      .edge-label-attachment line {
+        stroke: var(--cnd-label-text, #1a1a1a);
+        stroke-width: 0.8px;
+        stroke-dasharray: 2 2;
+        opacity: 0.6;
+      }
+
+      .edge-label-attachment circle {
+        fill: var(--cnd-label-text, #1a1a1a);
+      }
+
       .mostSpecificTypeLabel {
         font-size: 9px;
         font-weight: 600;
