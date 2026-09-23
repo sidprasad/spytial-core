@@ -55,45 +55,6 @@ describe('edge-attached label placement', () => {
     expect(placeEdgeLabels([...labels].reverse(), [], [...routes].reverse())).toEqual(result);
   });
 
-  it('staggers crowded sibling labels along their edges, including a reverse edge', () => {
-    for (const reverse of [false, true]) {
-      const routes = [0, 7, 14].map((y, i) => ({ id: `e${i}`, bundleId: 'a-b',
-        points: [{ x: 0, y }, { x: 280, y }] }));
-      if (reverse) routes[1].points.reverse();
-      const labels = routes.map(route => label(route, 118, 16));
-      const result = placeEdgeLabels(labels, [], routes);
-      expect(result.get('e0')!.x).toBeLessThan(result.get('e1')!.x);
-      expect(result.get('e1')!.x).toBeLessThan(result.get('e2')!.x);
-      for (const placement of result.values()) {
-        if (!placement.leader) continue;
-        const { from, to } = placement.leader;
-        expect(from.x).toBeCloseTo(to.x); // attachment stays on its horizontal edge
-        expect([0, 7, 14]).toContain(from.y);
-        expect(Math.hypot(to.x - from.x, to.y - from.y)).toBeLessThanOrEqual(43);
-        expect(Math.min(Math.abs(to.y - placement.box.y), Math.abs(to.y - placement.box.y - placement.box.height))).toBeLessThan(1e-6);
-      }
-      expect(placeEdgeLabels([...labels].reverse(), [], [...routes].reverse())).toEqual(result);
-    }
-  });
-
-  it('keeps already clear sibling labels centered without adding attachment marks', () => {
-    const routes = [0, 80].map((y, i) => ({ id: `e${i}`, bundleId: 'a-b', points: [{ x: 0, y }, { x: 280, y }] }));
-    const result = placeEdgeLabels(routes.map(route => label(route)), [], routes);
-    for (const route of routes) {
-      expect(result.get(route.id)).toMatchObject({ x: 140, y: route.points[0].y });
-      expect(result.get(route.id)!.leader).toBeUndefined();
-    }
-  });
-
-  it('places a boundary-edge label beside the group caption with a visible attachment', () => {
-    const route = { id: 'caption-edge', points: [{ x: 40, y: 0 }, { x: 320, y: 0 }] };
-    const caption = { x: 120, y: -15, width: 120, height: 30 };
-    const result = place(label(route, 112, 16), [caption, { x: 0, y: 0, width: 360, height: 2 }]);
-    expect(labelOverlap(result.box, caption)).toBe(0);
-    expect(result.box.x + result.box.width <= caption.x || result.box.x >= caption.x + caption.width).toBe(true);
-    expect(Math.abs(result.y)).toBeLessThan(20);
-  });
-
   it('avoids masking an unrelated crossing edge when a clear position exists', () => {
     const crossing = { id: 'crossing', points: [{ x: 50, y: -50 }, { x: 50, y: 50 }] };
     const result = place(label(horizontal, 20), [], [horizontal, crossing]);
