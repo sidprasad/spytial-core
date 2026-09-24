@@ -20,7 +20,7 @@ import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewO
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
-import { placeRenderedEdgeLabels } from './edge-labels';
+import { observeRenderedEdgeLabels } from './edge-label-observer';
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
@@ -938,6 +938,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
+  private stopEdgeLabelObservation?: () => void;
 
   private get root(): ShadowRoot {
     if (!this.shadowRoot) {
@@ -3352,6 +3353,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * the first render (every step is guarded).
    */
   private teardownInflightRender(): void {
+    this.stopEdgeLabelObservation?.();
+    this.stopEdgeLabelObservation = undefined;
     if (this.colaLayout) {
       try {
         (this.colaLayout as any).stop?.();
@@ -4877,8 +4880,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private updatePositions(): void {
-
-    
+    this.stopEdgeLabelObservation?.();
+    this.stopEdgeLabelObservation = undefined;
     // Update group positions and sizes first (lower layer)
     this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
@@ -5119,6 +5122,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private gridUpdatePositions() {
+    this.stopEdgeLabelObservation?.();
+    this.stopEdgeLabelObservation = undefined;
 
     // Force recompute node bounds from current positions
     // This is critical for grid mode to work correctly with all node types
@@ -6485,8 +6490,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /** Choose readable label positions on the final routes without moving nodes. */
   private updateLinkLabelsAfterRouting(): void {
+    this.stopEdgeLabelObservation?.();
+    this.stopEdgeLabelObservation = undefined;
     const container = this.container?.node() as SVGGElement | null;
-    if (container) placeRenderedEdgeLabels(container);
+    if (container) {
+      this.stopEdgeLabelObservation = observeRenderedEdgeLabels(container, () => this.fitViewportToContent());
+    }
     this.container.selectAll('.link-group .linklabel').raise();
   }
 

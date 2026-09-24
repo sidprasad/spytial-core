@@ -28,8 +28,9 @@ function measuredBox(element: SVGGraphicsElement): LabelRect | null {
 
 /**
  * Measure once, solve in memory, then write positions once. This runs after
- * final routing in both pipelines (including grid fallback), not on solver
- * ticks. Every measurement is in the zoomable container's diagram coordinates.
+ * final routing in both pipelines (including grid fallback), and again when
+ * rendered text geometry changes, not on solver ticks. Every measurement is
+ * in the zoomable container's diagram coordinates.
  * Labels remain in their edge groups, preserving lookup, theming and morphs.
  */
 export function placeRenderedEdgeLabels(container: SVGGElement): void {

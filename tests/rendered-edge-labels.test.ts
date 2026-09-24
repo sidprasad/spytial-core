@@ -12,6 +12,7 @@ function fixture() {
   // jsdom does not invalidate computed styles after changes inside a shadow
   // root. Keep the renderer's selection, but measure in a light-DOM SVG here.
   const svg = document.createElementNS(ns, 'svg');
+  svg.getClientRects = () => [{ width: 800, height: 600 }] as unknown as DOMRectList;
   svg.append(container);
   document.body.append(svg);
   const obstacle = (className: string, box: LabelRect) => {
