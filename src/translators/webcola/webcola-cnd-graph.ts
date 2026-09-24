@@ -3188,12 +3188,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
             pathEl.setAttribute('stroke-dashoffset', String(interpolate(t)));
           };
         })
-        .on('end', function(this: SVGGElement) {
+        .on('end', function(this: SVGGElement, d: EdgeWithMetadata) {
           this.removeAttribute('data-arrowheads-hidden');
-          // Clean up dash attributes and show labels/arrows
+          // Restore the authored pattern: draw-in temporarily replaces it with
+          // one path-length dash, so removing the attribute makes styled edges solid.
           const pathEl = this.querySelector('path[data-link-id]');
           if (pathEl) {
-            pathEl.removeAttribute('stroke-dasharray');
+            const dasharray = graph.getEdgeDasharray(d.style);
+            if (dasharray) pathEl.setAttribute('stroke-dasharray', dasharray);
+            else pathEl.removeAttribute('stroke-dasharray');
             pathEl.removeAttribute('stroke-dashoffset');
           }
           d3.select(this).selectAll('.linklabel, .arrowhead')
