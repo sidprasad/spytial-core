@@ -794,7 +794,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly INITIAL_UNCONSTRAINED_ITERATIONS = 10;
   private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
-  private static readonly GRID_SNAP_ITERATIONS = 1; // Reduced from 5 for performance, but kept at 1 for alignment
+  // A nonzero snap phase replaces node-to-node stress weights with zero and
+  // leaves grid attraction active for subsequent tick()/resume() calls (see
+  // vendor/cola.js Layout.start). The grid uses the first node's collision
+  // width, so it can stretch some edges and compress others after solving.
+  // Keep the distance objective active; constraint projection enforces author
+  // separations and alignments independently of grid snapping.
+  private static readonly GRID_SNAP_ITERATIONS = 0;
   /**
    * Cap on the synchronous alpha-decay ticks driven after layout.start()
    * returns (see renderLayout). start() has already run every constraint
