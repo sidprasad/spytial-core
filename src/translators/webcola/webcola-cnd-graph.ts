@@ -6434,35 +6434,31 @@ export class WebColaCnDGraph extends HTMLElementBase {
       route.splice(1, 0, midpoint);
     }
 
-    // The two mechanisms need two different directions, and sharing one was the
-    // bug: an endpoint offset slides ports ALONG the node side the route leaves
-    // from, so its axis comes from the exit normal — the route's first segment.
-    // A curvature bows the route sideways, so its axis comes from where the
-    // edge actually travels, end to end. On a taut route those differ by 90°:
-    // the first segment is the perpendicular exit stub, and bowing across it
-    // stretches the route along its own direction of travel instead of moving
-    // it off its siblings (two wrap-around edges over the same row of nodes
-    // stayed exactly on top of each other, each overshooting the row).
-    const exitAngle = Math.atan2(route[1].y - route[0].y, route[1].x - route[0].x);
+    // Curvature bows the route sideways, so its axis comes from where the edge
+    // travels end to end, not from a perpendicular exit stub.
     const last = route.length - 1;
     const travelAngle = Math.atan2(route[last].y - route[0].y, route[last].x - route[0].x);
 
-    // Endpoint offsets are capped against the room the whole route has; the bow
-    // is a fraction of how far apart the ENDS are. Charging it the full
-    // polyline length instead made a long detour bow in proportion to its own
-    // detour, which is how an 800px route ended up 500px off the diagram.
-    const routeLength = getRouteLength(route);
+    // The bow is a fraction of how far apart the ends are. Charging it the full
+    // polyline length made long detours balloon away from the diagram.
     const endSpan = Math.hypot(route[last].x - route[0].x, route[last].y - route[0].y);
 
     // Find edge index once and reuse for both offset and curvature
     const edgeIndex = allEdgesBetweenNodes.findIndex(edge => edge.id === edgeData.id);
 
-    // Apply offset and curvature only if we found the edge. curvatureScale < 1
-    // shrinks the fan bulge (used by the taut router to back off a fan that
-    // would clip an obstacle) — endpoint/port offsets are not scaled because
-    // they stay on the node perimeter by construction.
+    // The taut router has already assigned its endpoints through portAttachment.
+    // Offsetting those a second time from the route's angle can move them inside
+    // a node when the edge travels diagonally across a side (and put its
+    // arrowhead over the node label). Keep the old fallback only for callers
+    // without assigned ports. curvatureScale < 1 backs off a fan that clips an
+    // obstacle without changing its endpoints.
     if (edgeIndex !== -1) {
-      route = applyEdgeOffsetWithIndex(edgeData, route, exitAngle, edgeIndex, routeLength);
+      const hasAssignedPorts = (edgeData._sourcePortCount ?? 0) > 1 ||
+        (edgeData._targetPortCount ?? 0) > 1;
+      if (!hasAssignedPorts) {
+        const exitAngle = Math.atan2(route[1].y - route[0].y, route[1].x - route[0].x);
+        route = applyEdgeOffsetWithIndex(edgeData, route, exitAngle, edgeIndex, getRouteLength(route));
+      }
       const curvature = calculateCurvatureWithIndex(allEdgesBetweenNodes, edgeIndex);
       const cappedCurvature = clampCurvature(curvature) * curvatureScale;
       route = applyCurvatureToRoute(route, cappedCurvature, travelAngle, endSpan);
