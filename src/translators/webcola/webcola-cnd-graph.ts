@@ -19,7 +19,6 @@ import { isAutoSizedNode } from '../../layout/auto-sized-nodes';
 import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewOptions, type GraphControl } from './graph-view-options';
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
-import { idealLinkDistance } from './link-distance';
 import { syncArrowheadLayer } from './arrowheads';
 import { observeRenderedEdgeLabels } from './edge-label-observer';
 import {
@@ -795,10 +794,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly INITIAL_UNCONSTRAINED_ITERATIONS = 10;
   private static readonly INITIAL_USER_CONSTRAINT_ITERATIONS = 50;
   private static readonly INITIAL_ALL_CONSTRAINTS_ITERATIONS = 200;
-  // WebCola's snap phase uses the first node's width as a grid interval and
-  // temporarily removes pairwise link forces. Even one iteration can turn a
-  // well-spaced constrained chain into alternating long and cramped edges.
-  // WebCola's constraint projection already enforces author alignments.
+  // A nonzero snap phase replaces node-to-node stress weights with zero and
+  // leaves grid attraction active for subsequent tick()/resume() calls (see
+  // vendor/cola.js Layout.start). The grid uses the first node's collision
+  // width, so it can stretch some edges and compress others after solving.
+  // Keep the distance objective active; constraint projection enforces author
+  // separations and alignments independently of grid snapping.
   private static readonly GRID_SNAP_ITERATIONS = 0;
   /**
    * Cap on the synchronous alpha-decay ticks driven after layout.start()
@@ -1281,11 +1282,87 @@ export class WebColaCnDGraph extends HTMLElementBase {
     return group.name.startsWith(WebColaCnDGraph.DISCONNECTED_NODE_PREFIX);
   }
 
-  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[], groups?: any[]) {
+  /**
+   * Computes adaptive link length based on actual node dimensions, edge labels, and graph density
+   */
+  private computeAdaptiveLinkLength(nodes: any[], scaleFactor: number, links?: any[]): number {
+    if (!nodes || nodes.length === 0) {
+      return 150; // fallback
+    }
+
+    // Calculate average node dimensions using visual width/height (not inflated collision bounds)
+    let totalWidth = 0;
+    let totalHeight = 0;
+    let validNodes = 0;
+
+    nodes.forEach(node => {
+      if (node && !this.isHiddenNode(node)) {
+        totalWidth += (node.visualWidth ?? node.width ?? 100);
+        totalHeight += (node.visualHeight ?? node.height ?? 60);
+        validNodes++;
+      }
+    });
+
+    if (validNodes === 0) {
+      return 150; // fallback
+    }
+
+    const avgWidth = totalWidth / validNodes;
+    const avgHeight = totalHeight / validNodes;
+    const avgNodeSize = Math.max(avgWidth, avgHeight);
+
+    // Calculate maximum edge label width if links are provided
+    let maxLabelWidth = 0;
+    if (links && links.length > 0) {
+      const fontSize = 12; // Default edge label font size
+      links.forEach(link => {
+        if (link && link.label) {
+          const labelWidth = this.measureTextWidth(link.label, fontSize);
+          maxLabelWidth = Math.max(maxLabelWidth, labelWidth);
+        }
+      });
+    }
+
+    // Marker size (arrowhead)
+    const markerSize = 15; // Width of the marker as defined in SVG defs
+
+    // Base link length should account for:
+    // 1. Average node size
+    // 2. Edge label text width
+    // 3. Marker (arrowhead) size
+    // 4. Additional separation buffer
+    const baseSeparation = 50; // minimum separation between nodes
+    const labelAndMarkerSpace = maxLabelWidth + markerSize + 20; // 20px buffer
+    let baseLinkLength = Math.max(avgNodeSize + baseSeparation + labelAndMarkerSpace, 120);
+
+    // Apply density factor - more nodes = slightly tighter spacing to fit better
+    const densityFactor = Math.max(0.7, 1 - Math.log10(validNodes) * 0.1);
+    baseLinkLength *= densityFactor;
+
+    // Apply scale factor
+    const adjustedScaleFactor = scaleFactor / 5;
+    const scaledLinkLength = baseLinkLength / adjustedScaleFactor;
+
+    // Ensure reasonable bounds - prevent tiny edges and excessive spacing
+    return Math.max(60, Math.min(scaledLinkLength, 350));
+  }
+
+  private getScaledDetails(constraints: any[], scaleFactor: number = DEFAULT_SCALE_FACTOR, nodes?: any[], groups?: any[], links?: any[]) {
     const adjustedScaleFactor = scaleFactor / 5;
 
     // Calculate adaptive group compactness based on graph structure
     let groupCompactness = this.calculateAdaptiveGroupCompactness(groups || [], nodes?.length || 0, adjustedScaleFactor);
+
+    // Use adaptive link length calculation if nodes are available
+    let linkLength: number;
+    if (nodes && nodes.length > 0) {
+      linkLength = this.computeAdaptiveLinkLength(nodes, scaleFactor, links);
+    } else {
+      // Fallback to original calculation
+      const min_sep = 150;
+      const default_node_width = 100;
+      linkLength = (min_sep + default_node_width) / adjustedScaleFactor;
+    }
 
     /*
     For each constraint, if it is a separation constraint, adjust the distance by the scale factor.
@@ -1308,6 +1385,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
     return {
       scaledConstraints: getScaledConstraints(constraints),
+      linkLength: linkLength,
       groupCompactness: groupCompactness
     }
   }
@@ -2503,30 +2581,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
       }
 
 
-      // Scale hard constraints and group compactness independently of the
-      // soft, per-edge distance targets below.
-      const { scaledConstraints, groupCompactness } = this.getScaledDetails(
+      // Get scaled constraints, link length, and adaptive group compactness
+      const { scaledConstraints, linkLength, groupCompactness } = this.getScaledDetails(
         webcolaLayout.constraints, 
         DEFAULT_SCALE_FACTOR, 
         webcolaLayout.nodes,
-        webcolaLayout.groups
+        webcolaLayout.groups,
+        webcolaLayout.links
       );
-
-      // WebCola replaces numeric endpoints with node objects when it starts.
-      // Cache by link identity before that mutation so the solver callback is
-      // cheap and one exceptional label cannot lengthen every other edge.
-      const linkDistances = new Map(webcolaLayout.links.map(link => {
-        const endpoint = (value: any) => typeof value === 'number'
-          ? webcolaLayout.nodes[value] : value;
-        const visibleLabelWidth = link.label && link.showLabel !== false
-          ? this.measureTextWidth(link.label,
-              link.textStyle?.size ? resolveAttrFontSize(link.textStyle.size) : 12)
-          : 0;
-        return [link, idealLinkDistance(
-          endpoint(link.source), endpoint(link.target),
-          webcolaLayout.nodes.length, DEFAULT_SCALE_FACTOR, visibleLabelWidth,
-        )] as const;
-      }));
 
       if (shouldShowLoadingOverlay) {
         this.updateLoadingProgress('Applying constraints and initializing...');
@@ -2538,7 +2600,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
       // Create WebCola layout using d3adaptor
       const layout: D3Layout = requireCola().d3adaptor(d3)
-        .linkDistance((link: any) => linkDistances.get(link) ?? 150)
+        .linkDistance(linkLength)
         .convergenceThreshold(convergenceThreshold)
         .avoidOverlaps(true)
         .handleDisconnected(true)
