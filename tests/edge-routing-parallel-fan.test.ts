@@ -144,3 +144,32 @@ describe('handleMultipleEdgeRouting — wrap-around siblings over a row of nodes
     expect(proto.handleMultipleEdgeRouting.call(fakeThis, edge, input, 1)).toEqual(before);
   });
 });
+
+describe('handleMultipleEdgeRouting — dragged reverse edge', () => {
+  it('keeps both assigned arrowhead ports on node borders when the pair is diagonal', () => {
+    const build = { id: 'Build', x: 50, y: 190, width: 100, height: 60 };
+    const test = { id: 'Test', x: -159.5, y: 335.9, width: 100, height: 60 };
+    const buildPort = { x: 0, y: 200.5 }; // Build's left border
+    const testPort = { x: -109.5, y: 346.4 }; // Test's right border
+    const siblings = [{ id: 'build-test' }, { id: 'test-build' }];
+    const fakeThis = { getAllEdgesBetweenNodes: () => siblings };
+
+    for (const [index, source, target, start, end, exitSide, entrySide] of [
+      [0, build, test, buildPort, testPort, 'left', 'right'],
+      [1, test, build, testPort, buildPort, 'right', 'left'],
+    ] as const) {
+      const edge: any = {
+        id: siblings[index].id, source, target,
+        _exitSide: exitSide, _entrySide: entrySide,
+        _sourcePortIndex: index, _sourcePortCount: 2,
+        _targetPortIndex: index, _targetPortCount: 2,
+      };
+      const fanned = (WebColaCnDGraph.prototype as any).handleMultipleEdgeRouting.call(
+        fakeThis, edge, [start, end].map(p => ({ ...p })), 1
+      );
+
+      expect(fanned[0]).toEqual(start);
+      expect(fanned[fanned.length - 1]).toEqual(end);
+    }
+  });
+});
