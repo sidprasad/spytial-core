@@ -7,7 +7,7 @@ import { numberPayload, numberSource } from './numbers';
 import { isRuntimeNothing, isRuntimeReference, referenceInfo, isCallableField, objectFields, reifiedValueInfo, type PyretValueInfo } from './values';
 import { runtimeDictionaryInfo, dictionaryEntries } from './string-dict';
 import { isRuntimeTable, isRuntimeRow, tableContents } from './table';
-import { constructorInfo, fieldId, readFieldId } from './identity';
+import { constructorInfo, constructorDisplayName, fieldId, readFieldId, readConstructorTypeId } from './identity';
 import { assertSameRelationName, relationSignature, tupleKey, uniqueTuples } from '../relation-identity';
 
 /**
@@ -127,6 +127,19 @@ export function generateEdgeId(
  * ```
  */
 export class PyretDataInstance extends DataInstanceEventEmitter implements IInputDataInstance {
+
+  /** Capture normalized roots together so aliases across roots retain one atom. */
+  static fromValues(values: readonly unknown[]): { instance: PyretDataInstance; rootIds: string[] } {
+    const instance = new PyretDataInstance();
+    const processed = new WeakSet<object>();
+    const rootIds = values.map(value => {
+      if (instance.isAtomicValue(value)) return instance.createAtomFromPrimitive(value);
+      if (!Array.isArray(value) && !instance.isPyretObject(value)) throw new Error('Unsupported normalized Pyret root');
+      instance.parseObjectIteratively(value as PyretObject | unknown[], processed);
+      return instance.objectToAtomId.get(value as object)!;
+    });
+    return { instance, rootIds };
+  }
 
   private atoms = new Map<string, IAtom>();
   private relations = new Map<string, IRelation>();
@@ -514,10 +527,9 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   /**
    * Parses Pyret objects iteratively to avoid stack overflow and handle cycles
    */
-  private parseObjectIteratively(rootObject: PyretObject | unknown[]): void {
+  private parseObjectIteratively(rootObject: PyretObject | unknown[], processed = new WeakSet<object>()): void {
     type Pending = { obj: PyretObject | unknown[]; parentInfo?: { atoms: string[]; relationId: string; relationName?: string } };
     const queue: Pending[] = [{ obj: rootObject }];
-    const processed = new WeakSet<object>();
     const enqueue = (value: unknown, atoms: string[], relationId: string, relationName?: string): void => {
       if (this.isAtomicValue(value)) {
         const target = this.createAtomFromPrimitive(value);
@@ -597,7 +609,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
       }
       if (!object.dict || typeof object.dict !== 'object') continue;
       const fields = info?.fields ?? (shape?.kind === 'object' ? objectFields(object.dict, this.options.showFunctions) : Object.keys(object.dict));
-      if (!shape) this.cacheConstructorPattern(this.extractType(object), fields);
+      if (!shape && !readConstructorTypeId(this.extractType(object))) this.cacheConstructorPattern(this.extractType(object), fields);
       fields.forEach((name, position) => {
         const value = object.dict![name];
         const relationId = info ? fieldId(info, position)
@@ -810,7 +822,7 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    */
   private extractLabel(obj: PyretObject): string {
     if (obj.$name && typeof obj.$name === 'string') {
-      return obj.$name;
+      return constructorDisplayName(obj.$name);
     }
 
     const type = this.extractType(obj);
@@ -880,9 +892,16 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
    */
   private ensureTypeExists(typeName: string): void {
     if (!this.types.has(typeName)) {
+      const nominal = readConstructorTypeId(typeName);
+      // Display-name types are selector aliases. Reserved builtin names cannot
+      // be aliases: a user constructor named Number is still a constructor.
+      const alias = nominal && !['Number', 'String', 'Boolean', 'PyretObject', 'Index', 'Nothing', 'Object',
+        'Tuple', 'RawArray', 'Reference', 'StringDict', 'MutableStringDict', 'Table'].includes(nominal.name)
+        ? nominal.name : undefined;
+      if (alias) this.ensureTypeExists(alias);
       const type: IType = {
         id: typeName,
-        types: [typeName, 'PyretObject'], // All types inherit from PyretObject
+        types: alias ? [typeName, alias, 'PyretObject'] : [typeName, 'PyretObject'],
         atoms: [],
         isBuiltin: this.isBuiltinType(typeName)
       };
@@ -954,7 +973,8 @@ export class PyretDataInstance extends DataInstanceEventEmitter implements IInpu
   getTypes(): readonly IType[] {
     // Update type atoms based on current atoms
     this.types.forEach(type => {
-      type.atoms = this.getAtoms().filter(atom => atom.type === type.id);
+      type.atoms = this.getAtoms().filter(atom => atom.type === type.id
+        || (!!readConstructorTypeId(atom.type) && this.types.get(atom.type)?.types.includes(type.id)));
     });
 
     return Array.from(this.types.values());

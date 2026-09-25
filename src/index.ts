@@ -31,6 +31,7 @@ export { DotDataInstance } from './data-instance/dot/dot-data-instance';
 export type { DotTypeConfig, DotTypeDescriptor, DotDataInstanceOptions } from './data-instance/dot/dot-data-instance';
 export { RacketGDataInstance } from './data-instance/racket/racket-g-data-instance';
 export { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
+export * from './pyret-capture';
 // The evaluator a PyretDataInstance runs against (`window.__internalRepl`).
 // These types were exported from the REPL's expression parser before it was
 // removed; they describe `fromExpression`'s third argument, so they keep their

@@ -1,11 +1,11 @@
-import { constructorInfo } from './identity';
+import { constructorInfo, constructorDisplayName } from './identity';
 import type { PyretObject } from './pyret-data-instance';
 import type { ReifiedValue } from './reify';
 
 interface SetContents { kind: 'list-set' | 'tree-set'; elements: ReifiedValue[] }
 
 function variant(value: ReifiedValue, name: string, fields: string[]): value is PyretObject {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || !('$name' in value) || value.$name !== name) return false;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || !('$name' in value) || constructorDisplayName(String(value.$name)) !== name) return false;
   const info = constructorInfo(value);
   return !!info && !info.mutableFields?.length && info.arity === (fields.length || -1)
     && info.fields.length === fields.length && info.fields.every((field, i) => field === fields[i])

@@ -250,7 +250,13 @@ function isListLike(fieldNames: string[]): boolean {
  *                no incoming tuples. Cycles and multiple roots require this argument.
  * @returns a synthetic, re-relationalizable value (PyretObject / array / primitive)
  */
-export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
+export function reifyToValue(di: IDataInstance, rootId?: string, options: { allowContainerCycles?: boolean } = {}): ReifiedValue {
+  const values = reifyToValues(di, rootId === undefined ? undefined : [rootId], options);
+  return values.length ? values[0] : null;
+}
+
+/** Reconstruct roots with a common identity memo, including cross-root aliases. */
+export function reifyToValues(di: IDataInstance, rootIds?: readonly string[], options: { allowContainerCycles?: boolean } = {}): ReifiedValue[] {
   const atomsById = new Map(di.getAtoms().map((a) => [a.id, a] as const));
   const idx = buildIndex(di);
   const { fields, targets, elements, references, entries } = idx;
@@ -263,7 +269,7 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
 
   const reifyAtom = (id: string): ReifiedValue => {
     if (memo.has(id)) {
-      if (pending.get(id) === referenceDepth && activeSequences.size) throw new Error('Cyclic Pyret containers are not supported');
+      if (!options.allowContainerCycles && pending.get(id) === referenceDepth && activeSequences.size) throw new Error('Cyclic Pyret containers are not supported');
       return memo.get(id)!;
     }
 
@@ -415,13 +421,15 @@ export function reifyToValue(di: IDataInstance, rootId?: string): ReifiedValue {
   };
 
   // The observation point belongs to the call, not the relational datum.
-  if (rootId !== undefined) {
-    if (!atomsById.has(rootId)) throw new Error('Unknown Pyret root ID: ' + rootId);
-    return reifyAtom(rootId);
+  if (rootIds !== undefined) {
+    return rootIds.map(rootId => {
+      if (!atomsById.has(rootId)) throw new Error('Unknown Pyret root ID: ' + rootId);
+      return reifyAtom(rootId);
+    });
   }
   const allIds = di.getAtoms().map(a => a.id);
-  if (!allIds.length) return null;
+  if (!allIds.length) return [];
   const roots = allIds.filter(id => !targets.has(id));
   if (roots.length !== 1) throw new Error('Pyret graph has no unique root; supply an explicit root ID');
-  return reifyAtom(roots[0]);
+  return [reifyAtom(roots[0])];
 }

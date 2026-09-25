@@ -1,0 +1,39 @@
+name: Standard Pyret capture
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  upstream:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: core
+      - uses: actions/checkout@v5
+        with:
+          repository: brownplt/pyret-lang
+          ref: 6e62dcda5298606aa0abe66a372c4eb17a38db85
+          path: pyret
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22.22.2
+      - run: npm ci --ignore-scripts
+        working-directory: core
+      - run: npm run build:pyret-capture
+        working-directory: core
+      - run: npm ci --ignore-scripts && make phaseA
+        working-directory: pyret/lang
+      - run: node scripts/check-pyret-capture.mjs ../pyret/lang capture-runtime.json
+        working-directory: core
+      - run: node scripts/check-pyret-capture-program.mjs ../pyret/lang capture-program.json
+        working-directory: core
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pyret-capture-evidence
+          path: core/capture-*.json

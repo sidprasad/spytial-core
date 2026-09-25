@@ -4,6 +4,26 @@
  * Unicode collisions. No field order or constructor kind lives in a cache.
  */
 const FIELD = 'pyret:field:v1:';
+const CONSTRUCTOR = 'pyret:constructor:v1:';
+
+/** Capture-scoped nominal identity; display spelling is never its identity. */
+export function constructorTypeId(scope: string, index: number, name: string): string {
+  return CONSTRUCTOR + JSON.stringify([scope, index, name]);
+}
+
+export function readConstructorTypeId(id: string): { scope: string; index: number; name: string } | undefined {
+  if (!id.startsWith(CONSTRUCTOR)) return undefined;
+  const v: unknown = JSON.parse(id.slice(CONSTRUCTOR.length));
+  if (!Array.isArray(v) || v.length !== 3 || typeof v[0] !== 'string' || !v[0]
+      || !Number.isSafeInteger(v[1]) || v[1] < 0 || typeof v[2] !== 'string' || !v[2]) {
+    throw new Error('Malformed Pyret constructor identity');
+  }
+  return { scope: v[0], index: v[1], name: v[2] };
+}
+
+export function constructorDisplayName(id: string): string {
+  return readConstructorTypeId(id)?.name ?? id;
+}
 
 export interface ConstructorInfo { name: string; arity: number; fields: string[]; mutableFields?: number[] }
 
