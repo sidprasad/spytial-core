@@ -34,7 +34,6 @@ import { referenceSource } from './reference-source';
 import { setContents, setSource } from './set-source';
 import { dictionarySource, type DictionaryEntry } from './string-dict';
 import { tableSource } from './table';
-import { constructorDisplayName, readConstructorTypeId } from './identity';
 
 function isPyretObject(v: unknown): v is PyretObject {
   return typeof v === 'object' && v !== null && !Array.isArray(v) && 'dict' in v;
@@ -130,7 +129,7 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
       onPath.delete(v);
       return out;
     }
-    const type = constructorDisplayName((v.$name as string) || 'object');
+    const type = (v.$name as string) || 'object';
     const dict = (v.dict as Record<string, unknown>) || {};
     const keys = Object.keys(dict);
     const out = shape?.kind === 'object'
@@ -147,15 +146,6 @@ function render(v: ReifiedValue, onPath: Set<object>, child = (value: ReifiedVal
 
 /** Reconstruct and render the selected atom; infer it only when there is a unique root. */
 export function replit(di: IDataInstance, rootId?: string): string {
-  const names = new Map<string, string>();
-  for (const atom of di.getAtoms()) {
-    const nominal = readConstructorTypeId(atom.type);
-    if (!nominal) continue;
-    if (names.has(nominal.name) && names.get(nominal.name) !== atom.type) {
-      throw new Error(`Source reconstruction needs explicit bindings for same-named constructor ${nominal.name}`);
-    }
-    names.set(nominal.name, atom.type);
-  }
   const value = reifyToValue(di, rootId);
   return referenceSource(value, (v, child) => render(v, new Set(), child), objectKey)
     ?? render(value, new Set());

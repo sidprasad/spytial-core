@@ -1,6 +1,6 @@
 import type { PyretObject } from './pyret-data-instance';
 import type { ReifiedValue } from './reify';
-import { constructorInfo, constructorDisplayName } from './identity';
+import { constructorInfo } from './identity';
 import { numberPayload } from './numbers';
 import { reifiedValueInfo } from './values';
 import { setContents } from './set-source';
@@ -61,7 +61,7 @@ export function referenceSource(root: ReifiedValue, render: Render, fieldName: (
   const reserved = new Set<string>(['nothing']);
   for (const v of nodes) {
     if (Array.isArray(v)) continue;
-    if (typeof v.$name === 'string') reserved.add(constructorDisplayName(v.$name));
+    if (typeof v.$name === 'string') reserved.add(v.$name);
     const info = constructorInfo(v);
     const fields = info?.mutableFields?.map(i => info.fields[i]) ?? [];
     mutable.set(v, fields);

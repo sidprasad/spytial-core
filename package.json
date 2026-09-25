@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "6.3.1",
+  "version": "6.3.2",
   "description": "A fully client-side application for SpyTial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/types/index.d.ts",
@@ -40,11 +40,10 @@
     "dist/conformance.js.map",
     "dist/conformance.mjs.map",
     "dist/cli",
-    "dist/pyret-capture.js",
-    "dist/pyret-capture.mjs",
-    "dist/pyret-capture.global.js",
-    "dist/pyret-capture.d.ts",
-    "dist/pyret-capture.d.mts"
+    "dist/data.js",
+    "dist/data.mjs",
+    "dist/data.d.ts",
+    "dist/data.d.mts"
   ],
   "bin": {
     "spytial-check": "./dist/cli/spytial-check.js"
@@ -126,14 +125,14 @@
       "import": "./dist/components/*.global.js",
       "require": "./dist/components/*.global.js"
     },
-    "./pyret-capture": {
+    "./data": {
       "import": {
-        "types": "./dist/pyret-capture.d.mts",
-        "default": "./dist/pyret-capture.mjs"
+        "types": "./dist/data.d.mts",
+        "default": "./dist/data.mjs"
       },
       "require": {
-        "types": "./dist/pyret-capture.d.ts",
-        "default": "./dist/pyret-capture.js"
+        "types": "./dist/data.d.ts",
+        "default": "./dist/data.js"
       }
     }
   },
@@ -151,7 +150,7 @@
     "build:types": "tsc -p tsconfig.types.json && node -e \"['dist/types/index.d.ts','dist/types/components/index.d.ts','dist/types/explorer.d.ts'].forEach(f=>require('fs').accessSync(f))\"",
     "build:language": "tsx scripts/generate-language-artifacts.ts",
     "sync:versions": "tsx scripts/sync-versions.ts",
-    "build:all": "npm run build:parser && npm run build:language && npm run sync:versions && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:conformance && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types && npm run build:pyret-capture",
+    "build:all": "npm run build:parser && npm run build:language && npm run sync:versions && npm run build:browser && npm run build:components && npm run build:lib && npm run build:evaluator && npm run build:sql && npm run build:conformance && npm run build:routers && npm run build:react && npm run build:esm && npm run build:types && npm run build:data",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -172,7 +171,8 @@
     "analysis:test": "vitest run --config vitest.analysis.config.ts",
     "build:routers": "tsup --config tsup.routers.config.ts",
     "version": "npm run sync:versions && npm run build:language && git add README.md docs/YAML_SPECIFICATION.md docs/agent-manifest.json docs/spytial-language.json docs/spytial-spec.schema.json site/api-reference.md site/new-language-integration.md site/index.html .claude/skills/integrate-language/SKILL.md",
-    "build:pyret-capture": "tsup --config tsup.pyret-capture.config.ts"
+    "build:data": "tsup --config tsup.data.config.ts",
+    "prepare": "npm run build:data"
   },
   "keywords": [
     "typescript",
