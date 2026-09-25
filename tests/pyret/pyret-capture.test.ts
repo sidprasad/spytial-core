@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from 'vitest';
+import fc from 'fast-check';
 import { capturePyret, importPyretCapture, PyretCaptureError } from '../../src/pyret-capture';
 import type { PyretRuntimeAdapter } from '../../src/pyret-capture';
 import { numberPayload } from '../../src/data-instance/pyret/numbers';
@@ -27,6 +28,69 @@ const snapshot = (v: unknown) => capturePyret([{ name: 'root', value: v }], adap
 const round = (v: unknown) => importPyretCapture(JSON.parse(JSON.stringify(snapshot(v))));
 
 describe('portable Pyret capture', () => {
+  it.each([1, 2])('preserves generated graph topology, ordered fields and nominal identities (seed %i)', seed => {
+    const slot = fc.oneof(fc.record({ node: fc.nat(30) }),
+      fc.integer({ min: -1000, max: 1000 }), fc.string(), fc.boolean());
+    const graph = fc.array(fc.record({ kind: fc.integer({ min: 0, max: 4 }),
+      slots: fc.tuple(slot, slot, slot) }), { minLength: 1, maxLength: 12 });
+    fc.assert(fc.property(graph, fc.boolean(), (spec, reversed) => {
+      // Two distinct declarations deliberately reuse the same spelling.
+      const constructors = [ctor('node', ['z', 'a', 'middle']),
+        ctor('node', reversed ? ['middle', 'a', 'z'] : ['z', 'a', 'middle'])];
+      const nodes: any[] = spec.map(s => s.kind < 2 ? value(constructors[s.kind])
+        : s.kind === 2 ? [] : s.kind === 3 ? {} : { ref: true });
+      const resolve = (s: (typeof spec)[number]['slots'][number]) =>
+        typeof s === 'object' ? nodes[s.node % nodes.length] : s;
+      spec.forEach((s, i) => {
+        const children = s.slots.map(resolve);
+        if (s.kind < 2) nodes[i].values = children;
+        else if (s.kind === 2) nodes[i].push(...children);
+        else if (s.kind === 3) Object.assign(nodes[i], { z: children[0], a: children[1], middle: children[2] });
+        else nodes[i].target = children[0];
+      });
+      const captured = capturePyret(nodes.map((node, i) => ({ name: String(i), value: node })), adapter);
+      // Neither enumeration order nor a producer-side cache may carry schema.
+      captured.datum.atoms.reverse(); captured.datum.relations.reverse();
+      for (const relation of captured.datum.relations) relation.tuples.reverse();
+      PyretDataInstance.clearGlobalConstructorCache();
+      const imported = importPyretCapture(JSON.parse(JSON.stringify(captured)));
+      const forward = new Map<object, unknown>();
+      const backward = new Map<object, unknown>();
+      const declarations = new Map<object, string>();
+      const pending = nodes.map((node, i) => [node, imported.values.get(String(i))]);
+      while (pending.length) {
+        const [original, decoded] = pending.pop()!;
+        if (typeof original !== 'object') { expect(decoded).toBe(original); continue; }
+        expect(decoded).toBeTypeOf('object');
+        if (forward.has(original)) { expect(decoded).toBe(forward.get(original)); continue; }
+        expect(backward.has(decoded)).toBe(false); // equal-but-distinct nodes cannot collapse
+        forward.set(original, decoded); backward.set(decoded, original);
+        if (Array.isArray(original)) {
+          expect(Array.isArray(decoded)).toBe(true);
+          expect(decoded).toHaveLength(original.length);
+          original.forEach((v, i) => pending.push([v, decoded[i]]));
+        } else if (original.ref) {
+          expect(decoded.$pyretValue.kind).toBe('reference');
+          pending.push([original.target, decoded.value]);
+        } else if (original.ctor) {
+          expect(readConstructorTypeId(decoded.$name)?.name).toBe(original.ctor.name);
+          if (declarations.has(original.ctor)) expect(decoded.$name).toBe(declarations.get(original.ctor));
+          else {
+            expect([...declarations.values()]).not.toContain(decoded.$name);
+            declarations.set(original.ctor, decoded.$name);
+          }
+          expect(decoded.$arity).toBe(original.ctor.arity);
+          expect(Object.keys(decoded.dict)).toEqual(original.ctor.fields);
+          original.ctor.fields.forEach((f: string, i: number) => pending.push([original.values[i], decoded.dict[f]]));
+        } else {
+          expect(Object.keys(decoded.dict)).toEqual(Object.keys(original));
+          Object.keys(original).forEach(f => pending.push([original[f], decoded.dict[f]]));
+        }
+      }
+      expect(forward.size).toBe(nodes.length);
+    }), { seed, numRuns: 1000, verbose: true });
+  });
+
   it('imports with no browser or runtime and retains roots/context and shared identities', () => {
     expect(typeof window).toBe('undefined');
     const leaf = value(ctor('leaf', ['n']), 3);

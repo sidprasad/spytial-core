@@ -130,3 +130,8 @@ with different field orders, a reference cycle, an `_output` that throws, and
 shared dictionary/table contents. The CI workflow pins and builds upstream and
 uploads both reports. These checks establish structural capture, not arbitrary
 executable reconstruction or a migration of the IDE's display extension.
+
+The capture unit suite also runs 1,000 generated graphs for each of seeds 1 and 2.
+It compares the original and imported graphs with a bijection, checking that
+sharing, cycles, distinct objects, constructor identities, ordered fields and
+primitive contents survive JSON transport independently of enumeration order.
