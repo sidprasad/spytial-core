@@ -5,7 +5,7 @@ This document explains how to use the comprehensive test suite for `IInputDataIn
 ## Test Files
 
 ### `tests/input-data-instance.test.ts`
-This is the main comprehensive test suite with 48 tests covering all aspects of the `IInputDataInstance` interface:
+This is the main comprehensive test suite covering the `IInputDataInstance` interface across Core's JSON and Alloy implementations:
 
 - **Adding/Removing Atoms**: Tests for `addAtom()` and `removeAtom()` with validation and edge cases
 - **Adding/Removing Relations**: Tests for `addRelationTuple()` and `removeRelationTuple()` with referential integrity
@@ -14,13 +14,6 @@ This is the main comprehensive test suite with 48 tests covering all aspects of 
 - **Type Management**: Tests for automatic type creation and `getAtomType()`
 - **Data Integrity**: Tests for projections, graph generation, and reification
 - **Edge Cases**: Tests for special characters, unicode, large datasets, and error conditions
-
-### `tests/cross-implementation.test.ts`
-This file demonstrates how the tests can work across different implementations:
-
-- Tests with `PyretDataInstance`
-- Tests with `JSONDataInstance`
-- Interface consistency validation
 
 ## Running Tests for Your Implementation
 

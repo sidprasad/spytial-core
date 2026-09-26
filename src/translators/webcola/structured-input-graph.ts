@@ -24,7 +24,7 @@ const d3: any = (typeof window !== 'undefined' && (window as any).d3v4) || d3Ven
  * - Auto-generated unique atom IDs with user-provided labels
  * - Full CnD pipeline integration (data instance, evaluator, layout instance)
  * - Constraint enforcement on data changes
- * - Data export using the data instance's reify() method (supports JSON, Pyret, Alloy, etc.)
+ * - Data export using the data instance's reify() method (supports JSON, Alloy, etc.)
  * - Draggable edge endpoint handles in input mode: hollow ring at the source,
  *   filled diamond at the target (both diamonds for symmetric edges), tinted to
  *   the edge color

@@ -6,7 +6,8 @@
 
 If you want to render Python objects, use **[sPyTial](https://github.com/sidprasad/spytial)**.
 If you want to render Rust values, use **[Caraspace](https://github.com/sidprasad/caraspace)**.
-If you want to render Pyret values, use **[Spyret](https://github.com/sidprasad/spyret-lang)**.
+If you want to render Pyret values, use **[Spyret](https://github.com/sidprasad/spyret)**.
+For the Core 6.4 Pyret API removal, see [the migration guide](docs/MIGRATING_TO_SPYRET.md).
 If you want to add a new host to that list — read on.
 
 ---
@@ -51,7 +52,7 @@ CDN:
 
 That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has.
 
-For reproducibility, pin a version (e.g. `spytial-core@6.3.2`).
+For reproducibility, pin a version (e.g. `spytial-core@6.4.0`).
 
 ---
 
@@ -82,7 +83,7 @@ That's the entire core pipeline. Where `jsonPayload` and `yamlSpec` come from is
 
 | Layer                | Highlights                                                                            |
 |----------------------|---------------------------------------------------------------------------------------|
-| **Data instances**   | `JSONDataInstance`, `AlloyDataInstance`, `DotDataInstance`, `PyretDataInstance`, `TlaDataInstance`, plus the `IDataInstance` interface for custom adapters. |
+| **Data instances**   | `JSONDataInstance`, `AlloyDataInstance`, `DotDataInstance`, `TlaDataInstance`, plus the `IDataInstance` interface for custom adapters. Pyret values are adapted by [Spyret](https://github.com/sidprasad/spyret). |
 | **Spec language**    | YAML constraints (`orientation`, `align`, `cyclic`, `group`, `size`, `hideAtom`) and directives (`atomStyle`, `edgeStyle`, `icon`, `attribute`, `tag`, `inferredEdge`, `flag`, …). |
 | **Selector engine**  | `SGraphQueryEvaluator` (Forge-style relational expressions) plus optional Forge / SQL evaluators. |
 | **Layout solver**    | `LayoutInstance` + `QualitativeConstraintValidator` — qualitative spatial constraints with IIS reporting. |

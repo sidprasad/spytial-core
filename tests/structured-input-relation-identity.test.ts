@@ -3,7 +3,6 @@ import { defaultGraphViewOptions } from '../src/translators/webcola/graph-view-o
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
-import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import type { IInputDataInstance, IRelation } from '../src/data-instance/interfaces';
 
 const relation = (id: string, name = 'foo', pairs = [['a', 'b']]): IRelation => ({
@@ -52,12 +51,7 @@ describe('interactive editing resolves names to stored relation IDs', () => {
     Alloy: () => new AlloyDataInstance({ types: {
       Node: { id: 'Node', types: ['Node'], atoms: atoms.map(a => ({ ...a, _: 'atom' })), _: 'type' },
     }, skolems: {}, relations: { 'A<:foo': { ...relation('A<:foo'), _: 'relation' } } } as any),
-    Pyret: () => {
-      const instance = new PyretDataInstance();
-      atoms.forEach(a => instance.addAtom(a));
-      instance.addRelationTuple('pyret:field:v1:["duo",0,"foo"]', { atoms: ['a', 'b'], types: ['Node', 'Node'] });
-      return instance;
-    },
+    EncodedID: () => json([relation('pyret:field:v1:["duo",0,"foo"]')]),
   };
   for (const [kind, fixture] of Object.entries(fixtures)) {
     it(`${kind}: drag-create, reconnect, relabel, and delete use the existing ID`, async () => {
