@@ -3383,6 +3383,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Morph renders replace it themselves, but a 'replace' render would not —
     // remove it here so it can't linger above the new graph.
     if (this.svg) {
+      // Zoom-to-fit transitions live on the root SVG. Cancel them before a
+      // queued callback can read relative SVG lengths after disconnection.
+      this.svg.interrupt();
       this.svg.selectAll('.morph-exit-layer').interrupt().remove();
     }
     this.morphEnteringNodeIds = new Set();
