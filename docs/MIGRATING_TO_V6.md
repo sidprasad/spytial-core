@@ -1,7 +1,7 @@
 # Migrating to spytial-core 6.0
 
-This records the 6.x migration. For the Pyret API move in Core 7, see
-[Migrating to v7](MIGRATING_TO_V7.md).
+This records the 6.x migration. For the Pyret API move in Core 6.4, see
+[Migrating Pyret to Spyret](MIGRATING_TO_SPYRET.md).
 
 ## Store by ID, query by name
 

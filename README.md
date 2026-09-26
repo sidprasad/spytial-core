@@ -7,7 +7,7 @@
 If you want to render Python objects, use **[sPyTial](https://github.com/sidprasad/spytial)**.
 If you want to render Rust values, use **[Caraspace](https://github.com/sidprasad/caraspace)**.
 If you want to render Pyret values, use **[Spyret](https://github.com/sidprasad/spyret)**.
-For the Core 7 Pyret API removal, see [the migration guide](docs/MIGRATING_TO_V7.md).
+For the Core 6.4 Pyret API removal, see [the migration guide](docs/MIGRATING_TO_SPYRET.md).
 If you want to add a new host to that list — read on.
 
 ---
@@ -52,7 +52,7 @@ CDN:
 
 That is the only script tag you need. The bundle carries its own d3 v4 and WebCola, and it will not replace a `window.d3` your page already has.
 
-For reproducibility, pin a version (e.g. `spytial-core@7.0.0`).
+For reproducibility, pin a version (e.g. `spytial-core@6.4.0`).
 
 ---
 

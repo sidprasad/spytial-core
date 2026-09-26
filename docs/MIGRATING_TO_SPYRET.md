@@ -1,11 +1,11 @@
-# Migrating to spytial-core 7.0
+# Migrating to spytial-core 6.4.0
 
-Core 7 removes its Pyret adapter and Pyret-only reconstruction helpers. The
+Core 6.4 removes its Pyret adapter and Pyret-only reconstruction helpers. The
 same language-facing code is maintained and tested in
-[Spyret](https://github.com/sidprasad/spyret). This is a major release because
-Core 6 exported those symbols from its default entry and browser bundle.
+[Spyret](https://github.com/sidprasad/spyret). These exports were present in
+Core 6.3. Applications using them must switch imports when moving to 6.4.
 
-| Core 6 import or global | Core 7 replacement |
+| Core 6.3 import or global | Core 6.4 replacement |
 | --- | --- |
 | `PyretDataInstance`, `PyretEvaluator`, `PyretEvaluationResult` | Import from `spyret` or use `window.Spyret` |
 | `reifyToValue`, `ReifiedValue`, `replit`, `canon` | Import from `spyret` or use `window.Spyret` |
