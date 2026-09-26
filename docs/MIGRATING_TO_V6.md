@@ -1,5 +1,8 @@
 # Migrating to spytial-core 6.0
 
+This records the 6.x migration. For the Pyret API move in Core 7, see
+[Migrating to v7](MIGRATING_TO_V7.md).
+
 ## Store by ID, query by name
 
 `JSONDataInstance` no longer destroys distinct relation identities during

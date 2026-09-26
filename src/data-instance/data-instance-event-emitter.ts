@@ -1,7 +1,7 @@
 import { DataInstanceEvent, DataInstanceEventType, DataInstanceEventListener } from './interfaces';
 
 /**
- * Shared event plumbing for the mutable data instances (JSON, Alloy, Pyret,
+ * Shared event plumbing for the mutable data instances (JSON, Alloy, TLA,
  * DOT). Each adapter used to carry its own copy of this listener map and the
  * three methods around it; they all extend this class instead.
  *

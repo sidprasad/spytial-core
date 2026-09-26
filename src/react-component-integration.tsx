@@ -14,7 +14,6 @@ import { createEmptyAlloyDataInstance } from './data-instance/alloy-data-instanc
 import { IInputDataInstance } from './data-instance/interfaces';
 import { ErrorMessageContainer, ErrorStateManager, SelectorErrorDetail } from './components/ErrorMessageModal/index'
 import { ErrorMessages } from './layout/constraint-types';
-import { PyretDataInstance } from './data-instance/pyret/pyret-data-instance';
 import { EvaluatorRepl } from './components/EvaluatorRepl/EvaluatorRepl';
 import { IEvaluator } from './evaluators';
 import { RelationHighlighter } from './components/RelationHighlighter/RelationHighlighter';
@@ -971,8 +970,6 @@ export const CnDCore = {
   ErrorAPI,
   DataAPI,
 
-  // Direct Pyret utilities for convenience
-  PyretDataInstance,
 };
 
 

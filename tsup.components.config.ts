@@ -17,6 +17,6 @@ export default defineConfig({
   splitting: false,
   dts: true,
   onSuccess: async () => {
-    console.log('✅ Demo components built successfully for HTML integration (integrated + pyret-repl)');
+    console.log('✅ Demo components built successfully for HTML integration');
   },
 });
