@@ -7497,67 +7497,23 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /**
    * Captures the current graph as a high-resolution PNG and downloads it.
-   * Inlines all computed styles and converts external images to base64
-   * for accurate offline rendering.
+   * This is what the toolbar's download button does. To get the PNG without
+   * a download (to upload it, embed it, or hand it to a host language), use
+   * {@link exportPng}.
+   *
+   * @param filename - Name for the downloaded file. Defaults to
+   *   `graph-screenshot-<timestamp>.png`.
    */
-  public async takeScreenshot(): Promise<void> {
-    const svg = this.shadowRoot?.querySelector('#svg') as SVGSVGElement | null;
-    if (!svg) {
-      console.warn('No SVG element found for screenshot.');
-      return;
-    }
-
+  public async takeScreenshot(filename?: string): Promise<void> {
     try {
-      // Clone the SVG so we don't mutate the live DOM
-      const svgClone = svg.cloneNode(true) as SVGSVGElement;
-
-      // Read viewBox dimensions for proper sizing
-      const viewBox = svg.getAttribute('viewBox');
-      let width = svg.clientWidth || 800;
-      let height = svg.clientHeight || 600;
-      if (viewBox) {
-        const parts = viewBox.split(/[\s,]+/).map(Number);
-        if (parts.length === 4) {
-          width = parts[2];
-          height = parts[3];
-        }
-        svgClone.setAttribute('viewBox', viewBox);
-      }
-      svgClone.setAttribute('width', String(width));
-      svgClone.setAttribute('height', String(height));
-      svgClone.removeAttribute('preserveAspectRatio');
-
-      // Inline computed styles from the live SVG into the clone so they survive serialization
-      this.inlineComputedStyles(svg, svgClone);
-
-      // Convert <image> hrefs to base64 data URIs so icons render in the PNG
-      await this.convertImagesToBase64(svgClone);
-
-      // Match the on-screen canvas background so PNG exports look like the live view
-      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      bgRect.setAttribute('width', '100%');
-      bgRect.setAttribute('height', '100%');
-      bgRect.setAttribute('fill', this.getCanvasBackground());
-      svgClone.insertBefore(bgRect, svgClone.firstChild);
-
-      // Serialize the clone to a string
-      const serializer = new XMLSerializer();
-      const svgString = serializer.serializeToString(svgClone);
-
-      // Render to a high-res canvas
-      const scale = WebColaCnDGraph.SCREENSHOT_SCALE;
-      const blob = await this.svgStringToPngBlob(svgString, width, height, scale);
-      if (!blob) {
-        console.error('Failed to generate PNG blob from SVG.');
-        return;
-      }
+      const blob = await this.exportPng();
 
       // Trigger download
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      link.download = `graph-screenshot-${timestamp}.png`;
+      link.download = filename ?? `graph-screenshot-${timestamp}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -7565,6 +7521,73 @@ export class WebColaCnDGraph extends HTMLElementBase {
     } catch (error) {
       console.error('Screenshot failed:', error);
     }
+  }
+
+  /**
+   * Renders the current graph to a PNG and returns it as a Blob. Nothing is
+   * downloaded. The image matches the toolbar download: same styles, icons,
+   * and canvas background.
+   *
+   * @example
+   * const blob = await graph.exportPng({ scale: 2 });
+   * img.src = URL.createObjectURL(blob);
+   *
+   * @param options.scale - Pixel density multiplier. Defaults to 3 (high-res).
+   * @throws If the graph has no rendered SVG, or the browser cannot draw it.
+   */
+  public async exportPng(options: { scale?: number } = {}): Promise<Blob> {
+    const scale = options.scale ?? WebColaCnDGraph.SCREENSHOT_SCALE;
+    if (!Number.isFinite(scale) || scale <= 0) {
+      throw new Error(`exportPng: scale must be a positive number, got ${scale}.`);
+    }
+
+    const svg = this.shadowRoot?.querySelector('#svg') as SVGSVGElement | null;
+    if (!svg) {
+      throw new Error('exportPng: no rendered SVG found. Render a layout first.');
+    }
+
+    // Clone the SVG so we don't mutate the live DOM
+    const svgClone = svg.cloneNode(true) as SVGSVGElement;
+
+    // Read viewBox dimensions for proper sizing
+    const viewBox = svg.getAttribute('viewBox');
+    let width = svg.clientWidth || 800;
+    let height = svg.clientHeight || 600;
+    if (viewBox) {
+      const parts = viewBox.split(/[\s,]+/).map(Number);
+      if (parts.length === 4) {
+        width = parts[2];
+        height = parts[3];
+      }
+      svgClone.setAttribute('viewBox', viewBox);
+    }
+    svgClone.setAttribute('width', String(width));
+    svgClone.setAttribute('height', String(height));
+    svgClone.removeAttribute('preserveAspectRatio');
+
+    // Inline computed styles from the live SVG into the clone so they survive serialization
+    this.inlineComputedStyles(svg, svgClone);
+
+    // Convert <image> hrefs to base64 data URIs so icons render in the PNG
+    await this.convertImagesToBase64(svgClone);
+
+    // Match the on-screen canvas background so PNG exports look like the live view
+    const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bgRect.setAttribute('width', '100%');
+    bgRect.setAttribute('height', '100%');
+    bgRect.setAttribute('fill', this.getCanvasBackground());
+    svgClone.insertBefore(bgRect, svgClone.firstChild);
+
+    // Serialize the clone to a string
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgClone);
+
+    // Render to a high-res canvas
+    const blob = await this.svgStringToPngBlob(svgString, width, height, scale);
+    if (!blob) {
+      throw new Error('exportPng: failed to generate PNG blob from SVG.');
+    }
+    return blob;
   }
 
   /**
