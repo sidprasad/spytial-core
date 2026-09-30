@@ -228,6 +228,8 @@ and stays on the default entry too.
 | `ErrorMessageContainer`, `ErrorMessageContainerProps`        | UI surface for system errors. |
 | `ErrorStateManager`, `SystemError`, `SelectorErrorDetail`    | Error-state plumbing for surfacing selector / IIS errors. |
 
+Pass `defaultCollapsed` to `ErrorMessageContainer` or `ErrorMessageModal` to start with error details hidden. The default is expanded. With the CDN mount helper, use `window.mountErrorMessageModal(containerId, graphElementId, true)` for the same behavior. Users can still expand or collapse the details with the button.
+
 Components are tree-shakable and also published under the subpath `spytial-core/components/*`.
 
 ---
@@ -315,7 +317,7 @@ CDN URLs:
 - jsDelivr: `https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js`
 - unpkg:    `https://unpkg.com/spytial-core/dist/browser/spytial-core-complete.global.js`
 
-For reproducibility, pin a version (`spytial-core@6.4.1`).
+For reproducibility, pin a version (`spytial-core@6.5.0`).
 
 ---
 

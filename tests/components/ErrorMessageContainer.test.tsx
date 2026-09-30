@@ -10,7 +10,8 @@ vi.mock('../../src/components/ErrorMessageModal/ErrorMessageModal', () => ({
   ErrorMessageModal: vi.fn((props) => {
     return React.createElement('div', {
       'data-testid': 'error-message-modal',
-      'data-system-error': JSON.stringify(props.systemError)
+      'data-system-error': JSON.stringify(props.systemError),
+      'data-default-collapsed': String(props.defaultCollapsed)
     }, 'Mocked ErrorMessageModal')
   })
 }))
@@ -48,6 +49,14 @@ describe('ErrorMessageContainer Component', () => {
         // Verify the correct error is passed to ErrorMessageModal
         const passedError = JSON.parse(modal.getAttribute('data-system-error') || '{}')
         expect(passedError).toEqual(testError)
+      })
+
+      it('passes the initial collapse preference to the modal', () => {
+        mockErrorManager.setError({ type: 'general-error', message: 'Test error' })
+
+        render(<ErrorMessageContainer errorManager={mockErrorManager} defaultCollapsed />)
+
+        expect(screen.getByTestId('error-message-modal')).toHaveAttribute('data-default-collapsed', 'true')
       })
 
       it('should render the ErrorMessageContainer with default wrapper div', () => {

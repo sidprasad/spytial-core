@@ -641,22 +641,28 @@ export function getCurrentCNDSpecFromReact(): string | undefined {
  * Mount ErrorMessageModal component into specified container
  * 
  * @param containerId - DOM element ID to mount into (default: 'error-messages')
+ * @param graphElementId - Graph element ID for highlighting (default: 'graph-container')
+ * @param defaultCollapsed - Whether details start hidden (default: false)
  * @returns Boolean indicating success
  * 
  * @example
  * ```javascript
  * // Mount into default container
- * CnDCore.mountErrorModal();
+ * mountErrorMessageModal();
  * 
  * // Mount into custom container
- * CnDCore.mountErrorModal('my-error-container');
+ * mountErrorMessageModal('my-error-container');
+ *
+ * // Start with details collapsed
+ * mountErrorMessageModal('my-error-container', 'graph-container', true);
  * ```
  * 
  * @public
  */
 export function mountErrorMessageModal(
   containerId: string = 'error-messages',
-  graphElementId: string = 'graph-container'
+  graphElementId: string = 'graph-container',
+  defaultCollapsed: boolean = false
 ): boolean {
   const container = document.getElementById(containerId);
 
@@ -667,7 +673,7 @@ export function mountErrorMessageModal(
 
   try {
     const root = createRoot(container);
-    root.render(<ErrorMessageContainer errorManager={globalErrorManager} graphElementId={graphElementId} />);
+    root.render(<ErrorMessageContainer errorManager={globalErrorManager} graphElementId={graphElementId} defaultCollapsed={defaultCollapsed} />);
     console.log(`Error Modal mounted to #${containerId}`);
     return true;
   } catch (error) {

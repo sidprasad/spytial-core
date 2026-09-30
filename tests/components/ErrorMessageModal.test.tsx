@@ -253,8 +253,9 @@ describe('ErrorMessageModal Component', () => {
     it('should render expanded by default with body content visible', () => {
       render(<ErrorMessageModal systemError={parseError} />)
 
-      const toggle = screen.getByRole('button', { name: /collapse error details/i })
+      const toggle = screen.getByRole('button', { name: /hide details/i })
       expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(toggle).toHaveTextContent('Hide details')
       expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
       expect(screen.getByText('Orientation constraint must have selector field')).toBeInTheDocument()
     })
@@ -263,7 +264,7 @@ describe('ErrorMessageModal Component', () => {
       const user = userEvent.setup()
       render(<ErrorMessageModal systemError={parseError} />)
 
-      await user.click(screen.getByRole('button', { name: /collapse error details/i }))
+      await user.click(screen.getByRole('button', { name: /hide details/i }))
 
       // Modal container and header remain; body content is gone
       expect(document.getElementById('error-message-modal')).toBeInTheDocument()
@@ -271,17 +272,33 @@ describe('ErrorMessageModal Component', () => {
       expect(screen.queryByText('Orientation constraint must have selector field')).not.toBeInTheDocument()
 
       // Toggle now advertises expand and reports collapsed state
-      expect(screen.getByRole('button', { name: /expand error details/i })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('button', { name: /show details/i })).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.getByRole('button', { name: /show details/i })).toHaveTextContent('Show details')
+    })
+
+    it('can start collapsed and reveal the error on demand', async () => {
+      const user = userEvent.setup()
+      render(<ErrorMessageModal systemError={parseError} defaultCollapsed />)
+
+      const toggle = screen.getByRole('button', { name: /show details/i })
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      expect(toggle).toHaveTextContent('Show details')
+      expect(screen.queryByText('Orientation constraint must have selector field')).not.toBeInTheDocument()
+
+      await user.click(toggle)
+
+      expect(screen.getByRole('button', { name: /hide details/i })).toHaveTextContent('Hide details')
+      expect(screen.getByText('Orientation constraint must have selector field')).toBeInTheDocument()
     })
 
     it('should restore body content when toggled again', async () => {
       const user = userEvent.setup()
       render(<ErrorMessageModal systemError={parseError} />)
 
-      await user.click(screen.getByRole('button', { name: /collapse error details/i }))
+      await user.click(screen.getByRole('button', { name: /hide details/i }))
       expect(screen.queryByText('An error occurred while processing your data.')).not.toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: /expand error details/i }))
+      await user.click(screen.getByRole('button', { name: /show details/i }))
       expect(screen.getByText('An error occurred while processing your data.')).toBeInTheDocument()
     })
   })

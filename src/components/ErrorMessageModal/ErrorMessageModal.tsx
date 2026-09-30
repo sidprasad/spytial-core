@@ -15,6 +15,8 @@ export interface ErrorMessageModalProps {
    * (via the graph's public `highlightNodes` / `clearNodeHighlights` API).
    */
   graphElementId?: string;
+  /** Whether error details start hidden. Defaults to false (expanded). */
+  defaultCollapsed?: boolean;
 }
 
 /** Constraint node with bidirectional relationships */
@@ -35,9 +37,9 @@ type HighlightState = {
  * Supports both constraint conflicts and parse errors
  * @public
  */
-export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError, graphElementId }: ErrorMessageModalProps) => {
+export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemError, graphElementId, defaultCollapsed = false }: ErrorMessageModalProps) => {
   const [highlightState, setHighlightState] = useState<HighlightState>({ ids: [], source: null });
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   /** Minimal shape of the graph element's node-highlighting API */
   type GraphHighlightElement = HTMLElement & {
@@ -219,11 +221,12 @@ export const ErrorMessageModal: React.FC<ErrorMessageModalProps> = ({ systemErro
           type="button"
           className="error-modal-toggle"
           aria-expanded={!collapsed}
-          aria-label={collapsed ? 'Expand error details' : 'Collapse error details'}
-          title={collapsed ? 'Expand error details' : 'Collapse error details'}
           onClick={() => setCollapsed(c => !c)}
         >
-          {collapsed ? '▸' : '▾'}
+          <span>{collapsed ? 'Show details' : 'Hide details'}</span>
+          <svg className="error-modal-chevron" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="m5 7.5 5 5 5-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </div>
       {!collapsed && (
