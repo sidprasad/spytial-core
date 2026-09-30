@@ -15,6 +15,8 @@ export interface ErrorMessageContainerProps {
    * conflicting constraint highlights the referenced nodes in that diagram.
    */
   graphElementId?: string;
+  /** Whether error details start hidden. Defaults to false (expanded). */
+  defaultCollapsed?: boolean;
 }
 
 /**
@@ -24,7 +26,8 @@ export interface ErrorMessageContainerProps {
 export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
   errorManager,
   className = '',
-  graphElementId
+  graphElementId,
+  defaultCollapsed
 }) => {
   const [currentError, setCurrentError] = useState<SystemError | null>(
     errorManager.getCurrentError()
@@ -54,6 +57,7 @@ export const ErrorMessageContainer: React.FC<ErrorMessageContainerProps> = ({
       <ErrorMessageModal
         systemError={currentError}
         graphElementId={graphElementId}
+        defaultCollapsed={defaultCollapsed}
       />
     </div>
   );
