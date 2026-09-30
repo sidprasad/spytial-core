@@ -10,7 +10,6 @@ import {
   DataInstanceEvent 
 } from '../src/data-instance/interfaces';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
-import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 
 /**
@@ -430,20 +429,6 @@ const jsonFactory: InstanceFactory = {
 };
 
 /**
- * Pyret Data Instance Factory
- */
-const pyretFactory: InstanceFactory = {
-  name: 'PyretDataInstance',
-  createEmpty: () => new PyretDataInstance(null, false),
-  createWithTestData: () => {
-    const instance = new PyretDataInstance(null, false);
-    instance.addAtom({ id: 'test1', type: 'TestType', label: 'Test1' });
-    instance.addAtom({ id: 'test2', type: 'TestType', label: 'Test2' });
-    return instance;
-  }
-};
-
-/**
  * Alloy Data Instance Factory
  */
 const alloyFactory: InstanceFactory = {
@@ -461,10 +446,6 @@ const alloyFactory: InstanceFactory = {
 describe('IInputDataInstance Comprehensive Tests', () => {
   describe('JSONDataInstance Implementation', () => {
     createIInputDataInstanceTestSuite(jsonFactory);
-  });
-
-  describe('PyretDataInstance Implementation', () => {
-    createIInputDataInstanceTestSuite(pyretFactory);
   });
 
   describe('AlloyDataInstance Implementation', () => {

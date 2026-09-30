@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import type { IJsonDataInstance } from '../src/data-instance/json-data-instance';
-import { PyretDataInstance } from '../src/data-instance/pyret/pyret-data-instance';
 import { AlloyDataInstance, createEmptyAlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { DotDataInstance } from '../src/data-instance/dot/dot-data-instance';
 import { generateSQLSchema } from '../src/data-instance/schema-descriptor';
@@ -290,25 +289,6 @@ describe('AlloyDataInstance.addRelationTuple — positional column types', () =>
     // reify() reads tuple.types[i] positionally to decide backticking: the Int
     // literal stays bare, the atom id gets a backtick.
     expect(instance.reify() as string).toContain('age = (`S1->7)');
-  });
-});
-
-describe('PyretDataInstance.addRelationTuple — positional column types', () => {
-  it('gives the relation one column type per tuple position', () => {
-    const instance = new PyretDataInstance({ dict: {} } as never);
-    instance.addAtom({ id: 'P1', type: 'Person', label: 'Ada' });
-    instance.addAtom({ id: 'S1', type: 'Student', label: 'Bo' });
-    instance.addAtom({ id: 'C1', type: 'City', label: 'Providence' });
-
-    instance.addRelationTuple('lives_in', { atoms: ['P1', 'C1'], types: ['Person', 'City'] });
-    instance.addRelationTuple('lives_in', { atoms: ['S1', 'C1'], types: ['Student', 'City'] });
-
-    const lives_in = relationNamed(instance, 'lives_in');
-    expect(lives_in.types).toEqual(['Person', 'City']);
-    for (const tuple of lives_in.tuples) {
-      expect(tuple.types).toHaveLength(tuple.atoms.length);
-      expect(tuple.types).toEqual(lives_in.types);
-    }
   });
 });
 

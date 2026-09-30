@@ -24,6 +24,10 @@ export function getGraphCSS({
         width: 100%;
         height: 100%;
         font-family: ${fontFamily};
+        /* Inherited pre/pre-wrap/pre-line styles cross the shadow boundary.
+           Collapse template indentation so newlines around the status overlays
+           cannot create blank lines before the SVG (or the graph shell). */
+        white-space: normal;
       }
 
       /* A column: the toolbar takes the height it needs, the canvas takes the

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import * as d3 from 'd3';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 
 /**
@@ -198,7 +199,7 @@ describe('WebColaCnDGraph overlapping renders', () => {
     const fakeThis: any = {
       colaLayout: { stop, on },
       morphSlideTimer: { stop: slideStop },
-      svg: { selectAll: vi.fn(() => exitLayerSel) },
+      svg: { interrupt: vi.fn(), selectAll: vi.fn(() => exitLayerSel) },
       morphEnteringNodeIds: new Set(['n1']),
       morphEnteringEdgeIds: new Set(['e1']),
       teardownInflightRender: proto.teardownInflightRender,
@@ -211,6 +212,36 @@ describe('WebColaCnDGraph overlapping renders', () => {
   }
 
   describe('teardownInflightRender', () => {
+    it('cancels a queued viewport transition before it can read a detached SVG', () => {
+      const svg = d3.select(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+      const start = vi.fn();
+      const { fakeThis } = inflightThis({ svg });
+      try {
+        svg.transition().duration(300).on('start', start);
+        proto.teardownInflightRender.call(fakeThis);
+        d3.timerFlush();
+        expect(start).not.toHaveBeenCalled();
+      } finally {
+        svg.interrupt();
+      }
+    });
+
+    it('interrupts an active viewport transition when the render ends', () => {
+      const svg = d3.select(document.createElementNS('http://www.w3.org/2000/svg', 'svg'));
+      const start = vi.fn();
+      const interrupt = vi.fn();
+      const { fakeThis } = inflightThis({ svg });
+      try {
+        svg.transition().duration(300).on('start', start).on('interrupt', interrupt);
+        d3.timerFlush();
+        expect(start).toHaveBeenCalledOnce();
+        proto.teardownInflightRender.call(fakeThis);
+        expect(interrupt).toHaveBeenCalledOnce();
+      } finally {
+        svg.interrupt();
+      }
+    });
+
     it('stops the solver, detaches handlers, cancels the morph timer, clears morph leftovers, and hides the overlay', () => {
       const { fakeThis, stop, on, slideStop, exitLayerRemove, hideLoading } = inflightThis();
 

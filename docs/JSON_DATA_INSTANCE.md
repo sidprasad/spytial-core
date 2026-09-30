@@ -55,7 +55,8 @@ Each type object includes:
 - Supertypes in a type hierarchy (e.g., `object`) do not need their own entries unless they have atoms.
 - Use atom `metadata` for host reconstruction data. Arbitrary extra fields are
   not a guaranteed extension mechanism across all adapters or transformations.
-- For migration guidance and the Pyret encoding, see [v6 migration](MIGRATING_TO_V6.md).
+- For data-instance migration guidance, see [v6 migration](MIGRATING_TO_V6.md).
+Pyret encoding is maintained by [Spyret](https://github.com/sidprasad/spyret).
 
 ## Example: Order Statistic Tree instance
 
