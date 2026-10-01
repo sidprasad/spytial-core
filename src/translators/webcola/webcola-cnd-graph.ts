@@ -2,7 +2,7 @@
 import { EdgeWithMetadata, NodeWithMetadata, WebColaLayout, WebColaTranslator, TransformInfo, LayoutState, WebColaLayoutOptions, WebColaRenderTransitionMode } from './webcolatranslator';
 import { InstanceLayout, isInstanceLayout, LayoutNode, ColorSource } from '../../layout/interfaces';
 import type { LayoutErrorDetail, LayoutWarning } from '../../layout/error-state';
-import type { Layout, ID3StyleLayoutAdaptor } from 'webcola';
+import type { Descent, Layout, ID3StyleLayoutAdaptor } from 'webcola';
 import * as d3VendorModule from '../../vendor/d3.v4.min.js';
 
 /**
@@ -798,8 +798,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   // leaves grid attraction active for subsequent tick()/resume() calls (see
   // vendor/cola.js Layout.start). The grid uses the first node's collision
   // width, so it can stretch some edges and compress others after solving.
-  // Keep the distance objective active; constraint projection enforces author
-  // separations and alignments independently of grid snapping.
+  // Keep the distance objective active for the initial solve only. The end
+  // handler then disables attraction while retaining constraint projection.
   private static readonly GRID_SNAP_ITERATIONS = 0;
   /**
    * Cap on the synchronous alpha-decay ticks driven after layout.start()
@@ -2704,6 +2704,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
           // Teardown race: bail if clear()/dispose() nulled the selections.
           if (!this.currentLayout || !this.svgNodes) return;
 
+          if (isInitialSolve) {
+            // Preferred distances help the initial arrangement, but are not
+            // constraints on user edits. Drop all soft distance weights,
+            // including group compactness, before any drag can resume this
+            // solver. Keep the projection (author constraints, containment,
+            // and non-overlap) and pointer locks intact. Do not enable grid
+            // snapping or restore attraction on release. A new render creates
+            // a fresh solver with its usual initial distance objective.
+            const descent = (layout as unknown as { _descent: Descent })._descent;
+            descent.G = descent.x[0].map(() => new Array(descent.x[0].length).fill(0));
+          }
           isInitialSolve = false;
           if (shouldShowLoadingOverlay) {
             this.updateLoadingProgress('Finalizing...');

@@ -35,6 +35,12 @@ or `false` to change it. `getViewOptions()` returns a detached snapshot.
 The exported TypeScript types are `GraphViewOptions`, `GraphControl`, and
 `ResolvedGraphViewOptions`.
 
+Preferred edge lengths help compute the initial layout. After it settles,
+dragging a node or group preserves the other nodes' positions unless authored
+constraints, group containment, or non-overlap require them to move. Edge
+lengths can change freely; releasing the pointer does not restore attraction.
+Explicitly rendering a new layout computes its initial arrangement again.
+
 Controls and permissions update synchronously without rebuilding the graph.
 Font changes remeasure automatic node boxes and rerun the constrained
 layout from the live positions, preserving the viewport. Await the returned

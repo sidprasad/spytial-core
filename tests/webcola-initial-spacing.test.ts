@@ -1,7 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { Layout, Node } from 'webcola';
+import type { Group, Layout, Node } from 'webcola';
 import type { InstanceLayout, LayoutConstraint, LayoutNode } from '../src/layout/interfaces';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
+import { requireCola } from '../src/translators/webcola/routing/cola-runtime';
 
 // Only browser measurements are stubbed. These tests render through the real
 // translator, vendored solver, initial settling loop, and renderer end handler.
@@ -61,8 +62,7 @@ function chain(axis: 'x' | 'y', minDistance = 20, grouped = false): InstanceLayo
   };
 }
 
-async function render(input: InstanceLayout): Promise<Layout> {
-  const graph = new WebColaCnDGraph();
+async function render(input: InstanceLayout, graph = new WebColaCnDGraph()): Promise<Layout> {
   const errors = vi.fn();
   graph.addEventListener('layout-error', errors);
   document.body.appendChild(graph);
@@ -96,6 +96,46 @@ function expectNearTargets(layout: Layout) {
   }
 }
 
+function positions(layout: Layout) {
+  return layout.nodes().map(n => ({ x: n.x!, y: n.y! }));
+}
+
+function expectPositions(layout: Layout, expected: { x: number; y: number }[]) {
+  layout.nodes().forEach((node, i) => {
+    expect(node.x).toBeCloseTo(expected[i].x, 4);
+    expect(node.y).toBeCloseTo(expected[i].y, 4);
+  });
+}
+
+function dragAndRelease(layout: Layout, subject: Node | Group, dx: number, dy: number) {
+  const synchronous = layout as unknown as { kick(): void; tick(): boolean };
+  // Use the vendored adaptor's actual drag operations and resume path. Only
+  // replace the animation timer; start() would rebuild the descent state.
+  const kick = vi.spyOn(synchronous, 'kick').mockImplementation(() => {
+    for (let i = 0; i < 500; i++) if (synchronous.tick()) return;
+    throw new Error('Resumed layout did not settle');
+  });
+  const cola = requireCola();
+  const { x, y } = cola.Layout.dragOrigin(subject);
+  try {
+    cola.Layout.dragStart(subject);
+    for (let step = 1; step <= 8; step++) {
+      cola.Layout.drag(subject, { x: x + dx * step / 8, y: y + dy * step / 8 });
+      layout.resume();
+    }
+    expectConstraints(layout);
+    const released = positions(layout);
+    cola.Layout.dragEnd(subject);
+    layout.resume();
+    // Releasing the pointer must not restart attraction or cause snap-back.
+    expectPositions(layout, released);
+    expectConstraints(layout);
+  } finally {
+    cola.Layout.dragEnd(subject);
+    kick.mockRestore();
+  }
+}
+
 describe('first settled WebCola spacing', () => {
   it.each(['x', 'y'] as const)('retains attainable edge distances and exact alignment along %s', async axis => {
     const layout = await render(chain(axis));
@@ -117,29 +157,80 @@ describe('first settled WebCola spacing', () => {
     expect(a.bounds!.X).toBeLessThanOrEqual(b.bounds!.x + 1e-4);
   });
 
-  it('continues honoring distances and constraints after a drag and release', async () => {
-    const layout = await render(chain('x'));
-    const synchronous = layout as unknown as { kick(): void; tick(): boolean };
-    // Drive the normal resume path synchronously instead of waiting for D3's
-    // animation timer. Do not restart: that would reset the descent state.
-    const kick = vi.spyOn(synchronous, 'kick').mockImplementation(() => {
-      for (let i = 0; i < 500; i++) if (synchronous.tick()) return;
-      throw new Error('Resumed layout did not settle');
-    });
-    try {
-      const dragged = layout.nodes()[2];
-      dragged.fixed = 1;
-      dragged.px = dragged.x! + 200;
-      dragged.py = dragged.y!;
-      layout.resume();
-      expect(dragged.x).toBeCloseTo(dragged.px, 4);
-      expectConstraints(layout);
-      dragged.fixed = 0;
-      layout.resume();
-      expectNearTargets(layout);
-      expectConstraints(layout);
-    } finally {
-      kick.mockRestore();
+  it.each(['x', 'y'] as const)('lets a user stretch and shorten an edge along %s without pulling its neighbors', async axis => {
+    const layout = await render(chain(axis));
+    expectNearTargets(layout);
+    const expected = positions(layout);
+    for (const distance of [200, -100]) {
+      expected[2][axis] += distance;
+      dragAndRelease(layout, layout.nodes()[2], axis === 'x' ? distance : 0, axis === 'y' ? distance : 0);
+      expectPositions(layout, expected);
     }
+  });
+
+  it('keeps connected neighbors still even without authored constraints', async () => {
+    const input = chain('x');
+    input.constraints = [];
+    const layout = await render(input);
+    const rightmost = layout.nodes().reduce((a, b) => a.x! > b.x! ? a : b);
+    const expected = positions(layout);
+    expected[layout.nodes().indexOf(rightmost)].x += 200;
+    dragAndRelease(layout, rightmost, 200, 0);
+    expectPositions(layout, expected);
+  });
+
+  it.each(['x', 'y'] as const)('still moves neighbors when alignment or minimum separation along %s requires it', async axis => {
+    const layout = await render(chain(axis));
+    const otherAxis = axis === 'x' ? 'y' : 'x';
+    const before = positions(layout);
+    dragAndRelease(layout, layout.nodes()[2], axis === 'x' ? 0 : 100, axis === 'y' ? 0 : 100);
+    expect(layout.nodes()[0][otherAxis]! - before[0][otherAxis]).toBeGreaterThan(99);
+    // Move the first node toward its neighbors until separation must push them.
+    dragAndRelease(layout, layout.nodes()[0], axis === 'x' ? 300 : 0, axis === 'y' ? 300 : 0);
+    expect(layout.nodes()[1][axis]! - before[1][axis]).toBeGreaterThan(1);
+  });
+
+  it('still prevents overlap when dragging nodes with no authored constraints', async () => {
+    const input = chain('x');
+    input.constraints = [];
+    const layout = await render(input);
+    const [a, b] = layout.nodes();
+    dragAndRelease(layout, a, b.x! - a.x!, b.y! - a.y!);
+    const nodes = layout.nodes();
+    for (let i = 0; i < nodes.length; i++) {
+      for (let j = i + 1; j < nodes.length; j++) {
+        const xGap = Math.abs(nodes[i].x! - nodes[j].x!) - (nodes[i].width! + nodes[j].width!) / 2;
+        const yGap = Math.abs(nodes[i].y! - nodes[j].y!) - (nodes[i].height! + nodes[j].height!) / 2;
+        expect(Math.max(xGap, yGap)).toBeGreaterThanOrEqual(-1e-4);
+      }
+    }
+  });
+
+  it('lets a group member move without pulling other members or connected groups', async () => {
+    const layout = await render(chain('x', 20, true));
+    const expected = positions(layout);
+    expected[3].x += 200;
+    dragAndRelease(layout, layout.nodes()[3], 200, 0);
+    expectPositions(layout, expected);
+    const [a, b] = layout.groups();
+    expect(a.bounds!.X).toBeLessThanOrEqual(b.bounds!.x + 1e-4);
+  });
+
+  it('lets a whole group move without pulling a connected group', async () => {
+    const layout = await render(chain('x', 20, true));
+    const expected = positions(layout);
+    expected[2].x += 200;
+    expected[3].x += 200;
+    dragAndRelease(layout, layout.groups()[1], 200, 0);
+    expectPositions(layout, expected);
+  });
+
+  it('uses distance attraction again when a new layout is explicitly rendered', async () => {
+    const graph = new WebColaCnDGraph();
+    const layout = await render(chain('x'), graph);
+    dragAndRelease(layout, layout.nodes()[2], 200, 0);
+    const replacement = await render(chain('x'), graph);
+    expectNearTargets(replacement);
+    expectConstraints(replacement);
   });
 });
