@@ -6157,11 +6157,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
    *
    * Geometry: a *tulip petal* — start and end land on the same side of the
    * node, close together, and the curve bulges out perpendicular to that
-   * side, forming a teardrop. Loops distribute around all four sides (in
-   * the order right → bottom → left → top), so a node with two self-loops
-   * gets one petal on the right and one on the bottom rather than two
-   * stacked on the top. The 5th+ loop on a node goes into an outer ring
-   * (further bulge).
+   * side, forming a teardrop. Loops prefer sides with fewer ordinary edge
+   * ports, and distribute around all four sides before starting an outer
+   * ring (further bulge). Ties use right → bottom → left → top.
    *
    * The 5-point polyline gives curveBasis enough control to produce both a
    * rounded apex and arrival tangents perpendicular to the side, so the
@@ -6192,7 +6190,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const cy = bounds.y + height / 2;
 
     const selfLoopIndex = indexOverride ?? this.getSelfLoopIndex(edgeData);
-    const sideIdx = selfLoopIndex % 4;
+    const sideIdx = this.getSelfLoopSideIndex(edgeData, selfLoopIndex);
     const ring = Math.floor(selfLoopIndex / 4);
     const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
@@ -6262,7 +6260,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   /**
    * Grid-mode self-loop route: an orthogonal "petal" — a rectangular bump
    * perpendicular to one side of the node. Mirrors the side / ring
-   * distribution from createSelfLoopRoute() (the curvy default-mode petal)
+   * selection from createSelfLoopRoute() (the curvy default-mode petal)
    * so the two routing modes agree on which side each self-loop lives on.
    *
    * Geometry (e.g. for top-side petal):
@@ -6291,7 +6289,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     const cy = bounds.y + height / 2;
 
     const selfLoopIndex = indexOverride ?? this.getSelfLoopIndex(edgeData);
-    const sideIdx = selfLoopIndex % 4;
+    const sideIdx = this.getSelfLoopSideIndex(edgeData, selfLoopIndex);
     const ring = Math.floor(selfLoopIndex / 4);
     const ringScale = 1 + ring * WebColaCnDGraph.SELF_LOOP_CURVATURE_SCALE;
 
@@ -6363,6 +6361,22 @@ export class WebColaCnDGraph extends HTMLElementBase {
       }
     }
     return 0;
+  }
+
+  /** Keep petals away from the sides used by node-to-node edges. The port
+   * cache is rebuilt at the start of each routing pass, so the choice follows
+   * the current layout. Sorting all four sides also keeps sibling loops on
+   * distinct sides until the next ring. Group loops retain their own order.
+   */
+  private getSelfLoopSideIndex(edgeData: any, loopIndex: number): number {
+    if (this.isGroupSelfLoop(edgeData)) return loopIndex % 4;
+    const ports = this.edgeRoutingCache.nodeEdgesBySide.get(edgeData.source.id);
+    if (!ports) return loopIndex % 4;
+    const sides = ['right', 'bottom', 'left', 'top'] as const;
+    const ranked = [0, 1, 2, 3].sort((a, b) =>
+      ports[sides[a]].length - ports[sides[b]].length || a - b
+    );
+    return ranked[loopIndex % 4];
   }
 
   /**
