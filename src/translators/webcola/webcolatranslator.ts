@@ -443,6 +443,11 @@ export class WebColaLayout {
           target: instanceLayout.nodes[edge.target as unknown as number].id,
           bidirectional: edge.bidirectional,
         })),
+        // Compare viewport fit only when the seed describes the fresh layout.
+        // Priors, authored constraints, and group packing can change its bounds.
+        this.priorPositionMap.size === 0 && instanceLayout.constraints.length === 0 && instanceLayout.groups.length === 0
+          ? { width: fig_width, height: fig_height }
+          : undefined,
       );
     }
     catch (e) {

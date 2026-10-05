@@ -137,6 +137,25 @@ function dragAndRelease(layout: Layout, subject: Node | Group, dx: number, dy: n
 }
 
 describe('first settled WebCola spacing', () => {
+  it('chooses LR from the measured viewport for a fresh unconstrained chain', async () => {
+    const input = chain('x');
+    input.nodes = Array.from({ length: 10 }, (_, i) => ({ ...input.nodes[0], id: `n${i}`, width: 100, height: 60 }));
+    input.edges = input.nodes.slice(1).map((node, i) => ({
+      id: `e${i}`, source: input.nodes[i], target: node, label: 'next', relationName: 'next', color: '#000',
+    }));
+    input.constraints = [];
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 1200, bottom: 500, width: 1200, height: 500, toJSON: () => ({}),
+    });
+    try {
+      const nodes = (await render(input)).nodes();
+      for (let i = 1; i < nodes.length; i++) {
+        expect(nodes[i].x).toBeGreaterThan(nodes[i - 1].x!);
+        expect(nodes[i].y).toBeCloseTo(nodes[0].y!, 4);
+      }
+    } finally { rect.mockRestore(); }
+  });
+
   it.each(['x', 'y'] as const)('retains attainable edge distances and exact alignment along %s', async axis => {
     const layout = await render(chain(axis));
     expectNearTargets(layout);

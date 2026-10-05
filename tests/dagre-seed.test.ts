@@ -40,6 +40,53 @@ describe('display-aligned deterministic DAGRE seeds', () => {
     expect(result.colaNodes[1].y).toBe(result.colaNodes[2].y);
   });
 
+  it.each([
+    { width: 1200, height: 500, boxWidth: 100, direction: 'LR' },
+    { width: 500, height: 900, boxWidth: 100, direction: 'TB' },
+    { width: 800, height: 600, boxWidth: 240, direction: 'TB' },
+    { width: 900, height: 600, boxWidth: 100, direction: 'TB' }, // <10% coverage gain
+    { width: 3000, height: 3000, boxWidth: 100, direction: 'TB' }, // TB fills more at 1:1
+  ])('chooses $direction for a chain in $width x $height with $boxWidth px boxes', ({ width, height, boxWidth, direction }) => {
+    const input = fixture(10, Array.from({ length: 9 }, (_, i) => [i, i + 1]), false, boxWidth);
+    const edges = input.edges.map(e => ({ source: e.source.id, target: e.target.id }));
+    expect(computeDagreSeed(input.nodes, edges, { width, height }).graph().rankdir).toBe(direction);
+  });
+
+  it('accounts for branching rather than treating every wide viewport as LR', () => {
+    const input = fixture(10, Array.from({ length: 9 }, (_, i) => [0, i + 1]));
+    const edges = input.edges.map(e => ({ source: e.source.id, target: e.target.id }));
+    expect(computeDagreSeed(input.nodes, edges, { width: 1200, height: 500 }).graph().rankdir).toBe('TB');
+  });
+
+  it('keeps TB without a usable viewport, including empty and singleton graphs', () => {
+    const input = fixture(2, [[0, 1]]);
+    for (const viewport of [undefined, { width: 0, height: 600 }, { width: NaN, height: 600 }, { width: 800, height: Infinity }]) {
+      expect(computeDagreSeed(input.nodes, [], viewport).graph().rankdir).toBe('TB');
+    }
+    for (const count of [0, 1]) {
+      expect(computeDagreSeed(fixture(count, []).nodes, [], { width: 1200, height: 500 }).graph().rankdir).toBe('TB');
+    }
+  });
+
+  it('selects LR for a fresh chain but retains TB seeds with priors, constraints, or groups', async () => {
+    const input = fixture(10, Array.from({ length: 9 }, (_, i) => [i, i + 1]));
+    const fresh = await new WebColaTranslator().translate(input, 1200, 500);
+    expect(fresh.colaNodes[9].x).toBeGreaterThan(fresh.colaNodes[0].x!);
+    expect(fresh.colaNodes[9].y).toBe(fresh.colaNodes[0].y);
+    const tb = computeDagreSeed(input.nodes, input.edges.map(e => ({ source: e.source.id, target: e.target.id })));
+    const priorPositions = { positions: [{ id: 'N00', x: 123, y: 456 }], transform: { k: 1, x: 0, y: 0 } };
+    const warm = await new WebColaTranslator().translate(input, 1200, 500, { priorPositions });
+    expect(warm.colaNodes[0]).toMatchObject({ x: 123, y: 456 });
+    input.constraints = [{ sourceConstraint: {} as any, left: input.nodes[0], right: input.nodes[9], minDistance: 20 }];
+    const constrained = await new WebColaTranslator().translate(input, 1200, 500, { seedMode: 'dagre' });
+    input.constraints = [];
+    input.groups = [{ name: 'group', keyNodeId: input.nodes[0].id, nodeIds: input.nodes.map(n => n.id), showLabel: true }];
+    const grouped = await new WebColaTranslator().translate(input, 1200, 500);
+    for (const result of [warm, constrained, grouped]) {
+      expect(result.colaNodes[1]).toMatchObject({ x: tb.node('N01').x, y: tb.node('N01').y });
+    }
+  });
+
   it.each([false, true])('produces the same shuffled positions (symmetric=%s)', async symmetric => {
     const input = fixture(4, diamond, symmetric);
     const expected = await positions(input);
