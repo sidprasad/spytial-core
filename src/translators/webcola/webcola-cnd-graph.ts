@@ -2469,9 +2469,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
       ? {
           priorPositions: resolvedState,
           lockUnconstrainedNodes: options && this.presentationRenders.has(options) ? false : useReducedIterations,
-          collapseSymmetricEdges: this.shouldCollapseSymmetricEdges()
+          collapseSymmetricEdges: this.shouldCollapseSymmetricEdges(),
+          dagreRankDirection: options?.dagreRankDirection,
         }
-      : { collapseSymmetricEdges: this.shouldCollapseSymmetricEdges() };
+      : { collapseSymmetricEdges: this.shouldCollapseSymmetricEdges(), dagreRankDirection: options?.dagreRankDirection };
 
     this.applyViewportRenderPolicy(hasPriorPositions, hasPriorTransform);
     
