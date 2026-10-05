@@ -6,7 +6,7 @@ import type { IconPlacement } from '../../layout/style/atom-style-spec';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
 import { computeConstraintAwareSeed, hasSeedableConstraints, SeedPosition } from './constraint-aware-seed';
-import * as dagre from 'dagre';
+import { computeDagreSeed } from './dagre-seed';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -386,8 +386,8 @@ export class WebColaLayout {
   private priorPositionMap: Map<string, NodePositionHint>;
 
   /**
-   * Map of node id to its index in `colaNodes`. Built once after `colaNodes`
-   * is constructed. Backs `getNodeIndex()` so constraint translation and
+   * Map of node id to its index in `colaNodes`. Built from the input order
+   * before translating nodes and edges. Backs `getNodeIndex()` so constraint translation and
    * the post-pass run in O(c) instead of O(c × n).
    */
   private nodeIndexMap: Map<string, number> = new Map();
@@ -428,22 +428,27 @@ export class WebColaLayout {
     this.lockUnconstrainedNodes = options?.lockUnconstrainedNodes ?? false;
     this.collapseSymmetric = options?.collapseSymmetricEdges ?? true;
 
-    // Can I create a DAGRE graph here.
+    // Edge translation needs indices, but not node positions. Collapse display
+    // pairs before DAGRE so one double-headed edge is one layout connection.
+    instanceLayout.nodes.forEach((node, index) => this.nodeIndexMap.set(node.id, index));
+    this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
+    if (this.collapseSymmetric) this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
+
+    // Initial layout uses the same collapsed connections as the renderer.
     try {
-      const g = new dagre.graphlib.Graph({ multigraph: true });
-      g.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
-      g.setDefaultEdgeLabel(() => ({}));
-
-      instanceLayout.nodes.forEach(node => {
-        g.setNode(node.id, { width: node.width, height: node.height });
-      });
-
-      instanceLayout.edges.forEach(edge => {
-        g.setEdge(edge.source.id, edge.target.id);
-      });
-      dagre.layout(g);
-
-      this.dagre_graph = g;
+      this.dagre_graph = computeDagreSeed(
+        instanceLayout.nodes,
+        this.colaEdges.map(edge => ({
+          source: instanceLayout.nodes[edge.source as unknown as number].id,
+          target: instanceLayout.nodes[edge.target as unknown as number].id,
+          bidirectional: edge.bidirectional,
+        })),
+        // Compare viewport fit only when the seed describes the fresh layout.
+        // Priors, authored constraints, and group packing can change its bounds.
+        this.priorPositionMap.size === 0 && instanceLayout.constraints.length === 0 && instanceLayout.groups.length === 0
+          ? { width: fig_width, height: fig_height }
+          : undefined,
+      );
     }
     catch (e) {
       console.log(e);
@@ -480,20 +485,6 @@ export class WebColaLayout {
     }
 
     this.colaNodes = instanceLayout.nodes.map(node => this.toColaNode(node));
-    // Build node-id -> index map. Used by getNodeIndex() to keep
-    // constraint translation and the constraint-aware locking post-pass
-    // O(c) instead of O(c × n).
-    for (let i = 0; i < this.colaNodes.length; i++) {
-      this.nodeIndexMap.set(this.colaNodes[i].id, i);
-    }
-    this.colaEdges = instanceLayout.edges.map(edge => this.toColaEdge(edge));
-
-    // Collapse symmetric edges with identical presentation into one double-headed edge.
-    // Editable graphs disable this so each direction stays an independent,
-    // individually-editable arrow (see collapseSymmetricEdges option).
-    if (this.collapseSymmetric) {
-      this.colaEdges = this.collapseSymmetricEdges(this.colaEdges);
-    }
 
     // Collapse identical nested groups to reduce jitter and constraint conflicts
     const deduplicatedGroups = this.collapseIdenticalGroups(instanceLayout.groups);
