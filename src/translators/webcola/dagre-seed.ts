@@ -1,8 +1,6 @@
 import * as dagre from 'dagre';
 import type { LayoutNode } from '../../layout/interfaces';
 
-export type DagreRankDirection = 'TB' | 'LR';
-
 export interface DagreSeedEdge {
   source: string;
   target: string;
@@ -12,9 +10,9 @@ export interface DagreSeedEdge {
 const compareIds = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 
 /** Seed the displayed graph deterministically. No solver constraints or locks. */
-export function computeDagreSeed(nodes: LayoutNode[], edges: DagreSeedEdge[], direction: DagreRankDirection = 'TB') {
+export function computeDagreSeed(nodes: LayoutNode[], edges: DagreSeedEdge[]) {
   const graph = new dagre.graphlib.Graph({ multigraph: true });
-  graph.setGraph({ nodesep: 50, ranksep: 100, rankdir: direction });
+  graph.setGraph({ nodesep: 50, ranksep: 100, rankdir: 'TB' });
   graph.setDefaultEdgeLabel(() => ({}));
   for (const node of [...nodes].sort((a, b) => compareIds(a.id, b.id))) {
     graph.setNode(node.id, { width: node.width, height: node.height });

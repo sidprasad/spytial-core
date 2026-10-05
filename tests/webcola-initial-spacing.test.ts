@@ -2,7 +2,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { Group, Layout, Node } from 'webcola';
 import type { InstanceLayout, LayoutConstraint, LayoutNode } from '../src/layout/interfaces';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
-import type { WebColaLayoutOptions } from '../src/translators/webcola/webcolatranslator';
 import { requireCola } from '../src/translators/webcola/routing/cola-runtime';
 
 // Only browser measurements are stubbed. These tests render through the real
@@ -63,11 +62,11 @@ function chain(axis: 'x' | 'y', minDistance = 20, grouped = false): InstanceLayo
   };
 }
 
-async function render(input: InstanceLayout, graph = new WebColaCnDGraph(), options?: WebColaLayoutOptions): Promise<Layout> {
+async function render(input: InstanceLayout, graph = new WebColaCnDGraph()): Promise<Layout> {
   const errors = vi.fn();
   graph.addEventListener('layout-error', errors);
   document.body.appendChild(graph);
-  await graph.renderLayout(input, { transitionMode: 'replace', ...options });
+  await graph.renderLayout(input, { transitionMode: 'replace' });
   // A silent fallback to unsolved seed positions must not count as a pass.
   expect(errors).not.toHaveBeenCalled();
   const layout = (graph as unknown as { colaLayout: Layout }).colaLayout;
@@ -138,17 +137,6 @@ function dragAndRelease(layout: Layout, subject: Node | Group, dx: number, dy: n
 }
 
 describe('first settled WebCola spacing', () => {
-  it('passes an explicit DAGRE direction through the renderer', async () => {
-    const input = chain('x');
-    input.constraints = [];
-    const layout = await render(input, undefined, { dagreRankDirection: 'LR' });
-    const nodes = layout.nodes();
-    expect(nodes[1].x).toBeGreaterThan(nodes[0].x!);
-    expect(nodes[2].x).toBeGreaterThan(nodes[1].x!);
-    expect(nodes[0].y).toBeCloseTo(nodes[1].y!, 4);
-    expect(nodes[1].y).toBeCloseTo(nodes[2].y!, 4);
-  });
-
   it.each(['x', 'y'] as const)('retains attainable edge distances and exact alignment along %s', async axis => {
     const layout = await render(chain(axis));
     expectNearTargets(layout);

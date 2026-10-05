@@ -68,19 +68,6 @@ wrap at narrow widths after opting into `setViewOptions()`, and hidden controls
 take neither focus nor toolbar space. Controls added with `addToolbarControl()` are host-owned and remain
 visible independently of the built-in preset.
 
-## Initial layout direction
-
-DAGRE uses one connection per display-collapsed symmetric pair and orders its
-nodes and edges deterministically. It uses top-to-bottom (TB) by default. To
-seed left-to-right instead, pass an explicit direction to `renderLayout`:
-
-```typescript
-await graph.renderLayout(layout, { dagreRankDirection: 'LR' }); // or 'TB'
-```
-
-Prior positions and the constraint-aware seed take precedence. This option
-changes only initial positions; authored constraints and drag behavior still apply.
-
 ## Host-owned controls
 
 These actions work regardless of toolbar visibility or gesture permissions:

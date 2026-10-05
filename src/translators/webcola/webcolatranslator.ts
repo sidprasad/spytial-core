@@ -6,7 +6,7 @@ import type { IconPlacement } from '../../layout/style/atom-style-spec';
 import type { IDataInstance } from '../../data-instance/interfaces';
 import type { SequencePolicy } from './sequence-policy';
 import { computeConstraintAwareSeed, hasSeedableConstraints, SeedPosition } from './constraint-aware-seed';
-import { computeDagreSeed, type DagreRankDirection } from './dagre-seed';
+import { computeDagreSeed } from './dagre-seed';
 
 /**
  * WebColaTranslator - Translates InstanceLayout to WebCola format
@@ -251,11 +251,6 @@ export type WebColaRenderTransitionMode = 'replace' | 'morph';
  */
 export interface WebColaLayoutOptions {
   /**
-   * Initial DAGRE seed direction; defaults to TB. Prior positions and the
-   * constraint-aware seed take precedence. Dragging is unaffected.
-   */
-  dagreRankDirection?: DagreRankDirection;
-  /**
    * A sequence policy that transforms prior state before it reaches the
    * solver.  Requires `prevInstance` and `currInstance`.
    */
@@ -448,7 +443,6 @@ export class WebColaLayout {
           target: instanceLayout.nodes[edge.target as unknown as number].id,
           bidirectional: edge.bidirectional,
         })),
-        options?.dagreRankDirection,
       );
     }
     catch (e) {
