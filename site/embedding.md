@@ -17,6 +17,29 @@ await graph.renderLayout(layout);
 See [full and quiet graphs together](../webcola-demo/embedding-options-demo.html)
 (build locally with `npm run build:all`, then `npm run serve`).
 
+## Height and width
+
+Size the custom element with CSS. Dimensions are not `setViewOptions` options,
+and `width` / `height` HTML attributes on `<webcola-cnd-graph>` are not read:
+
+```html
+<webcola-cnd-graph
+  id="graph"
+  style="width: 100%; height: 480px;"
+></webcola-cnd-graph>
+```
+
+This fills the parent container's width. To change the available width in an
+embedded page, also size the host container or iframe. A percentage height needs
+a parent with a definite height; the graph does not grow to fit its nodes.
+The specified height includes the toolbar, with the remaining height used by the
+canvas. For narrow embeds, `setViewOptions({ toolbar: 'compact' })` reduces the
+controls and allows them to wrap.
+
+CSS box changes do not automatically re-fit the diagram. After resizing or
+revealing a hidden graph, call `resetViewToFitContent()` once its box is laid out.
+See the [Height and width FAQ](sizing-faq.md) for complete examples and troubleshooting.
+
 ## Options and live updates
 
 | Option | Default | Meaning |

@@ -35,4 +35,5 @@
   * [Contributor Guide](contributing.md)
 
 * **Help**
+  * [Height and Width FAQ](sizing-faq.md)
   * [File an Issue](https://github.com/sidprasad/spytial-core/issues/new)

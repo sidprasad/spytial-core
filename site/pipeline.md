@@ -15,12 +15,14 @@ Add the custom element that will receive the final layout:
 
 ```html
 <style>
-  webcola-cnd-graph { width: 800px; height: 600px; }
+  webcola-cnd-graph { width: 100%; max-width: 800px; height: 600px; }
 </style>
 <webcola-cnd-graph id="graph-container"></webcola-cnd-graph>
 ```
 
 Size it with CSS, as you would a `<div>`. `width` and `height` attributes on the tag are not read.
+Here the graph fills its parent up to 800px wide and has a fixed 600px height.
+See the [Height and width FAQ](sizing-faq.md) for embedded containers and responsive layouts.
 
 Edge routing defaults to the taut router (obstacle-avoiding straight-line paths with rounded bends). Set `layoutFormat="grid"` for orthogonal routing; the Routing dropdown in the rendered toolbar switches modes at runtime. (`layoutFormat="legacy"`, the old curved router, has been removed — the value still parses but warns and routes as taut.)
 

@@ -185,6 +185,10 @@ These register themselves automatically when the bundle loads in a browser.
 | `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
 | `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
 
+Set `<webcola-cnd-graph>` dimensions with CSS; `width` and `height` HTML attributes
+are not read. See the [Height and width FAQ](sizing-faq.md) for sizing embedded
+containers and re-fitting after a resize.
+
 ### Embedded graph options
 
 `setViewOptions(options)` / `getViewOptions()` configure toolbar presets, individual
