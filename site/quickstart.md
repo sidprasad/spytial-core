@@ -17,7 +17,7 @@ Save the following as `demo.html`, then open it in a browser:
   <script src="https://cdn.jsdelivr.net/npm/spytial-core/dist/browser/spytial-core-complete.global.js"></script>
   <style>
     /* Size the element with CSS. width/height attributes on the tag are not read. */
-    webcola-cnd-graph { width: 800px; height: 500px; }
+    webcola-cnd-graph { width: 100%; max-width: 800px; height: 500px; }
   </style>
 </head>
 <body>
@@ -107,15 +107,23 @@ directives:
 
 ## Sizing
 
-Size the element with CSS, as you would a `<div>`. It fills whatever box you give it:
+Set the element's width and height with CSS, as you would a `<div>`:
 
 ```css
 webcola-cnd-graph { width: 100%; height: 600px; }
 ```
 
-`width` and `height` attributes on the tag are not read. Your rule beats the component's own defaults, so `webcola-cnd-graph { height: 100vh; }` is all a full-page view needs. Do not set `display` from outside: `<spytial-explorer>` lays itself out as a flex column and relies on its own value.
+`width` and `height` attributes on the tag are not read. Stylesheet rules and inline
+styles can override the component's default `width: 100%; height: 100%`.
+`width: 100%` fills the containing block, so an embedded graph's available width
+depends on its parent container or iframe. Give the graph an explicit height,
+or give its parent a definite height before using `height: 100%`.
 
-The diagram does not re-fit itself when its box changes size. Call `resetViewToFitContent()` after you resize it (the toolbar's Fit to View button does the same).
+CSS resizes the box; it does not automatically re-fit the diagram. Call
+`resetViewToFitContent()` after the browser has applied the new dimensions
+(the toolbar's Fit to View button does the same).
+See the [Height and width FAQ](sizing-faq.md) for container, iframe, flex/grid,
+and resize examples.
 
 ## Adding a toolbar button
 
@@ -140,7 +148,7 @@ document.addEventListener('fullscreenchange', () => {
 graph.addToolbarControl(button);
 ```
 
-If the page runs inside an iframe (an embedded Gradio app or Hugging Face Space, say), the iframe needs `allow="fullscreen"` or `requestFullscreen()` is refused.
+If the page runs inside an iframe, the iframe needs `allow="fullscreen"` or `requestFullscreen()` is refused.
 
 ---
 
