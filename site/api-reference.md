@@ -148,6 +148,50 @@ Type re-exports include `InstanceLayout`, `LayoutNode`, `LayoutEdge`, `LayoutCon
 
 Re-exported namespace: `Translators`.
 
+### Structural edit schemas
+
+`StructuredInputGraph.setEditSchema(schema)` opts the editor into declaration checks.
+The default is `null`, which keeps open-ended editing. Setting `null` again removes
+the declaration guidance. Hosts provide an `EditSchema` with type IDs, parent
+memberships, optional type bounds, and exact relation IDs with ordered columns.
+
+For Alloy/Forge, capture declarations from the original parsed XML before editing:
+
+```typescript
+import { AlloyDataInstance, editSchemaFromAlloy, validateInstanceStructure } from 'spytial-core';
+
+const schema = editSchemaFromAlloy(originalParsedInstance);
+const data = new AlloyDataInstance(originalParsedInstance);
+graph.setDataInstance(data);
+graph.setEditSchema(schema);
+
+// Call after data changes or before exporting; this does not mutate the draft.
+const report = validateInstanceStructure(data, schema);
+```
+
+The node picker offers declared concrete types, including empty ones. The relation
+picker offers compatible atoms for each column. Creation, relabeling, and
+reconnection check the destination tuple before removing the original one;
+rejections emit `relation-edit-error`.
+
+| Export | Purpose |
+|--------|---------|
+| `EditSchema` | Host-supplied declarations; independent of observed tuples. |
+| `editSchemaFromAlloy` | Extract types, inheritance, relation columns, and available `abstract`/`one` XML metadata. |
+| `atomFitsType`, `checkRelationTuple` | Check membership or one proposed tuple against the declarations. |
+| `validateInstanceStructure` | Report undeclared types/relations, missing atoms, arity/type mismatches, abstract instances, and supplied type bounds. |
+| `StructuralValidation`, `StructuralIssue` | Status and diagnostics, including atom IDs and relation IDs for host feedback. |
+
+Statuses are `unavailable` without a schema, `invalid` for structural errors,
+`incomplete` for unmet minimum bounds, and `valid` when the known checks pass.
+Incomplete drafts remain editable; the host decides when to permit export.
+
+These checks do not evaluate model facts, predicates, field multiplicities, or
+spatial constraints. XML may omit signature metadata too; a single observed atom
+does not establish a singleton declaration. `valid` only certifies the checks
+represented by the supplied schema. Low-level data mutation APIs remain available
+to hosts; call the validator to inspect changes made outside the editor.
+
 ---
 
 ## Sequence policies

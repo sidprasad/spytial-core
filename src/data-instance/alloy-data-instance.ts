@@ -347,7 +347,15 @@ export class AlloyDataInstance extends DataInstanceEventEmitter implements IInpu
   public removeAtom(id: string): void {
     
     // We actually have to 
+    const types = this.alloyInstance.types;
     this.alloyInstance = removeInstanceAtom(this.alloyInstance, id);
+    // Keep empty declarations: deleting the last atom must not lose its type
+    // hierarchy or singleton metadata when the user adds it back.
+    for (const [typeId, type] of Object.entries(types)) {
+      if (!this.alloyInstance.types[typeId]) {
+        this.alloyInstance.types[typeId] = { ...type, atoms: [] };
+      }
+    }
     
     // Emit event
     this.emitEvent({
