@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" />
+  <title>Initial layout responsiveness</title>
+  <style>
+    body {
+      margin: 16px;
+      font: 14px system-ui;
+      color: #20252b;
+    }
+    h1 {
+      font-size: 20px;
+    }
+    header {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    #report {
+      background: #f3f5f7;
+      padding: 12px;
+      white-space: pre-wrap;
+      font-size: 12px;
+      margin: 0;
+      overflow: auto;
+    }
+    main {
+      display: grid;
+      grid-template-columns: 310px minmax(0, 1fr);
+      gap: 12px;
+      margin-top: 12px;
+      height: 602px;
+    }
+    webcola-cnd-graph {
+      display: block;
+      height: 600px;
+      border: 1px solid #ccd2d8;
+    }
+  </style>
+  <h1>Initial layout responsiveness (#634)</h1>
+  <p>
+    Render a constrained binary tree, then test host input while it solves.
+    Timings are in milliseconds.
+  </p>
+  <header>
+    <label
+      >Nodes
+      <select id="size">
+        <option>31</option>
+        <option>63</option>
+        <option selected>127</option>
+      </select></label
+    >
+    <button id="run" disabled>Render tree</button>
+    <button id="input">Test host input (0)</button>
+    <strong id="status" role="status">Loading engine</strong>
+  </header>
+  <main>
+    <pre id="report">Waiting for a run.</pre>
+    <webcola-cnd-graph
+      id="graph"
+      aria-label="Benchmark tree"
+    ></webcola-cnd-graph>
+  </main>
+  <details>
+    <summary>Final coordinates (for exact baseline comparison)</summary>
+    <pre id="positions"></pre>
+  </details>
+  <script>
+    const query = new URLSearchParams(location.search);
+    // Disable frames before the engine loads to exercise hidden-pane completion.
+    if (query.has('no-raf')) window.requestAnimationFrame = () => 0;
+    const bundle =
+      query.get('bundle') ||
+      '../../dist/browser/spytial-core-complete.global.js';
+    const graph = document.querySelector('#graph');
+    const report = document.querySelector('#report');
+    const status = document.querySelector('#status');
+    const run = document.querySelector('#run');
+    const size = document.querySelector('#size');
+    if (query.has('n')) size.value = query.get('n');
+    if (query.has('hidden')) graph.style.display = 'none';
+    let active = null,
+      inputCount = 0;
+    const script = document.createElement('script');
+    script.src = bundle;
+    script.onload = () => {
+      instrumentRenderer();
+      run.disabled = false;
+      status.textContent = 'Ready';
+    };
+    script.onerror = () => {
+      status.textContent = 'Build the browser bundle first (see README).';
+    };
+    document.head.append(script);
+
+    document.querySelector('#input').onclick = () => {
+      inputCount++;
+      if (active) active.inputsDuringSolve++;
+      document.querySelector('#input').textContent =
+        `Test host input (${inputCount})`;
+    };
+
+    // Benchmark-only pass-through wrappers. These measure CPU time inside each
+    // iterator step, excluding host yields. Routing is nested inside the final
+    // tick, so subtract it from decay time rather than counting it twice.
+    function timed(metrics, key, fn) {
+      const start = performance.now();
+      try {
+        return fn();
+      } finally {
+        metrics[key] += performance.now() - start;
+      }
+    }
+    function instrumentRenderer() {
+      const renderNodes = graph.renderNodes;
+      graph.renderNodes = function (nodes, layout) {
+        const metrics = active;
+        if (layout.startSteps) {
+          const startSteps = layout.startSteps;
+          layout.startSteps = function* (...args) {
+            metrics.preSolverMs = performance.now() - metrics.renderStartedAt;
+            const steps = startSteps.apply(this, args);
+            try {
+              while (true) {
+                const start = performance.now();
+                const step = timed(metrics, 'startCpuMs', () => steps.next());
+                metrics.maxStartStepMs = Math.max(
+                  metrics.maxStartStepMs,
+                  performance.now() - start
+                );
+                if (step.done) return step.value;
+                yield step.value;
+              }
+            } finally {
+              steps.return?.();
+            }
+          };
+        } else {
+          const start = layout.start;
+          layout.start = function (...args) {
+            metrics.preSolverMs = performance.now() - metrics.renderStartedAt;
+            return timed(metrics, 'startCpuMs', () => start.apply(this, args));
+          };
+        }
+        const tick = layout.tick;
+        layout.tick = function (...args) {
+          metrics.decayTicks++;
+          const start = performance.now();
+          try {
+            return timed(metrics, 'decayCpuMs', () => tick.apply(this, args));
+          } finally {
+            metrics.maxTickMs = Math.max(
+              metrics.maxTickMs,
+              performance.now() - start
+            );
+          }
+        };
+        return renderNodes.call(this, nodes, layout);
+      };
+      const routeEdges = graph.routeEdges;
+      graph.routeEdges = function (...args) {
+        return active
+          ? timed(active, 'routingCpuMs', () => routeEdges.apply(this, args))
+          : routeEdges.apply(this, args);
+      };
+    }
+
+    function treeFrame(n) {
+      const Core = window.spytialcore;
+      const pairs = { left: [], right: [] };
+      for (let i = 1; i < n; i++)
+        pairs[i % 2 ? 'left' : 'right'].push({
+          atoms: ['n' + Math.floor((i - 1) / 2), 'n' + i],
+          types: ['Node', 'Node'],
+        });
+      const instance = new Core.JSONDataInstance({
+        atoms: Array.from({ length: n }, (_, i) => ({
+          id: 'n' + i,
+          type: 'Node',
+          label: 'Node ' + i,
+        })),
+        relations: Object.entries(pairs).map(([name, tuples]) => ({
+          id: name,
+          name,
+          types: ['Node', 'Node'],
+          tuples,
+        })),
+      });
+      const evaluator = new Core.SGraphQueryEvaluator();
+      evaluator.initialize({ sourceData: instance });
+      const spec = Core.parseLayoutSpec(`constraints:
+  - orientation: { selector: left, directions: [below, left] }
+  - orientation: { selector: right, directions: [below, right] }
+`);
+      const result = new Core.LayoutInstance(spec, evaluator).generateLayout(
+        instance
+      );
+      if (result.error) throw new Error(result.error.message);
+      return { layout: result.layout, pairs };
+    }
+
+    run.onclick = async () => {
+      if (active) return;
+      run.disabled = true;
+      size.disabled = true;
+      status.textContent = 'Solving';
+      report.textContent =
+        'Host input should remain responsive during solving.';
+      // Let the benchmark's status paint before measuring synchronous generation.
+      await new Promise(resolve => setTimeout(resolve, 30));
+      const metrics = (active = {
+        nodes: +size.value,
+        hidden: query.has('hidden'),
+        noRaf: query.has('no-raf'),
+        generationMs: 0,
+        startCpuMs: 0,
+        decayCpuMs: 0,
+        routingCpuMs: 0,
+        renderMs: 0,
+        totalMs: 0,
+        maxStartStepMs: 0,
+        maxTickMs: 0,
+        maxHeartbeatGapMs: 0,
+        maxHeartbeatAtMs: 0,
+        heartbeats: 0,
+        inputsDuringSolve: 0,
+        decayTicks: 0,
+        completions: 0,
+        errors: [],
+      });
+      const start = performance.now();
+      let heartbeat;
+      const complete = () => metrics.completions++;
+      const error = event => metrics.errors.push(event.detail.message);
+      graph.addEventListener('layout-complete', complete);
+      graph.addEventListener('layout-error', error);
+      try {
+        const frame = treeFrame(metrics.nodes);
+        const generated = performance.now();
+        metrics.generationMs = generated - start;
+        metrics.renderStartedAt = generated;
+        // Measure the renderer independently of synchronous layout generation,
+        // matching #634's watchdog. totalMs still includes generation.
+        let last = generated;
+        heartbeat = setInterval(() => {
+          const now = performance.now();
+          if (now - last > metrics.maxHeartbeatGapMs)
+            metrics.maxHeartbeatAtMs = now - generated;
+          metrics.maxHeartbeatGapMs = Math.max(
+            metrics.maxHeartbeatGapMs,
+            now - last
+          );
+          last = now;
+          metrics.heartbeats++;
+        }, 16);
+        await graph.renderLayout(frame.layout, { transitionMode: 'replace' });
+        const finished = performance.now();
+        metrics.renderMs = finished - generated;
+        metrics.totalMs = finished - start;
+        active = null;
+        // Capture the delayed heartbeat even when rendering blocked until done.
+        await new Promise(resolve => setTimeout(resolve, 80));
+        clearInterval(heartbeat);
+        metrics.decayCpuMs -= metrics.routingCpuMs;
+        metrics.solverCpuMs = metrics.startCpuMs + metrics.decayCpuMs;
+        delete metrics.renderStartedAt;
+        const positions = graph.getNodePositions();
+        const byId = new Map(positions.map(p => [p.id, p]));
+        metrics.directionViolations = 0;
+        for (const [relation, tuples] of Object.entries(frame.pairs))
+          for (const tuple of tuples) {
+            const a = byId.get(tuple.atoms[0]),
+              b = byId.get(tuple.atoms[1]);
+            if (
+              !a ||
+              !b ||
+              b.y <= a.y ||
+              (relation === 'left' ? b.x >= a.x : b.x <= a.x)
+            )
+              metrics.directionViolations++;
+          }
+        const boxes = [...graph.shadowRoot.querySelectorAll('g.node rect')].map(
+          e => e.getBBox()
+        );
+        metrics.overlaps = 0;
+        for (let i = 0; i < boxes.length; i++)
+          for (let j = i + 1; j < boxes.length; j++) {
+            const a = boxes[i],
+              b = boxes[j];
+            if (
+              Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) >
+                1e-5 &&
+              Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) >
+                1e-5
+            )
+              metrics.overlaps++;
+          }
+        metrics.busyAfter = graph.shadowRoot
+          .querySelector('#graph-shell')
+          .getAttribute('aria-busy');
+        for (const key of Object.keys(metrics))
+          if (key.endsWith('Ms'))
+            metrics[key] = Math.round(metrics[key] * 10) / 10;
+        report.textContent = JSON.stringify(metrics, null, 2);
+        document.querySelector('#positions').textContent =
+          JSON.stringify(positions);
+        status.textContent = 'Complete';
+      } catch (error) {
+        clearInterval(heartbeat);
+        report.textContent = error.stack;
+        status.textContent = 'Failed';
+      } finally {
+        active = null;
+        graph.removeEventListener('layout-complete', complete);
+        graph.removeEventListener('layout-error', error);
+        run.disabled = false;
+        size.disabled = false;
+      }
+    };
+  </script>
+</html>
