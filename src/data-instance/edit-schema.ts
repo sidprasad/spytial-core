@@ -24,7 +24,11 @@ export interface StructuralValidation {
 export function editSchemaFromAlloy(instance: AlloyInstance): EditSchema {
   return {
     types: Object.values(instance.types).map(t => ({
-      id: t.id, parents: [...t.types], builtin: !!t.meta?.builtin,
+      id: t.id,
+      // The XML parser omits the univ root from type hierarchies. Restore it
+      // here so every declared Alloy type, including builtins, belongs to univ.
+      parents: t.id === 'univ' || t.types.includes('univ') ? [...t.types] : [...t.types, 'univ'],
+      builtin: !!t.meta?.builtin,
       abstract: !!t.meta?.abstract,
       ...(t.meta?.one ? { min: 1, max: 1 } : {}),
     })),

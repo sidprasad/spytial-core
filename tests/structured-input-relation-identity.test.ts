@@ -3,7 +3,9 @@ import { defaultGraphViewOptions } from '../src/translators/webcola/graph-view-o
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
+import { editSchemaFromAlloy } from '../src/data-instance/edit-schema';
 import type { IInputDataInstance, IRelation } from '../src/data-instance/interfaces';
+import { alloyUnivFixture } from './helpers/alloy-univ-fixture';
 
 const relation = (id: string, name = 'foo', pairs = [['a', 'b']]): IRelation => ({
   id, name, types: ['Node', 'Node'], tuples: pairs.map(atoms => ({ atoms, types: ['Node', 'Node'] })),
@@ -171,6 +173,39 @@ describe('interactive editing resolves names to stored relation IDs', () => {
 });
 
 describe('schema-guided editing', () => {
+  it('offers all Alloy atoms for univ destinations and permits creation and reconnection', async () => {
+    const raw = alloyUnivFixture();
+    const data = new AlloyDataInstance(raw);
+    const { graph, nodes, errors } = editor(data);
+    graph.setEditSchema(editSchemaFromAlloy(raw));
+    graph.showAddRelationPopover(document.createElement('button'));
+    const relationSelect = graph.shadowRoot.querySelector('select') as HTMLSelectElement;
+    relationSelect.value = 'Person<:related';
+    relationSelect.dispatchEvent(new Event('change'));
+    const positions = [...graph.shadowRoot.querySelectorAll('.si-position-list select')] as HTMLSelectElement[];
+    expect([...positions[0].options].map(o => o.value)).toEqual(['', 'Person$0', 'Person$1', 'Student$0']);
+    expect([...positions[1].options].map(o => o.value)).toEqual(['', ...data.getAtoms().map(a => a.id)]);
+    expect(positions[1].disabled).toBe(false);
+    positions[0].value = 'Person$1';
+    positions[1].value = 'Place$0';
+    positions.forEach(p => p.dispatchEvent(new Event('change')));
+    const create = graph.shadowRoot.querySelector('.si-btn-primary') as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    create.click();
+    await Promise.resolve();
+    expect(data.getRelations()[0].tuples.map(t => t.atoms)).toContainEqual(['Person$1', 'Place$0']);
+
+    const node = (id: string) => nodes.find((n: any) => n.id === id);
+    const edge = { id: 'related-edge', source: node('Person$0'), target: node('Person$1'), relName: 'related', label: 'related' };
+    graph.currentLayout.links.push(edge);
+    await graph.reconnectEdge(edge, 'target', node('Student$0'));
+    expect(data.getRelations()[0].tuples.map(t => t.atoms)).toEqual([
+      ['Person$1', 'Place$0'], ['Person$0', 'Student$0'],
+    ]);
+    expect(edge.target).toBe(node('Student$0'));
+    expect(errors).toEqual([]);
+  });
+
   const schema = {
     types: [{ id: 'Node', parents: ['Node'] }, { id: 'Place', parents: ['Place'] }],
     relations: [{ id: 'A<:foo', name: 'foo', columns: ['Node', 'Place'] }],

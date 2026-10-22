@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
 import { editSchemaFromAlloy, validateInstanceStructure, checkRelationTuple } from '../src/data-instance/edit-schema';
+import { alloyUnivFixture } from './helpers/alloy-univ-fixture';
 
 const type = (id: string, parents = [id], atoms: string[] = [], meta = {}) => ({
   _: 'type', id, types: parents, atoms: atoms.map(id2 => ({ _: 'atom', id: id2, type: id })), meta,
@@ -19,6 +20,37 @@ function fixture() {
 }
 
 describe('authoritative edit schema', () => {
+  it('accepts all declared Alloy atom types in univ columns without changing the parsed hierarchy', () => {
+    const raw = alloyUnivFixture();
+    const before = JSON.stringify(raw);
+    const data = new AlloyDataInstance(raw);
+    const schema = editSchemaFromAlloy(raw);
+    expect(raw.types.Person.types).toEqual(['Person']);
+    expect(raw.types.univ.atoms).toEqual([]);
+    expect(validateInstanceStructure(data, schema)).toEqual({ status: 'valid', issues: [] });
+    for (const atom of data.getAtoms()) {
+      expect(checkRelationTuple(data, schema, 'Person<:related', {
+        atoms: ['Person$0', atom.id], types: [],
+      }), atom.id).toEqual([]);
+    }
+    // Universal membership must not make unrelated types fit a narrower column.
+    expect(checkRelationTuple(data, schema, 'Person<:related', {
+      atoms: ['Place$0', 'Person$0'], types: [],
+    })).toMatchObject([{ code: 'type-mismatch', atomIds: ['Place$0'] }]);
+    expect(JSON.stringify(raw)).toBe(before);
+  });
+
+  it('does not treat a host-declared type named univ as universal', () => {
+    const { data } = fixture();
+    const schema = {
+      types: ['Person', 'Place', 'univ'].map(id => ({ id, parents: [] })),
+      relations: [{ id: 'Person<:at', name: 'at', columns: ['Person', 'univ'] }],
+    };
+    expect(checkRelationTuple(data, schema, 'Person<:at', {
+      atoms: ['p', 'home'], types: [],
+    })).toMatchObject([{ code: 'type-mismatch', atomIds: ['home'] }]);
+  });
+
   it('accepts inheritance and disconnected atoms without inventing required fields', () => {
     const { data, schema } = fixture();
     expect(validateInstanceStructure(data, schema).status).toBe('valid');
