@@ -3,7 +3,9 @@ import { defaultGraphViewOptions } from '../src/translators/webcola/graph-view-o
 import { StructuredInputGraph } from '../src/translators/webcola/structured-input-graph';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { AlloyDataInstance } from '../src/data-instance/alloy-data-instance';
+import { editSchemaFromAlloy } from '../src/data-instance/edit-schema';
 import type { IInputDataInstance, IRelation } from '../src/data-instance/interfaces';
+import { alloyUnivFixture } from './helpers/alloy-univ-fixture';
 
 const relation = (id: string, name = 'foo', pairs = [['a', 'b']]): IRelation => ({
   id, name, types: ['Node', 'Node'], tuples: pairs.map(atoms => ({ atoms, types: ['Node', 'Node'] })),
@@ -167,5 +169,123 @@ describe('interactive editing resolves names to stored relation IDs', () => {
     await Promise.resolve();
     expect(data.getRelations()[0].tuples).toHaveLength(1);
     expect(data.getRelations()[1].tuples).toEqual([]);
+  });
+});
+
+describe('schema-guided editing', () => {
+  it('offers all Alloy atoms for univ destinations and permits creation and reconnection', async () => {
+    const raw = alloyUnivFixture();
+    const data = new AlloyDataInstance(raw);
+    const { graph, nodes, errors } = editor(data);
+    graph.setEditSchema(editSchemaFromAlloy(raw));
+    graph.showAddRelationPopover(document.createElement('button'));
+    const relationSelect = graph.shadowRoot.querySelector('select') as HTMLSelectElement;
+    relationSelect.value = 'Person<:related';
+    relationSelect.dispatchEvent(new Event('change'));
+    const positions = [...graph.shadowRoot.querySelectorAll('.si-position-list select')] as HTMLSelectElement[];
+    expect([...positions[0].options].map(o => o.value)).toEqual(['', 'Person$0', 'Person$1', 'Student$0']);
+    expect([...positions[1].options].map(o => o.value)).toEqual(['', ...data.getAtoms().map(a => a.id)]);
+    expect(positions[1].disabled).toBe(false);
+    positions[0].value = 'Person$1';
+    positions[1].value = 'Place$0';
+    positions.forEach(p => p.dispatchEvent(new Event('change')));
+    const create = graph.shadowRoot.querySelector('.si-btn-primary') as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    create.click();
+    await Promise.resolve();
+    expect(data.getRelations()[0].tuples.map(t => t.atoms)).toContainEqual(['Person$1', 'Place$0']);
+
+    const node = (id: string) => nodes.find((n: any) => n.id === id);
+    const edge = { id: 'related-edge', source: node('Person$0'), target: node('Person$1'), relName: 'related', label: 'related' };
+    graph.currentLayout.links.push(edge);
+    await graph.reconnectEdge(edge, 'target', node('Student$0'));
+    expect(data.getRelations()[0].tuples.map(t => t.atoms)).toEqual([
+      ['Person$1', 'Place$0'], ['Person$0', 'Student$0'],
+    ]);
+    expect(edge.target).toBe(node('Student$0'));
+    expect(errors).toEqual([]);
+  });
+
+  const schema = {
+    types: [{ id: 'Node', parents: ['Node'] }, { id: 'Place', parents: ['Place'] }],
+    relations: [{ id: 'A<:foo', name: 'foo', columns: ['Node', 'Place'] }],
+  };
+  const fixture = () => new JSONDataInstance({
+    atoms: [...atoms, { id: 'home', type: 'Place', label: 'home' }],
+    relations: [{ id: 'A<:foo', name: 'foo', types: ['Node', 'Place'], tuples: [{ atoms: ['a', 'home'], types: ['Node', 'Place'] }] }],
+  });
+
+  it('rejects wrong-type reconnection without removing the original tuple or moving the edge', async () => {
+    const data = fixture();
+    const { graph, nodes, errors } = editor(data);
+    graph.setEditSchema(schema);
+    const e = { id: 'edge', source: nodes[0], target: nodes[3], relName: 'foo', label: 'foo' };
+    graph.currentLayout.links.push(e);
+    const before = JSON.stringify(data.reify());
+    await graph.reconnectEdge(e, 'target', nodes[1]);
+    expect(JSON.stringify(data.reify())).toBe(before);
+    expect(e.target).toBe(nodes[3]);
+    expect(errors[0].message).toContain('needs Place');
+  });
+
+  it('rejects undeclared relabeling before removing the original tuple', async () => {
+    const data = fixture();
+    const { graph, nodes, errors } = editor(data);
+    graph.setEditSchema(schema);
+    const e = { id: 'edge', source: nodes[0], target: nodes[3], relName: 'foo', label: 'foo' };
+    graph.currentLayout.links.push(e);
+    graph.showEdgeEditDialog = vi.fn().mockResolvedValue('new-field');
+    const before = JSON.stringify(data.reify());
+    await graph.editEdgeLabel(e);
+    expect(JSON.stringify(data.reify())).toBe(before);
+    expect(e.relName).toBe('foo');
+    expect(errors[0].message).toContain('not declared');
+  });
+
+  it('drops prior custom types from the picker when a schema is supplied', () => {
+    const { graph } = editor(fixture());
+    graph.customTypes = new Set(['OldType']);
+    graph.setEditSchema({ ...schema, types: [
+      ...schema.types,
+      { id: 'Empty', parents: ['Empty'] },
+      { id: 'Abstract', parents: ['Abstract'], abstract: true },
+    ] });
+    graph.showAddAtomPopover(document.createElement('button'));
+    const options = [...graph.shadowRoot.querySelectorAll('datalist option')] as HTMLOptionElement[];
+    expect(options.map(o => o.value)).toEqual(['Node', 'Place', 'Empty']);
+    const typeInput = graph.shadowRoot.querySelector('.si-type-input') as HTMLInputElement;
+    const labelInput = graph.shadowRoot.querySelector('.si-label-input') as HTMLInputElement;
+    const add = graph.shadowRoot.querySelector('.si-btn-primary') as HTMLButtonElement;
+    labelInput.value = 'Example';
+    typeInput.value = 'OldType';
+    typeInput.dispatchEvent(new Event('input'));
+    expect(add.disabled).toBe(true);
+    typeInput.value = 'Empty';
+    typeInput.dispatchEvent(new Event('input'));
+    expect(add.disabled).toBe(false);
+  });
+
+  it('offers only compatible atoms for each declared column, using the exact relation ID', async () => {
+    const data = fixture();
+    const { graph } = editor(data);
+    graph.setEditSchema(schema);
+    graph.showAddRelationPopover(document.createElement('button'));
+    const selects = [...graph.shadowRoot.querySelectorAll('select')] as HTMLSelectElement[];
+    expect([...selects[0].options].map(o => o.value)).toContain('A<:foo');
+    selects[0].value = 'A<:foo';
+    selects[0].dispatchEvent(new Event('change'));
+    const positions = [...graph.shadowRoot.querySelectorAll('select')].slice(1) as HTMLSelectElement[];
+    expect(positions).toHaveLength(2);
+    expect([...positions[0].options].map(o => o.value)).toEqual(['', 'a', 'b', 'c']);
+    expect([...positions[1].options].map(o => o.value)).toEqual(['', 'home']);
+    positions[0].value = 'b';
+    positions[1].value = 'home';
+    positions.forEach(p => p.dispatchEvent(new Event('change')));
+    const create = [...graph.shadowRoot.querySelectorAll('button')].find((b: any) => b.textContent === 'Create relation') as HTMLButtonElement;
+    expect(create.disabled).toBe(false);
+    create.click();
+    await Promise.resolve();
+    expect(data.getRelations().map(r => r.id)).toEqual(['A<:foo']);
+    expect(data.getRelations()[0].tuples.map(t => t.atoms)).toContainEqual(['b', 'home']);
   });
 });

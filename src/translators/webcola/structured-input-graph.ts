@@ -6,6 +6,7 @@ import { JSONDataInstance } from '../../data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../../evaluators/data/sgq-evaluator';
 import { LayoutInstance } from '../../layout/layoutinstance';
 import { parseLayoutSpec } from '../../layout/layoutspec';
+import { atomFitsType, checkRelationTuple, type EditSchema } from '../../data-instance/edit-schema';
 import { ConstraintError } from '../../layout/constraint-types';
 
 // Same vendored d3 the base class owns — see the note in webcola-cnd-graph.ts.
@@ -52,6 +53,19 @@ const d3: any = (typeof window !== 'undefined' && (window as any).d3v4) || d3Ven
  */
 export class StructuredInputGraph extends WebColaCnDGraph {
   private dataInstance!: IInputDataInstance;
+  private editSchema: EditSchema | null = null;
+
+  /** Opt-in declaration guidance. Omit for open-ended JSON editing. */
+  setEditSchema(schema: EditSchema | null): void {
+    this.editSchema = schema;
+    this.dismissOverlays();
+  }
+
+  private requireCompatibleTuple(relationId: string, tuple: ITuple): void {
+    if (!this.editSchema) return;
+    const issues = checkRelationTuple(this.dataInstance, this.editSchema, relationId, tuple);
+    if (issues.length) throw new Error(issues.map(i => i.message).join(' '));
+  }
   private evaluator: SGraphQueryEvaluator | null = null;
   private layoutInstance: LayoutInstance | null = null;
   private cndSpecString: string = '';
@@ -361,7 +375,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (this.structuralEditingDisabled) return;
     const allTypes = new Set<string>();
     this.getAvailableAtomTypes().forEach(t => allTypes.add(t));
-    this.customTypes.forEach(t => allTypes.add(t));
+    if (!this.editSchema) this.customTypes.forEach(t => allTypes.add(t));
     const datalistOpts = Array.from(allTypes).map(t => `<option value="${t}">`).join('');
 
     const popover = document.createElement('div');
@@ -396,9 +410,10 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     const updateState = () => {
       const hasType = typeIn.value.trim();
       const hasLabel = labelIn.value.trim();
-      addBtn.disabled = !hasType || !hasLabel;
-      typeHint.style.display = hasLabel && !hasType ? 'block' : 'none';
-      typeHint.textContent = 'Type is required';
+      const undeclared = !!this.editSchema && !!hasType && !allTypes.has(typeIn.value.trim());
+      addBtn.disabled = !hasType || !hasLabel || undeclared;
+      typeHint.style.display = (hasLabel && !hasType) || undeclared ? 'block' : 'none';
+      typeHint.textContent = undeclared ? 'Choose a declared, concrete type.' : 'Type is required';
       labelHint.style.display = hasType && !hasLabel ? 'block' : 'none';
       labelHint.textContent = 'Label is required';
     };
@@ -436,6 +451,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    */
   private showAddRelationPopover(anchor: HTMLElement): void {
     if (this.structuralEditingDisabled) return;
+    if (this.editSchema) { this.showGuidedRelationPopover(anchor); return; }
     const popover = document.createElement('div');
     popover.className = 'si-popover';
 
@@ -524,8 +540,80 @@ export class StructuredInputGraph extends WebColaCnDGraph {
   }
 
   /**
-   * Handle delete toolbar action — deletes selected node or shows a popover to select one
+   * Build a tuple from authoritative relation columns and compatible atoms.
    */
+  private showGuidedRelationPopover(anchor: HTMLElement): void {
+    const schema = this.editSchema!;
+    const popover = document.createElement('div');
+    popover.className = 'si-popover';
+    popover.innerHTML = `
+      <div class="si-field"><label for="si-declared-relation">Relation</label>
+        <select id="si-declared-relation" aria-label="Declared relation"></select></div>
+      <div class="si-position-list"></div>
+      <p class="si-schema-note" style="font-size:12px;line-height:1.4"></p>
+      <div role="status" class="si-edit-status" style="font-size:12px"></div>
+      <div class="si-actions"><button class="si-btn-primary" disabled>Create relation</button></div>`;
+    this.positionPopover(popover, anchor);
+    const relationSelect = popover.querySelector('select')!;
+    const positions = popover.querySelector('.si-position-list')!;
+    const note = popover.querySelector('.si-schema-note')!;
+    const status = popover.querySelector('.si-edit-status')!;
+    const create = popover.querySelector('button')!;
+    relationSelect.add(new Option('Choose a declared relation…', ''));
+    for (const relation of schema.relations) {
+      relationSelect.add(new Option(`${relation.name}: ${relation.columns.join(' → ')} [${relation.id}]`, relation.id));
+    }
+    const update = () => {
+      const selects = [...positions.querySelectorAll('select')];
+      create.disabled = !relationSelect.value || !selects.length || selects.some(s => !s.value);
+    };
+    relationSelect.addEventListener('change', () => {
+      positions.replaceChildren();
+      status.textContent = '';
+      const relation = schema.relations.find(r => r.id === relationSelect.value);
+      if (!relation) { update(); return; }
+      relation.columns.forEach((type, i) => {
+        const field = document.createElement('div');
+        field.className = 'si-field';
+        const label = document.createElement('label');
+        label.textContent = `Position ${i + 1} · ${type}`;
+        const select = document.createElement('select');
+        select.id = `si-schema-position-${i}`;
+        select.setAttribute('aria-label', label.textContent);
+        label.htmlFor = select.id;
+        const candidates = this.dataInstance.getAtoms().filter(a => atomFitsType(this.dataInstance, schema, a, type));
+        select.add(new Option(candidates.length ? `Choose ${type}…` : `No compatible ${type} atoms`, ''));
+        for (const atom of candidates) select.add(new Option(`${atom.label} (${atom.type})`, atom.id));
+        select.disabled = !candidates.length;
+        if (i === 0 && candidates.some(a => a.id === this.selectedNodeId)) select.value = this.selectedNodeId!;
+        select.addEventListener('change', update);
+        field.append(label, select);
+        positions.append(field);
+      });
+      note.textContent = 'Only type-compatible atoms are listed. Field multiplicities and model predicates are not checked here.';
+      update();
+    });
+    create.addEventListener('click', async () => {
+      if (create.disabled) return;
+      const tuple: ITuple = {
+        atoms: [...positions.querySelectorAll('select')].map(s => s.value), types: [],
+      };
+      create.disabled = true;
+      try {
+        this.requireCompatibleTuple(relationSelect.value, tuple);
+        this.dataInstance.addRelationTuple(relationSelect.value, tuple);
+        await this.enforceConstraintsAndRegenerate();
+        status.textContent = 'Relation created.';
+        this.dispatchEvent(new CustomEvent('relation-added', { detail: { relationId: relationSelect.value, tuple } }));
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : 'Could not create relation.';
+        this.rejectRelationEdit(error);
+      } finally { update(); }
+    });
+    this.setupPopoverDismiss(popover);
+    relationSelect.focus();
+  }
+
   private handleDeleteAction(): void {
     if (this.structuralEditingDisabled) return;
     if (this.selectedNodeId) {
@@ -794,6 +882,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     try {
       const relationId = event.detail.relationName !== undefined
         ? this.resolveRelationName(event.detail.relationName, true) : event.detail.relationId;
+      this.requireCompatibleTuple(relationId, tuple);
       this.dataInstance.addRelationTuple(relationId, tuple);
       await this.enforceConstraintsAndRegenerate();
     } catch (error) {
@@ -824,6 +913,11 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         ? (oldName ? this.resolveRelationName(oldName, false) : '') : event.detail.oldRelationId;
       const newRelationId = newName !== undefined
         ? (newName ? this.resolveRelationName(newName, true) : '') : event.detail.newRelationId;
+      // Preflight every destination BEFORE removing anything. A rejected
+      // reconnection/relabel must leave both the old tuple and picture intact.
+      if (newRelationId?.trim()) {
+        allTuples.forEach(t => this.requireCompatibleTuple(newRelationId, t));
+      }
       // If the new relation name is empty, delete the edge
       if (!newRelationId || newRelationId.trim() === '') {
         if (oldRelationId && oldRelationId.trim()) {
@@ -881,6 +975,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     try {
       const relationId = event.detail.relationName !== undefined
         ? this.resolveRelationName(event.detail.relationName, false) : event.detail.relationId;
+      this.requireCompatibleTuple(relationId, newTuple);
       if (relationId && relationId.trim()) {
         try {
           this.dataInstance.removeRelationTuple(relationId, oldTuple);
@@ -1008,6 +1103,7 @@ export class StructuredInputGraph extends WebColaCnDGraph {
    * Get available atom types from the current data instance
    */
   private getAvailableAtomTypes(): string[] {
+    if (this.editSchema) return this.editSchema.types.filter(t => !t.builtin && !t.abstract && t.id !== 'univ').map(t => t.id);
     const atomTypes = new Set<string>();
 
     if (this.dataInstance) {
@@ -1071,6 +1167,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
     if (!type || !label) return null;
 
     try {
+      if (this.editSchema && !this.getAvailableAtomTypes().includes(type)) {
+        throw new Error(`Choose a declared, concrete type; ${type} is unavailable.`);
+      }
       const atomId = this.generateAtomId(type);
       const atom: IAtom = {
         id: atomId,
@@ -1122,7 +1221,9 @@ export class StructuredInputGraph extends WebColaCnDGraph {
         types: atomTypes
       };
 
-      this.dataInstance.addRelationTuple(this.resolveRelationName(relationType, true), tuple);
+      const relationId = this.resolveRelationName(relationType, true);
+      this.requireCompatibleTuple(relationId, tuple);
+      this.dataInstance.addRelationTuple(relationId, tuple);
       await this.enforceConstraintsAndRegenerate();
 
       this.dispatchEvent(new CustomEvent('relation-added', {
