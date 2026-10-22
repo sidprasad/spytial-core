@@ -1,0 +1,7 @@
+constraints:
+  - cyclic:
+      selector: next
+      direction: clockwise
+  - cyclic:
+      selector: "~next"
+      direction: clockwise

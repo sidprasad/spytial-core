@@ -1,0 +1,61 @@
+{
+  "atoms": [
+    {
+      "id": "A",
+      "type": "Node",
+      "label": "A"
+    },
+    {
+      "id": "B",
+      "type": "Node",
+      "label": "B"
+    },
+    {
+      "id": "C",
+      "type": "Node",
+      "label": "C"
+    }
+  ],
+  "relations": [
+    {
+      "id": "next",
+      "name": "next",
+      "types": [
+        "Node",
+        "Node"
+      ],
+      "tuples": [
+        {
+          "atoms": [
+            "A",
+            "B"
+          ],
+          "types": [
+            "Node",
+            "Node"
+          ]
+        },
+        {
+          "atoms": [
+            "B",
+            "C"
+          ],
+          "types": [
+            "Node",
+            "Node"
+          ]
+        },
+        {
+          "atoms": [
+            "C",
+            "A"
+          ],
+          "types": [
+            "Node",
+            "Node"
+          ]
+        }
+      ]
+    }
+  ]
+}

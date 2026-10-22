@@ -1,0 +1,7 @@
+constraints:
+  - align:
+      selector: next
+      direction: horizontal
+  - cyclic:
+      selector: next
+      direction: clockwise
