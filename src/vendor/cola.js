@@ -574,11 +574,19 @@
             }
         };
         Descent.prototype.run = function (iterations) {
+            var steps = this.runSteps(iterations), step = steps.next();
+            while (!step.done)
+                step = steps.next();
+            return step.value;
+        };
+        // Spytial: expose iteration boundaries without changing the synchronous API.
+        Descent.prototype.runSteps = function* (iterations) {
             var stress = Number.MAX_VALUE, converged = false;
             while (!converged && iterations-- > 0) {
                 var s = this.rungeKutta();
                 converged = Math.abs(stress / s - 1) < this.threshold;
                 stress = s;
+                yield;
             }
             return stress;
         };
@@ -2217,6 +2225,13 @@
             return this;
         };
         Layout.prototype.start = function (initialUnconstrainedIterations, initialUserConstraintIterations, initialAllConstraintsIterations, gridSnapIterations, keepRunning, centerGraph) {
+            var steps = this.startSteps(initialUnconstrainedIterations, initialUserConstraintIterations, initialAllConstraintsIterations, gridSnapIterations, keepRunning, centerGraph);
+            while (!steps.next().done)
+                ;
+            return this;
+        };
+        // Spytial: both start() and the browser's cooperative driver share these phases.
+        Layout.prototype.startSteps = function* (initialUnconstrainedIterations, initialUserConstraintIterations, initialAllConstraintsIterations, gridSnapIterations, keepRunning, centerGraph) {
             var _this = this;
             if (initialUnconstrainedIterations === void 0) { initialUnconstrainedIterations = 0; }
             if (initialUserConstraintIterations === void 0) { initialUserConstraintIterations = 0; }
@@ -2296,10 +2311,12 @@
                 }
             }
             this._descent.threshold = this._threshold;
-            this.initialLayout(initialUnconstrainedIterations, x, y);
+            yield;
+            yield* this.initialLayoutSteps(initialUnconstrainedIterations, x, y);
             if (curConstraints.length > 0)
                 this._descent.project = new rectangle_1.Projection(this._nodes, this._groups, this._rootGroup, curConstraints).projectFunctions();
-            this._descent.run(initialUserConstraintIterations);
+            yield;
+            yield* this._descent.runSteps(initialUserConstraintIterations);
             this.separateOverlappingComponents(w, h, centerGraph);
             this.avoidOverlaps(ao);
             if (ao) {
@@ -2308,7 +2325,8 @@
                 this._nodes.forEach(function (v, i) { x[i] = v.x, y[i] = v.y; });
             }
             this._descent.G = G;
-            this._descent.run(initialAllConstraintsIterations);
+            yield;
+            yield* this._descent.runSteps(initialAllConstraintsIterations);
             if (gridSnapIterations) {
                 this._descent.snapStrength = 1000;
                 this._descent.snapGridSize = this._nodes[0].width;
@@ -2320,13 +2338,18 @@
                     return 0;
                 });
                 this._descent.G = G0;
-                this._descent.run(gridSnapIterations);
+                yield* this._descent.runSteps(gridSnapIterations);
             }
             this.updateNodePositions();
             this.separateOverlappingComponents(w, h, centerGraph);
             return keepRunning ? this.resume() : this;
         };
         Layout.prototype.initialLayout = function (iterations, x, y) {
+            var steps = this.initialLayoutSteps(iterations, x, y);
+            while (!steps.next().done)
+                ;
+        };
+        Layout.prototype.initialLayoutSteps = function* (iterations, x, y) {
             if (this._groups.length > 0 && iterations > 0) {
                 var n = this._nodes.length;
                 var edges = this._links.map(function (e) { return ({ source: e.source.index, target: e.target.index }); });
@@ -2340,7 +2363,7 @@
                     if (typeof g.groups !== 'undefined')
                         g.groups.forEach(function (gg) { return edges.push({ source: g.index, target: gg.index }); });
                 });
-                new Layout()
+                yield* new Layout()
                     .size(this.size())
                     .nodes(vs)
                     .links(edges)
@@ -2348,14 +2371,14 @@
                     .linkDistance(this.linkDistance())
                     .symmetricDiffLinkLengths(5)
                     .convergenceThreshold(1e-4)
-                    .start(iterations, 0, 0, 0, false);
+                    .startSteps(iterations, 0, 0, 0, false);
                 this._nodes.forEach(function (v) {
                     x[v.index] = vs[v.index].x;
                     y[v.index] = vs[v.index].y;
                 });
             }
             else {
-                this._descent.run(iterations);
+                yield* this._descent.runSteps(iterations);
             }
         };
         Layout.prototype.separateOverlappingComponents = function (width, height, centerGraph) {
