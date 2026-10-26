@@ -5,8 +5,9 @@
 `spytial-core` is the browser-side engine that turns relational data + a YAML spec of spatial constraints into a rendered diagram. It is **not** a tool for end users — it is the piece you embed when you want Spytial in a new host (a language, an IDE, a notebook, a debugger).
 
 If you want to render Python objects, use **[sPyTial](https://github.com/sidprasad/spytial)**.
-If you want to render Rust values, use **[Caraspace](https://github.com/sidprasad/caraspace)**.
+If you want to render Rust values, use **[Spytial for Rust](https://github.com/sidprasad/spytial-rust)**.
 If you want to render Pyret values, use **[Spyret](https://github.com/sidprasad/spyret)**.
+For Alloy and Forge instances, use **[Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/)**; see [Integrations](site/integrations.md) for the VS Code extensions.
 For the Core 6.4 Pyret API removal, see [the migration guide](docs/MIGRATING_TO_SPYRET.md).
 If you want to add a new host to that list — read on.
 

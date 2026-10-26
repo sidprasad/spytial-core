@@ -259,10 +259,10 @@ Spytial returns the minimal conflicting subset of rules above, with each constra
 
 This site has three audiences. Pick yours:
 
-- **You want to use Spytial.** → **[Integrations](integrations.md)** — Python, Rust, Pyret. Install, badges, docs links.
+- **You want to use Spytial.** → **[Integrations](integrations.md)** — Python, Rust, Pyret, Lean, Alloy, Forge, and GDL. Browser demos, VS Code extensions, installation instructions, and docs.
 - **You want to add Spytial to a new language.** → **[New Language Integration](new-language-integration.md)** — the integrator's design checklist, plus the [pipeline](pipeline.md), [data format](json-data.md), and a [quick start](quickstart.md).
 - **You want to hack on `spytial-core` itself.** → **[Contributing](contributing.md)** — build, test, code layout, how to add a [constraint](constraints.md) or [directive](directives.md).
 
-To learn more, **[read our upcoming PLDI paper](https://www.siddharthaprasad.com/papers/ptkns-spytial.pdf)**. Spytial is related to our **Cope and Drag** system for formal-methods visualization — [read the related blog post](https://blog.brownplt.org/2025/06/09/copeanddrag.html).
+To learn more, **[read our upcoming PLDI paper](https://www.siddharthaprasad.com/papers/ptkns-spytial.pdf)**.
 
 Every [constraint](constraints.md) and [directive](directives.md) in the spec language is documented by example, with a live diagram you can read off the page.

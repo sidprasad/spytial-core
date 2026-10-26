@@ -1,12 +1,18 @@
 # Integrations
 
-Spytial ships as a host-agnostic browser engine ([`spytial-core`](https://github.com/sidprasad/spytial-core)) plus a per-language integration. Pick your language; each integration has its own install, its own docs, and a host-friendly API for emitting atoms, relations, and layout specs.
+Choose an integration for the data you want to see: values from your program, instances from an Alloy or Forge model, or a graph you describe directly. Each integration brings Spytial into that workflow, with [`spytial-core`](https://github.com/sidprasad/spytial-core) providing the shared spatial layout and rendering engine.
 
-| Host       | Install                                                                                                | Badge                                                                                                                                              | Docs & Repo                                                                                                                                  |
-|------------|--------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------|
-| **Python** (sPyTial)        | `pip install spytial-diagramming`                                                                       | [![PyPI](https://img.shields.io/pypi/v/spytial-diagramming.svg?label=pypi%3A%20spytial-diagramming)](https://pypi.org/project/spytial-diagramming/) | [sidprasad.github.io/spytial](https://sidprasad.github.io/spytial/) · [github.com/sidprasad/spytial](https://github.com/sidprasad/spytial) |
-| **Rust** (Caraspace)        | `cargo add caraspace`                                                                                   | [![crates.io](https://img.shields.io/crates/v/caraspace.svg?label=crates.io%3A%20caraspace)](https://crates.io/crates/caraspace)                  | [github.com/sidprasad/caraspace](https://github.com/sidprasad/caraspace) · [docs.rs/caraspace](https://docs.rs/caraspace)                    |
-| **Pyret** (Spyret)          | Use the [Spyret IDE](https://github.com/sidprasad/spyret-ide)                                          | —                                                                                                                                                  | [github.com/sidprasad/spyret-lang](https://github.com/sidprasad/spyret-lang) · [spyret-ide](https://github.com/sidprasad/spyret-ide)         |
+The **Try it in your browser!** links open hosted editors or playgrounds. A dash means no hosted browser demo is listed; use the installation links to get started locally.
+
+| Language or input | Try it in your browser! | Install | Badge | Docs & Repo |
+|-------------------|------------------------|---------|-------|-------------|
+| **Python** (sPyTial) | [Python playground](https://www.siddharthaprasad.com/spytial/playground/) | `pip install spytial-diagramming` | [![PyPI](https://img.shields.io/pypi/v/spytial-diagramming.svg?label=pypi%3A%20spytial-diagramming)](https://pypi.org/project/spytial-diagramming/) | [Docs](https://sidprasad.github.io/spytial/) · [Repo](https://github.com/sidprasad/spytial) |
+| **Rust** (Spytial) | — | `cargo add spytial` | [![crates.io](https://img.shields.io/crates/v/spytial.svg?label=crates.io%3A%20spytial)](https://crates.io/crates/spytial) | [Guide](https://sidprasad.github.io/spytial-rust/) · [API](https://docs.rs/spytial) · [Repo](https://github.com/sidprasad/spytial-rust) |
+| **Pyret** (Spyret) | [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/#draft=f8ee4ca7-3668-459a-a61f-2ff44814894a) | Open the [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/) | — | [Library & docs](https://github.com/sidprasad/spyret) · [IDE repo](https://github.com/sidprasad/spyret-ide) |
+| **Graph description language** (Spytial-GDL) | [GDL playground](https://www.siddharthaprasad.com/spytial-gdl/playground/) | `npm install spytial-gdl` or [embed in a page](https://www.siddharthaprasad.com/spytial-gdl/docs/#/embedding) | [![npm](https://img.shields.io/npm/v/spytial-gdl.svg)](https://www.npmjs.com/package/spytial-gdl) | [Docs](https://www.siddharthaprasad.com/spytial-gdl/docs/) · [Repo](https://github.com/sidprasad/spytial-gdl) |
+| **Lean 4** (spytial-lean) | — | [Add the Lake dependency](https://github.com/sidprasad/spytial-lean#installation) | — | [Docs & repo](https://github.com/sidprasad/spytial-lean) |
+| **Alloy** (Cope and Drag) | — | [Alloy VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.cope-and-drag-alloy) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
+| **Forge** (Cope and Drag) | — | [Forge VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.forge-fm) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
 
 ## Don't see your favorite language?
 
@@ -22,8 +28,8 @@ The catalog includes BSTs, heaps, BDDs, DAG construction, Huffman trees, hash ta
 
 The host integration is responsible for three things:
 
-- **Walking your values** into atoms and relations. Python uses runtime reflection; Rust uses a `derive` macro; Pyret uses its value-skeleton machinery.
-- **Collecting layout specs** from host-native annotations. Python decorators, Rust attribute macros, Pyret output methods — they all compile to the same YAML.
+- **Describing your data** as atoms and relations. Python uses runtime reflection; Rust uses serialization; Pyret adapts runtime values; Lean reflects expressions; GDL parses nodes and edges.
+- **Collecting layout specs** from host-native annotations. Python decorators, Rust attribute macros, Pyret hooks, Lean layout operations, and GDL inline rules all feed the same layout engine.
 - **Surfacing the diagram** in your host's usual workflow. A function call, a notebook cell, an editor panel.
 
 `spytial-core` handles the rest in the browser: selector evaluation, constraint solving, rendering, conflict reports, sequence continuity, accessibility.
