@@ -6,13 +6,13 @@ The **Try it in your browser!** links open hosted editors or playgrounds. A dash
 
 | Language or input | Try it in your browser! | Install | Badge | Docs & Repo |
 |-------------------|------------------------|---------|-------|-------------|
-| **Python** (sPyTial) | [Python playground](https://www.siddharthaprasad.com/spytial/playground/) | `pip install spytial-diagramming` | [![PyPI](https://img.shields.io/pypi/v/spytial-diagramming.svg?label=pypi%3A%20spytial-diagramming)](https://pypi.org/project/spytial-diagramming/) | [Docs](https://sidprasad.github.io/spytial/) · [Repo](https://github.com/sidprasad/spytial) |
-| **Rust** (Spytial) | — | `cargo add spytial` | [![crates.io](https://img.shields.io/crates/v/spytial.svg?label=crates.io%3A%20spytial)](https://crates.io/crates/spytial) | [Guide](https://sidprasad.github.io/spytial-rust/) · [API](https://docs.rs/spytial) · [Repo](https://github.com/sidprasad/spytial-rust) |
-| **Pyret** (Spyret) | [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/#draft=f8ee4ca7-3668-459a-a61f-2ff44814894a) | Open the [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/) | — | [Library & docs](https://github.com/sidprasad/spyret) · [IDE repo](https://github.com/sidprasad/spyret-ide) |
-| **Graph description language** (Spytial-GDL) | [GDL playground](https://www.siddharthaprasad.com/spytial-gdl/playground/) | `npm install spytial-gdl` or [embed in a page](https://www.siddharthaprasad.com/spytial-gdl/docs/#/embedding) | [![npm](https://img.shields.io/npm/v/spytial-gdl.svg)](https://www.npmjs.com/package/spytial-gdl) | [Docs](https://www.siddharthaprasad.com/spytial-gdl/docs/) · [Repo](https://github.com/sidprasad/spytial-gdl) |
-| **Lean 4** (spytial-lean) | — | [Add the Lake dependency](https://github.com/sidprasad/spytial-lean#installation) | — | [Docs & repo](https://github.com/sidprasad/spytial-lean) |
-| **Alloy** (Cope and Drag) | — | [Alloy VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.cope-and-drag-alloy) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
-| **Forge** (Cope and Drag) | — | [Forge VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.forge-fm) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
+| **Python** | [Python playground](https://www.siddharthaprasad.com/spytial/playground/) | `pip install spytial-diagramming` | [![PyPI](https://img.shields.io/pypi/v/spytial-diagramming.svg?label=pypi%3A%20spytial-diagramming)](https://pypi.org/project/spytial-diagramming/) | [Docs](https://sidprasad.github.io/spytial/) · [Repo](https://github.com/sidprasad/spytial) |
+| **Rust** | — | `cargo add spytial` | [![crates.io](https://img.shields.io/crates/v/spytial.svg?label=crates.io%3A%20spytial)](https://crates.io/crates/spytial) | [Guide](https://sidprasad.github.io/spytial-rust/) · [API](https://docs.rs/spytial) · [Repo](https://github.com/sidprasad/spytial-rust) |
+| **Pyret** | [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/#draft=f8ee4ca7-3668-459a-a61f-2ff44814894a) | Open the [Spyret IDE](https://www.siddharthaprasad.com/spyret-ide/) | — | [Library & docs](https://github.com/sidprasad/spyret) · [IDE repo](https://github.com/sidprasad/spyret-ide) |
+| **GDL** (graph description language) | [GDL playground](https://www.siddharthaprasad.com/spytial-gdl/playground/) | `npm install spytial-gdl` or [embed in a page](https://www.siddharthaprasad.com/spytial-gdl/docs/#/embedding) | [![npm](https://img.shields.io/npm/v/spytial-gdl.svg)](https://www.npmjs.com/package/spytial-gdl) | [Docs](https://www.siddharthaprasad.com/spytial-gdl/docs/) · [Repo](https://github.com/sidprasad/spytial-gdl) |
+| **Lean 4** | — | [Add the Lake dependency](https://github.com/sidprasad/spytial-lean#installation) | — | [Docs & repo](https://github.com/sidprasad/spytial-lean) |
+| **Alloy** | — | [Alloy VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.cope-and-drag-alloy) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
+| **Forge** | — | [Forge VS Code extension](https://marketplace.visualstudio.com/items?itemName=SiddharthaPrasad.forge-fm) | — | [Cope and Drag](https://www.siddharthaprasad.com/copeanddrag/) · [CnD repo](https://github.com/sidprasad/copeanddrag) |
 
 ## Don't see your favorite language?
 
@@ -23,13 +23,3 @@ A new integration is mostly an exercise in answering four design questions. See 
 Here are examples of visualizations from *Introduction to Algorithms* (CLRS), the famous algorithms book: **[Git Repo](https://github.com/sidprasad/spytial-clrs)** · **[Live Website](https://spytial-clrs.netlify.app/)**.
 
 The catalog includes BSTs, heaps, BDDs, DAG construction, Huffman trees, hash tables, and more.
-
-## What each integration gives you
-
-The host integration is responsible for three things:
-
-- **Describing your data** as atoms and relations. Python uses runtime reflection; Rust uses serialization; Pyret adapts runtime values; Lean reflects expressions; GDL parses nodes and edges.
-- **Collecting layout specs** from host-native annotations. Python decorators, Rust attribute macros, Pyret hooks, Lean layout operations, and GDL inline rules all feed the same layout engine.
-- **Surfacing the diagram** in your host's usual workflow. A function call, a notebook cell, an editor panel.
-
-`spytial-core` handles the rest in the browser: selector evaluation, constraint solving, rendering, conflict reports, sequence continuity, accessibility.
