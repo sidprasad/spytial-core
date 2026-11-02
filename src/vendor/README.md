@@ -4,6 +4,20 @@
 The npm `webcola` dependency is a separate copy; changing it does not update
 this file. Preserve local patches when replacing the vendored runtime.
 
+## Cooperative initial solving (#634)
+
+`Descent.runSteps`, `Layout.startSteps`, and `Layout.initialLayoutSteps` expose
+iteration boundaries as generators. The original synchronous methods drain
+those same generators, retaining their phase order, convergence checks, return
+values, and group-initialization behavior. The browser drains the initial solve
+and decay ticks in short tasks; headless evaluation still uses synchronous
+`start`. Do not replace the cooperative path with rAF: hidden embedded panes
+must complete even when animation frames are suspended.
+
+Coverage lives in `tests/cooperative-layout.test.ts` and
+`tests/webcola-cooperative-render.test.ts`; existing spacing, constraint and
+node/group dragging tests exercise the resulting solver state.
+
 ## Exact alignment and group overlap (#585)
 
 The overlap sweep can defer X separation to Y based on penetration distance,

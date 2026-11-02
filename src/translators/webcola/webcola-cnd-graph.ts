@@ -21,6 +21,7 @@ export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from '.
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
 import { observeRenderedEdgeLabels } from './edge-label-observer';
+import { layoutDecaySteps, runLayoutSteps, type SteppableLayout } from './cooperative-layout';
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
@@ -87,6 +88,16 @@ const d3: any = (typeof window !== 'undefined' && window.d3v4) || d3Vendor;
 
 
 const DEFAULT_SCALE_FACTOR = 5;
+
+/** A partially solved graph must not start an interaction-driven solver. */
+function setSolveBusy(root: ShadowRoot | undefined, busy: boolean): void {
+  const shell = root?.querySelector('#graph-shell');
+  if (busy) shell?.setAttribute('aria-busy', 'true');
+  else shell?.removeAttribute('aria-busy');
+  for (const selector of ['#graph-toolbar', '#svg-container']) {
+    root?.querySelector(selector)?.toggleAttribute('inert', busy);
+  }
+}
 
 /**
  * WebCola CnD Graph Custom Element
@@ -802,14 +813,14 @@ export class WebColaCnDGraph extends HTMLElementBase {
   // handler then disables attraction while retaining constraint projection.
   private static readonly GRID_SNAP_ITERATIONS = 0;
   /**
-   * Cap on the synchronous alpha-decay ticks driven after layout.start()
-   * returns (see renderLayout). start() has already run every constraint
+   * Cap on alpha-decay ticks driven after the initial start phases
+   * (see renderLayout). Those phases have already run every constraint
    * phase; the decay ticks only polish stress below the convergence
    * threshold, which normally takes a handful of iterations. A stress
    * plateau that never crosses the threshold hits this cap and is forced
    * to a clean 'end' instead of iterating forever.
    */
-  private static readonly MAX_SYNC_DECAY_TICKS = 500;
+  private static readonly MAX_INITIAL_DECAY_TICKS = 500;
   private static readonly LOADING_INDICATOR_DELAY_MS = 180;
 
   /**
@@ -1735,12 +1746,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
     
     // Trigger re-routing if layout is already rendered
     if (this.currentLayout && this.colaLayout) {
-      if (this.useGridPipeline) {
-        // Apply grid routing
-        this.gridify(10, 25, 10);
-      } else {
-        // Apply standard-pipeline routing
-        this.routeEdges();
+      // A host may change modes while the initial solver is yielding. The end
+      // handler will use that mode; the partially initialized bounds cannot yet
+      // be routed safely.
+      if (!this.initialLayoutAbort) {
+        if (this.useGridPipeline) {
+          this.gridify(10, 25, 10);
+        } else {
+          this.routeEdges();
+        }
       }
       
       // Dispatch event for external listeners
@@ -2495,6 +2509,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       }
     }
 
+    const solve = new AbortController();
+    this.initialLayoutAbort = solve;
     try {
 
       // Ensure D3 and container are properly initialized
@@ -2507,6 +2523,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       if (!this.container) {
         throw new Error('Failed to initialize D3 container. SVG elements may not be available.');
       }
+      setSolveBusy(this.root, true);
 
       if (shouldShowLoadingOverlay) {
         this.showLoading();
@@ -2529,7 +2546,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
       // Superseded while awaiting translation? The newer render owns the
       // element now — abandon before creating a solver it can't tear down.
-      if (generation !== this.renderGeneration) return;
+      if (solve.signal.aborted || generation !== this.renderGeneration) return;
 
       // Nothing to draw. Handled here, before a solver exists, because WebCola
       // cannot be handed an empty node set at all — see renderEmptyLayout.
@@ -2650,9 +2667,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
       this.renderLinks(webcolaLayout.links, layout);
       this.renderNodes(webcolaLayout.nodes, layout);
 
-      // Hide the new elements while the solver runs — the old-graph
-      // snapshot keeps the display stable.
-      if (shouldMorph && this.container) {
+      // Yielding must not paint unsolved seed positions. A morph keeps its old
+      // snapshot visible; a replacement shows the loading status until solved.
+      if (this.container) {
         this.container.attr('opacity', 0);
       }
 
@@ -2774,26 +2791,27 @@ export class WebColaCnDGraph extends HTMLElementBase {
           }
         });
 
-      // Start the layout with error handling for D3/WebCola compatibility issues.
-      // keepRunning=false: start() runs every constraint phase synchronously and
-      // would then hand the remaining alpha-decay ticks — and the 'end' dispatch
-      // that triggers the ONLY paint of the initial solve — to a d3.timer.
-      // d3.timer is requestAnimationFrame-driven, and rAF never fires in a
-      // hidden/occluded tab or embedded pane, so the solve converges without
-      // ever painting. We drive those remaining ticks synchronously below
-      // instead; interaction-driven solves (drag → resume()) still use cola's
-      // own timer, which is fine because the user is present for those.
+      // Keep the exact vendored start phases/iteration limits, yielding between
+      // iterations so the embedding page can paint and handle input. Task-based
+      // scheduling also progresses when a hidden pane has no animation frames.
+      // keepRunning=false leaves interaction-driven d3 timers dormant until the
+      // initial solve is complete; drag/resume retain their existing lifecycle.
+      // npm's WebCola types do not include our vendored startSteps extension.
+      const steppable = layout as unknown as SteppableLayout;
       try {
-        layout.start(
+        const started = await runLayoutSteps(steppable.startSteps(
           unconstrainedIters,
           userConstraintIters,
           allConstraintIters,
           WebColaCnDGraph.GRID_SNAP_ITERATIONS,
           false
-        );
+        ), solve.signal);
+        if (!started) return;
       } catch (layoutError) {
+        if (solve.signal.aborted || generation !== this.renderGeneration) return;
         try {
-          layout.start(0, 0, 0, 0, false);
+          const started = await runLayoutSteps(steppable.startSteps(0, 0, 0, 0, false), solve.signal);
+          if (!started) return;
         } catch (fallbackError) {
           // Rethrown so the outer catch reports it the same way as any other
           // render failure — one message, on screen and on the event.
@@ -2812,26 +2830,22 @@ export class WebColaCnDGraph extends HTMLElementBase {
         });
       }
 
-      // Drive the remaining ticks to convergence synchronously. Each tick()
-      // dispatches through the handlers above (progress only, while
-      // isInitialSolve suppresses DOM updates) and the converging tick
-      // dispatches 'end', which performs the initial paint — so the paint can
-      // never be starved of animation frames. tick() is typed protected,
-      // hence the cast.
-      let syncTicks = 0;
-      while (!(layout as any).tick() && ++syncTicks < WebColaCnDGraph.MAX_SYNC_DECAY_TICKS);
-      if (syncTicks >= WebColaCnDGraph.MAX_SYNC_DECAY_TICKS) {
-        // Stress plateaued above the convergence threshold — force alpha to 0
-        // so this last tick takes the convergence branch and dispatches 'end'.
-        layout.stop();
-        (layout as any).tick();
-      }
+      // The converging (or capped) tick still owns the end event and drops soft
+      // attraction before dragging. Yield here too: plateaued trees can use all
+      // 500 decay ticks, which previously froze the page for several seconds.
+      await runLayoutSteps(layoutDecaySteps(steppable, WebColaCnDGraph.MAX_INITIAL_DECAY_TICKS), solve.signal);
 
     } catch (error) {
+      if (solve.signal.aborted || generation !== this.renderGeneration) return;
       this.showError(
         `Layout rendering failed: ${(error as Error).message}`,
         { phase: 'render', cause: error }
       );
+    } finally {
+      if (this.initialLayoutAbort === solve) {
+        this.initialLayoutAbort = undefined;
+        setSolveBusy(this.root, false);
+      }
     }
   }
 
@@ -2921,6 +2935,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * closures) instead of mutating state the newer render now owns.
    */
   private renderGeneration = 0;
+  private initialLayoutAbort?: AbortController;
 
   /**
    * Create a snapshot layer containing **only** the elements that are being
@@ -3373,6 +3388,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * the first render (every step is guarded).
    */
   private teardownInflightRender(): void {
+    this.initialLayoutAbort?.abort();
+    this.initialLayoutAbort = undefined;
+    setSolveBusy(this.root, false);
     this.stopEdgeLabelObservation?.();
     this.stopEdgeLabelObservation = undefined;
     if (this.colaLayout) {

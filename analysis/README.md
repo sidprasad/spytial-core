@@ -61,6 +61,9 @@ python3 analysis/runner/bootstrap_cis.py
 
 Outputs land in `analysis/results/` and are gitignored.
 
+For the separate browser initial-solve responsiveness benchmark (31/63/127-node
+trees, including hidden panes), see [browser/README.md](browser/README.md).
+
 ## Trace fixtures
 
 The four `traces/out/*.trace.json` files are pre-generated inputs the
