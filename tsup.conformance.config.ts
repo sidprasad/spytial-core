@@ -31,7 +31,7 @@ export default defineConfig([
     platform: 'node',
   },
   {
-    entry: { 'spytial-check': 'src/cli/spytial-check.ts' },
+    entry: { 'spytial-check': 'src/cli/spytial-check.ts', 'spytial-compare': 'src/cli/spytial-compare.ts' },
     format: ['cjs'],
     dts: false,
     splitting: false,

@@ -43,6 +43,8 @@ export type { SchemaDescriptorOptions } from './data-instance/schema-descriptor'
 
 // Direct exports of key classes for convenience
 export { LayoutInstance, ConstraintValidatorStrategy, AlignmentEdgeStrategy } from './layout/layoutinstance';
+export { comparePrograms } from './layout/compare-programs';
+export type { ComparisonProgram, ProgramComparison } from './layout/compare-programs';
 export { QualitativeConstraintValidator } from './layout/qualitative-constraint-validator';
 export { parseLayoutSpec } from './layout/layoutspec';
 // `parseLayoutSpec`'s return type. Replaces the `ParsedCnDSpec` alias that
