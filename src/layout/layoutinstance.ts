@@ -1977,7 +1977,9 @@ export class LayoutInstance {
             nodes: layout.nodes,
             edges: layout.edges,
             constraints,
-            groups: layout.groups,
+            // Never-groups draw no rectangle, here as on the normal path. Left
+            // in, the diagram would box exactly the members the rule forbids.
+            groups: layout.groups.filter(g => !g.negated),
             conflictingConstraints: [...minimalConflictingSet.values()].flat(),
             warnings: this.warnings,
             hiddenAtoms: layout.hiddenAtoms,

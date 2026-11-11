@@ -535,6 +535,32 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
             expect(validatorSat).toBe(false);
         });
 
+        // ── Negated group over aligned members ──────────────────────────
+        // Members in one row leave no room strictly inside their box on the
+        // vertical axis; a node aligned with them must still count as inside.
+
+        it('negated group in one row, free node can move between — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a <x b, a =y b, c <x d, {!G: a, b}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
+        it('negated group in one row, only other node kept out of the row — UNSAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec('a <x b, a =y b, a <x c, c <x b, a <y c, {!G: a, b}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(false);
+        });
+
+        it('negated 6-member group in one column with a node between — SAT (Z3 cross-check)', async () => {
+            const layout = parseConstraintSpec(
+                'a1 =x a2, a2 =x a3, a3 =x a4, a4 =x a5, a5 =x a6, a1 <y x, x <y a2, x =x a1, {!G: a1, a2, a3, a4, a5, a6}');
+            const { validatorSat, oracleSat } = await checkAgainstOracle(layout);
+            assertAgreement(layout, validatorSat, oracleSat);
+            expect(validatorSat).toBe(true);
+        });
+
         // ── Negated group cross-checks (bbox encoding, M > 5) ──────────
 
         it('negated 6-member group with free non-member — SAT (Z3 cross-check)', async () => {
