@@ -1444,6 +1444,27 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 // Check both directions — the ordering path that blocks alignment
                 if (graph.canReach(a, b)) traceConflictPath(graph, a, b);
                 if (graph.canReach(b, a)) traceConflictPath(graph, b, a);
+
+                // No order between A and B: the alignment was excluded
+                // because it puts two nodes in the same position. Some node P
+                // aligned with A and some node Q aligned with B (on this
+                // axis) are already aligned on the other axis. The conflict
+                // is the three alignment chains A..P, B..Q and P..Q (#646).
+                if (!graph.isStrictlyOrdered(a, b) && !graph.isStrictlyOrdered(b, a)) {
+                    const otherGraph = ac.axis === 'x' ? mfsV : mfsH;
+                    const classA = [...new Set([a, ...graph.getAlignmentClassOf(a)])].sort();
+                    const classB = [...new Set([b, ...graph.getAlignmentClassOf(b)])].sort();
+                    search:
+                    for (const p of classA) {
+                        for (const q of classB) {
+                            if (p === q || !otherGraph.areAligned(p, q)) continue;
+                            traceConflictPath(graph, a, p);
+                            traceConflictPath(graph, b, q);
+                            traceConflictPath(otherGraph, p, q);
+                            break search;
+                        }
+                    }
+                }
             } else {
                 const edge = this.constraintToEdge(c);
                 if (!edge) continue;
