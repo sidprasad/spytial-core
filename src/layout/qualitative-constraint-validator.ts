@@ -1670,25 +1670,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     /**
-     * Add spatial constraints, retaining group-boundary member implications
-     * so later implicit alignment orders respect the chosen group side.
+     * Add a group-side constraint (a node on one side of a group, or a group
+     * on one side of another group) as a conjunctive fact.
+     *
+     * This uses the same edges as the search (`addQualitativeEdge`): the edge
+     * to the virtual group node AND an edge to each group member. The member
+     * edges are necessary. Without them, a later constraint can put a member
+     * on the wrong side of the node and no cycle shows it (#643): a group and
+     * a never-group on the same members passed, and the implicit alignment
+     * order could put a member above a node that is above the group.
      */
     private addSpatialConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
-        if (isBoundingBoxConstraint(constraint)) {
-            const bc = constraint as BoundingBoxConstraint;
-            const groupId = `_group_${bc.group.name}`;
-            this.hGraph.ensureNode(groupId);
-            this.vGraph.ensureNode(groupId);
-            let ok: boolean;
-            switch (bc.side) {
-                case 'left':   ok = this.hGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
-                case 'right':  ok = this.hGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
-                case 'top':    ok = this.vGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
-                case 'bottom': ok = this.vGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
-                default: ok = true;
-            }
-            if (!ok) return this.buildConjunctiveError(constraint);
-        } else if (isGroupBoundaryConstraint(constraint)) {
+        if (isBoundingBoxConstraint(constraint) || isGroupBoundaryConstraint(constraint)) {
             if (!this.addQualitativeEdge(constraint)) return this.buildConjunctiveError(constraint);
         }
         return null;
