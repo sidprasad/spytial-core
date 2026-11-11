@@ -11,7 +11,7 @@ import { QualitativeConstraintValidator } from '../src/layout/qualitative-constr
  *  - the prune passes check all constraints of an alternative together;
  *  - a disjunction with no alternative that fits is a proof of a conflict,
  *    so the search does not start.
- * The limit itself is removed.
+ * The limit stays: some true conflicts still need it to stop the search.
  */
 const stats = (r: ReturnType<typeof solve>) =>
     (r.validator as QualitativeConstraintValidator).getStats();
