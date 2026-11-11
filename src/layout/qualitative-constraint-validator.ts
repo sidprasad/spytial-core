@@ -2127,14 +2127,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         let initialCheckpoint = this.checkpoint();
         let initialAddedLength = this.addedConstraints.length;
 
-        // No restart limit. A limit made the search stop with no proof, and
-        // the validator then reported a conflict that it did not prove
-        // (#650). The search always ends: each conflict adds a learned
-        // clause that excludes the decisions that led to it, and the number
-        // of decision combinations is finite.
+        // The restart limit stops a search that does not end in practical
+        // time. At the limit the validator reports a conflict that it did
+        // NOT prove (#650). Each system that is known to reach the limit is
+        // a true conflict, but that is not a guarantee.
+        //
+        // Example of a system that still reaches it: a never-group on two
+        // members of a group, where the third member is aligned with one of
+        // them. No alternative is impossible by itself; the search must
+        // refute each one for each combination of other decisions.
         let totalRestarts = 0;
+        const MAX_RESTARTS = 50;
 
-        while (true) {
+        while (totalRestarts <= MAX_RESTARTS) {
             this.restoreCheckpoint(initialCheckpoint);
             this.addedConstraints.length = initialAddedLength;
             this.assignmentTrail = [];
@@ -2179,6 +2184,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             totalRestarts++;
             this.updateRestartThreshold();
         }
+
+        // Limit reached: no proof. See the comment at MAX_RESTARTS.
+        return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
     }
 
     /**
