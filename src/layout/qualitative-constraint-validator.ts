@@ -1710,6 +1710,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         for (const node of this.nodes) nodeById.set(node.id, node);
 
         for (const group of this.groups) {
+            // A never-group draws no box, so its members are not "in a group"
+            // here. If they were, no rule kept them out of the box around a
+            // group they are not a member of (#644).
+            if (group.negated) continue;
             if (group.nodeIds.length > 1 && group.sourceConstraint) {
                 for (const nodeId of group.nodeIds) {
                     nodeToGroups.get(nodeId)?.add(group);
