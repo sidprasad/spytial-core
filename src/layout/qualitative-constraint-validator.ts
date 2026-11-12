@@ -1183,6 +1183,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
     private emptyDisjunctionError: PositionalConstraintError | null = null;
+    /** Set by pruneDisjunctions when a disjunction has no alternative that fits. */
+    private pruneFoundDeadDisjunction = false;
     private lubyIndex: number = 0;
 
     // ─── Node lookup ───
@@ -1551,7 +1553,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // Prune infeasible alternatives
             const validAlternatives: LayoutConstraint[][] = [];
             for (const alt of disj.alternatives) {
-                if (this.isAlternativeFeasible(alt)) {
+                if (this.isAlternativeAddable(alt)) {
                     validAlternatives.push(alt);
                 }
             }
@@ -1970,6 +1972,35 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     /**
+     * Can ALL constraints of this alternative be added together to the
+     * current graphs?
+     *
+     * `isAlternativeFeasible` checks each constraint by itself. That misses
+     * an alternative whose constraints contradict each other together with
+     * the graphs. Example: A and J are aligned, and the alternative is
+     * "A left of N, N left of J". Each part is possible; the two together
+     * are not. Such an alternative stayed in its disjunction, and the search
+     * then had to refute it with conflicts, one decision combination at a
+     * time (#650).
+     *
+     * This check adds the constraints, then removes them. It is for the
+     * prune passes only: it changes the graph stamps, so the search loop
+     * must not use it.
+     */
+    private isAlternativeAddable(alternative: LayoutConstraint[]): boolean {
+        if (!this.isAlternativeFeasible(alternative)) return false;
+        if (alternative.length < 2) return true;
+        for (const constraint of alternative) {
+            if (!this.addQualitativeEdge(constraint)) {
+                this.undoAlternativeEdges(alternative, constraint);
+                return false;
+            }
+        }
+        for (const constraint of alternative) this.removeQualitativeEdge(constraint);
+        return true;
+    }
+
+    /**
      * Check if a BoundingBox constraint is feasible given current orderings.
      * "node on side X of group" implies the node is on that side of ALL members.
      *   - left:   node left of all members → infeasible if any member→node in hGraph
@@ -2081,6 +2112,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Geometric pruning pass
         this.pruneDisjunctions();
+        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
@@ -2092,6 +2124,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         let initialCheckpoint = this.checkpoint();
         let initialAddedLength = this.addedConstraints.length;
 
+        // The restart limit stops a search that does not end in practical
+        // time. At the limit the validator reports a conflict that it did
+        // NOT prove (#650). Each system that is known to reach the limit is
+        // a true conflict, but that is not a guarantee.
+        //
+        // Example of a system that still reaches it: a never-group on two
+        // members of a group, where the third member is aligned with one of
+        // them. No alternative is impossible by itself; the search must
+        // refute each one for each combination of other decisions.
         let totalRestarts = 0;
         const MAX_RESTARTS = 50;
 
@@ -2128,6 +2169,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     // Same list shape: keep the clauses and the activity.
                     this.rebuildBranchIndex(false);
                 }
+                if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
                 if (after.length === 0) return { satisfiable: true };
                 assigned = new Int32Array(after.length).fill(-1);
             }
@@ -2140,6 +2182,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.updateRestartThreshold();
         }
 
+        // Limit reached: no proof. See the comment at MAX_RESTARTS.
         return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
     }
 
@@ -3080,6 +3123,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private pruneDisjunctions(): void {
         const pruned: DisjunctiveConstraint[] = [];
+        this.pruneFoundDeadDisjunction = false;
 
         for (const disj of this.allDisjunctions) {
             const impliedAlt = this.findImpliedAlternative(disj);
@@ -3090,11 +3134,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
             const validAlternatives: LayoutConstraint[][] = [];
             for (const alt of disj.alternatives) {
-                if (this.isAlternativeFeasible(alt)) validAlternatives.push(alt);
+                if (this.isAlternativeAddable(alt)) validAlternatives.push(alt);
             }
 
             if (validAlternatives.length === 0) {
+                // No alternative fits the constraints that hold without any
+                // decision. That is a proof: no search is necessary.
                 pruned.push(disj);
+                this.pruneFoundDeadDisjunction = true;
             } else if (validAlternatives.length === 1) {
                 for (const constraint of validAlternatives[0]) {
                     const error = this.addConjunctiveConstraint(constraint);
