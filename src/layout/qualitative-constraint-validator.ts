@@ -2087,8 +2087,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         this.rebuildBranchIndex(true);
 
-        const initialCheckpoint = this.checkpoint();
-        const initialAddedLength = this.addedConstraints.length;
+        // The state each restart goes back to. A prune after a restart can
+        // move it forward (see below), so these are not constants.
+        let initialCheckpoint = this.checkpoint();
+        let initialAddedLength = this.addedConstraints.length;
 
         let totalRestarts = 0;
         const MAX_RESTARTS = 50;
@@ -2101,13 +2103,33 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             assigned.fill(-1);
 
             if (totalRestarts > 0) {
+                const before = this.allDisjunctions;
                 this.pruneDisjunctions();
-                if (this.allDisjunctions.length === 0) return { satisfiable: true };
-                assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
-                // Pruning reshapes allDisjunctions; refresh the simplicity terms
-                // for the new shape but keep accumulated activity (the old
-                // index-keyed Map behaved the same way).
-                this.rebuildBranchIndex(false);
+                const after = this.allDisjunctions;
+                // Did the prune commit constraints, remove a disjunction, or
+                // remove an alternative?
+                const pruneChangedState = this.addedConstraints.length !== initialAddedLength
+                    || after.length !== before.length
+                    || after.some((d, i) => d.alternatives.length !== before[i].alternatives.length);
+                if (pruneChangedState) {
+                    // The prune committed edges and removed the disjunctions
+                    // they came from. The next restart must go back to THIS
+                    // state. If it went back to the first checkpoint, the
+                    // edges would be gone while the disjunctions stay
+                    // removed, and the search could accept a layout that
+                    // ignores them (#647).
+                    initialCheckpoint = this.checkpoint();
+                    initialAddedLength = this.addedConstraints.length;
+                    // A learned clause names (disjunction index, alternative
+                    // index), and so does the activity. Those indexes now
+                    // point at other disjunctions and alternatives (#648).
+                    this.reindexLearnedState(before, after);
+                } else {
+                    // Same list shape: keep the clauses and the activity.
+                    this.rebuildBranchIndex(false);
+                }
+                if (after.length === 0) return { satisfiable: true };
+                assigned = new Int32Array(after.length).fill(-1);
             }
 
             const result = this.cdclSearchLoop(assigned);
@@ -2119,6 +2141,45 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
+    }
+
+    /**
+     * Move learned clauses and activity from the indexes of `before` to the
+     * indexes of `after`, the list that a prune made from it.
+     *
+     * A prune keeps each alternative array by reference, so the array
+     * identifies the alternative in the two lists. A clause that names an
+     * alternative that is not in `after` is removed. That is safe: a learned
+     * clause only repeats what the constraints already imply.
+     */
+    private reindexLearnedState(before: DisjunctiveConstraint[], after: DisjunctiveConstraint[]): void {
+        const newIndex = new Map<LayoutConstraint[], { d: number; a: number }>();
+        after.forEach((disj, d) => disj.alternatives.forEach((alt, a) => newIndex.set(alt, { d, a })));
+
+        const oldActivity = new Map<LayoutConstraint[], number>();
+        before.forEach((disj, d) => disj.alternatives.forEach((alt, a) => {
+            const activity = this.activityAt(d, a);
+            if (activity !== 0) oldActivity.set(alt, activity);
+        }));
+
+        const kept: LearnedClause[] = [];
+        for (const clause of this.learnedClauses) {
+            const moved: LearnedClause = [];
+            for (const lit of clause) {
+                const alt = before[lit.disjunctionIndex]?.alternatives[lit.alternativeIndex];
+                const at = alt && newIndex.get(alt);
+                if (!at) break;
+                moved.push({ disjunctionIndex: at.d, alternativeIndex: at.a, sign: lit.sign });
+            }
+            if (moved.length === clause.length) kept.push(moved);
+        }
+        this.learnedClauses = kept;
+
+        this.rebuildBranchIndex(true);
+        for (const [alt, activity] of oldActivity) {
+            const at = newIndex.get(alt);
+            if (at) this.activityFlat[at.d * this.branchStride + at.a] = activity;
+        }
     }
 
     private cdclSearchLoop(assigned: Int32Array): { satisfiable: boolean; provedUnsat?: boolean } {
