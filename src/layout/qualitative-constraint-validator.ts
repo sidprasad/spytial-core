@@ -1192,6 +1192,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private fallbackAlternatives: WeakSet<LayoutConstraint[]> = new WeakSet();
     /** Ids of the zero-size helper nodes a large never-group adds to the graphs. */
     private proxyNodeIds: Set<string> = new Set();
+    /** Set by pruneDisjunctions when a disjunction has no alternative that fits. */
+    private pruneFoundDeadDisjunction = false;
     private lubyIndex: number = 0;
 
     // ─── Node lookup ───
@@ -1322,6 +1324,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
+            // The error was made in the middle of presolve, so its feasible
+            // subset had only the constraints committed up to that point. It
+            // had nothing for a disjunction that presolve did not commit.
+            // Use the same global subset as the other error paths: one
+            // alternative for each disjunction that can still hold (#651).
+            this.emptyDisjunctionError.maximalFeasibleSubset =
+                this.computeMaximalFeasibleSubset().feasibleConstraints;
             return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
@@ -1453,6 +1462,27 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 // Check both directions — the ordering path that blocks alignment
                 if (graph.canReach(a, b)) traceConflictPath(graph, a, b);
                 if (graph.canReach(b, a)) traceConflictPath(graph, b, a);
+
+                // No order between A and B: the alignment was excluded
+                // because it puts two nodes in the same position. Some node P
+                // aligned with A and some node Q aligned with B (on this
+                // axis) are already aligned on the other axis. The conflict
+                // is the three alignment chains A..P, B..Q and P..Q (#646).
+                if (!graph.isStrictlyOrdered(a, b) && !graph.isStrictlyOrdered(b, a)) {
+                    const otherGraph = ac.axis === 'x' ? mfsV : mfsH;
+                    const classA = [...new Set([a, ...graph.getAlignmentClassOf(a)])].sort();
+                    const classB = [...new Set([b, ...graph.getAlignmentClassOf(b)])].sort();
+                    search:
+                    for (const p of classA) {
+                        for (const q of classB) {
+                            if (p === q || !otherGraph.areAligned(p, q)) continue;
+                            traceConflictPath(graph, a, p);
+                            traceConflictPath(graph, b, q);
+                            traceConflictPath(otherGraph, p, q);
+                            break search;
+                        }
+                    }
+                }
             } else {
                 const edge = this.constraintToEdge(c);
                 if (!edge) continue;
@@ -1566,7 +1596,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             // Prune infeasible alternatives
             const validAlternatives: LayoutConstraint[][] = [];
             for (const alt of disj.alternatives) {
-                if (this.isAlternativeFeasible(alt)) {
+                if (this.isAlternativeAddable(alt)) {
                     validAlternatives.push(alt);
                 }
             }
@@ -1865,25 +1895,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     /**
-     * Add spatial constraints, retaining group-boundary member implications
-     * so later implicit alignment orders respect the chosen group side.
+     * Add a group-side constraint (a node on one side of a group, or a group
+     * on one side of another group) as a conjunctive fact.
+     *
+     * This uses the same edges as the search (`addQualitativeEdge`): the edge
+     * to the virtual group node AND an edge to each group member. The member
+     * edges are necessary. Without them, a later constraint can put a member
+     * on the wrong side of the node and no cycle shows it (#643): a group and
+     * a never-group on the same members passed, and the implicit alignment
+     * order could put a member above a node that is above the group.
      */
     private addSpatialConstraint(constraint: LayoutConstraint): PositionalConstraintError | null {
-        if (isBoundingBoxConstraint(constraint)) {
-            const bc = constraint as BoundingBoxConstraint;
-            const groupId = `_group_${bc.group.name}`;
-            this.hGraph.ensureNode(groupId);
-            this.vGraph.ensureNode(groupId);
-            let ok: boolean;
-            switch (bc.side) {
-                case 'left':   ok = this.hGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
-                case 'right':  ok = this.hGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
-                case 'top':    ok = this.vGraph.addEdge(bc.node.id, groupId, bc.minDistance, constraint); break;
-                case 'bottom': ok = this.vGraph.addEdge(groupId, bc.node.id, bc.minDistance, constraint); break;
-                default: ok = true;
-            }
-            if (!ok) return this.buildConjunctiveError(constraint);
-        } else if (isGroupBoundaryConstraint(constraint)) {
+        if (isBoundingBoxConstraint(constraint) || isGroupBoundaryConstraint(constraint)) {
             if (!this.addQualitativeEdge(constraint)) return this.buildConjunctiveError(constraint);
         }
         return null;
@@ -1905,6 +1928,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         for (const node of this.nodes) nodeById.set(node.id, node);
 
         for (const group of this.groups) {
+            // A never-group draws no box, so its members are not "in a group"
+            // here. If they were, no rule kept them out of the box around a
+            // group they are not a member of (#644).
+            if (group.negated) continue;
             if (group.nodeIds.length > 1 && group.sourceConstraint) {
                 for (const nodeId of group.nodeIds) {
                     nodeToGroups.get(nodeId)?.add(group);
@@ -2226,6 +2253,35 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     }
 
     /**
+     * Can ALL constraints of this alternative be added together to the
+     * current graphs?
+     *
+     * `isAlternativeFeasible` checks each constraint by itself. That misses
+     * an alternative whose constraints contradict each other together with
+     * the graphs. Example: A and J are aligned, and the alternative is
+     * "A left of N, N left of J". Each part is possible; the two together
+     * are not. Such an alternative stayed in its disjunction, and the search
+     * then had to refute it with conflicts, one decision combination at a
+     * time (#650).
+     *
+     * This check adds the constraints, then removes them. It is for the
+     * prune passes only: it changes the graph stamps, so the search loop
+     * must not use it.
+     */
+    private isAlternativeAddable(alternative: LayoutConstraint[]): boolean {
+        if (!this.isAlternativeFeasible(alternative)) return false;
+        if (alternative.length < 2) return true;
+        for (const constraint of alternative) {
+            if (!this.addQualitativeEdge(constraint)) {
+                this.undoAlternativeEdges(alternative, constraint);
+                return false;
+            }
+        }
+        for (const constraint of alternative) this.removeQualitativeEdge(constraint);
+        return true;
+    }
+
+    /**
      * Check if a BoundingBox constraint is feasible given current orderings.
      * "node on side X of group" implies the node is on that side of ALL members.
      *   - left:   node left of all members → infeasible if any member→node in hGraph
@@ -2335,17 +2391,46 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private solveCDCL(): { satisfiable: boolean; error?: PositionalConstraintError } {
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
+        const addedBeforePrune = this.addedConstraints.length;
+
         // Geometric pruning pass
         this.pruneDisjunctions();
+        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+
+        // One-step look-ahead: remove each alternative that leaves some
+        // other disjunction with no alternative.
+        if (this.allDisjunctions.length > 0) this.probeAlternatives();
+        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+
+        // The prune and the probe commit a disjunction when it has one
+        // alternative left, and remove it from the list. Each such commit
+        // holds in every solution. The modal queries (getMust, getCannot)
+        // read the snapshot graphs and the disjunctions that stay, so the
+        // snapshot must include these commits or the queries lose them.
+        if (this.addedConstraints.length !== addedBeforePrune && this.mustHGraph && this.mustVGraph) {
+            this.mustHGraph = this.hGraph.clone();
+            this.mustVGraph = this.vGraph.clone();
+        }
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
 
         this.rebuildBranchIndex(true);
 
-        const initialCheckpoint = this.checkpoint();
-        const initialAddedLength = this.addedConstraints.length;
+        // The state each restart goes back to. A prune after a restart can
+        // move it forward (see below), so these are not constants.
+        let initialCheckpoint = this.checkpoint();
+        let initialAddedLength = this.addedConstraints.length;
 
+        // The restart limit stops a search that does not end in practical
+        // time. At the limit the validator reports a conflict that it did
+        // NOT prove (#650). Each system that is known to reach the limit is
+        // a true conflict, but that is not a guarantee.
+        //
+        // Example of a system that still reaches it: a never-group on two
+        // members of a group, where the third member is aligned with one of
+        // them. No alternative is impossible by itself; the search must
+        // refute each one for each combination of other decisions.
         let totalRestarts = 0;
         const MAX_RESTARTS = 50;
 
@@ -2357,13 +2442,34 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             assigned.fill(-1);
 
             if (totalRestarts > 0) {
+                const before = this.allDisjunctions;
                 this.pruneDisjunctions();
-                if (this.allDisjunctions.length === 0) return { satisfiable: true };
-                assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
-                // Pruning reshapes allDisjunctions; refresh the simplicity terms
-                // for the new shape but keep accumulated activity (the old
-                // index-keyed Map behaved the same way).
-                this.rebuildBranchIndex(false);
+                const after = this.allDisjunctions;
+                // Did the prune commit constraints, remove a disjunction, or
+                // remove an alternative?
+                const pruneChangedState = this.addedConstraints.length !== initialAddedLength
+                    || after.length !== before.length
+                    || after.some((d, i) => d.alternatives.length !== before[i].alternatives.length);
+                if (pruneChangedState) {
+                    // The prune committed edges and removed the disjunctions
+                    // they came from. The next restart must go back to THIS
+                    // state. If it went back to the first checkpoint, the
+                    // edges would be gone while the disjunctions stay
+                    // removed, and the search could accept a layout that
+                    // ignores them (#647).
+                    initialCheckpoint = this.checkpoint();
+                    initialAddedLength = this.addedConstraints.length;
+                    // A learned clause names (disjunction index, alternative
+                    // index), and so does the activity. Those indexes now
+                    // point at other disjunctions and alternatives (#648).
+                    this.reindexLearnedState(before, after);
+                } else {
+                    // Same list shape: keep the clauses and the activity.
+                    this.rebuildBranchIndex(false);
+                }
+                if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+                if (after.length === 0) return { satisfiable: true };
+                assigned = new Int32Array(after.length).fill(-1);
             }
 
             const result = this.cdclSearchLoop(assigned);
@@ -2374,7 +2480,47 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             this.updateRestartThreshold();
         }
 
+        // Limit reached: no proof. See the comment at MAX_RESTARTS.
         return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
+    }
+
+    /**
+     * Move learned clauses and activity from the indexes of `before` to the
+     * indexes of `after`, the list that a prune made from it.
+     *
+     * A prune keeps each alternative array by reference, so the array
+     * identifies the alternative in the two lists. A clause that names an
+     * alternative that is not in `after` is removed. That is safe: a learned
+     * clause only repeats what the constraints already imply.
+     */
+    private reindexLearnedState(before: DisjunctiveConstraint[], after: DisjunctiveConstraint[]): void {
+        const newIndex = new Map<LayoutConstraint[], { d: number; a: number }>();
+        after.forEach((disj, d) => disj.alternatives.forEach((alt, a) => newIndex.set(alt, { d, a })));
+
+        const oldActivity = new Map<LayoutConstraint[], number>();
+        before.forEach((disj, d) => disj.alternatives.forEach((alt, a) => {
+            const activity = this.activityAt(d, a);
+            if (activity !== 0) oldActivity.set(alt, activity);
+        }));
+
+        const kept: LearnedClause[] = [];
+        for (const clause of this.learnedClauses) {
+            const moved: LearnedClause = [];
+            for (const lit of clause) {
+                const alt = before[lit.disjunctionIndex]?.alternatives[lit.alternativeIndex];
+                const at = alt && newIndex.get(alt);
+                if (!at) break;
+                moved.push({ disjunctionIndex: at.d, alternativeIndex: at.a, sign: lit.sign });
+            }
+            if (moved.length === clause.length) kept.push(moved);
+        }
+        this.learnedClauses = kept;
+
+        this.rebuildBranchIndex(true);
+        for (const [alt, activity] of oldActivity) {
+            const at = newIndex.get(alt);
+            if (at) this.activityFlat[at.d * this.branchStride + at.a] = activity;
+        }
     }
 
     private cdclSearchLoop(assigned: Int32Array): { satisfiable: boolean; provedUnsat?: boolean } {
@@ -2426,7 +2572,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
-            if (dIdx === -1) return { satisfiable: true };
+            if (dIdx === -1) {
+                // A disjunction has no assignment (checked above), and
+                // learned clauses remove all its alternatives. That is a
+                // conflict, not a solution. unitPropagate usually finds it,
+                // but not when graphPropagate made the assignments that
+                // complete those clauses (#657).
+                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+                const { learnedClause, backtrackLevel } = this.analyzeConflict(assigned);
+                if (!learnedClause) return { satisfiable: false, provedUnsat: true };
+                this.learnedClauses.push(learnedClause);
+                this.bumpActivity(learnedClause);
+                this.decayActivity();
+                this.conflictCount++;
+                conflictsSinceRestart++;
+                this.backtrackTo(backtrackLevel, assigned);
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
+                continue;
+            }
 
             this.decisionLevel++;
             const ok = this.tryAssign(dIdx, aIdx, assigned, true);
@@ -3037,9 +3200,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // Each infeasible alternative was blocked by edges in the graph. We find
         // those edges via provenance, then map them to trail entries.
         const involvedAssignments = new Set<number>(); // trail indices
+        // An alternative can also be infeasible for a cause that is not a
+        // cycle: an alignment that an earlier assignment added (a node in
+        // the row of a group member cannot go above the group; two nodes
+        // aligned on one axis cannot also be aligned on the other). The
+        // cycle paths below do not find those assignments. A clause built
+        // without them is too strong: it removes solutions. So when one
+        // alternative has no cycle to explain it, use the blunt analysis.
+        let eachAlternativeExplained = true;
 
         for (let a = 0; a < conflictDisj.alternatives.length; a++) {
             const alt = conflictDisj.alternatives[a];
+            let explained = false;
             for (const constraint of alt) {
                 const edge = this.constraintToEdge(constraint);
                 if (!edge) continue;
@@ -3050,6 +3222,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 if (graph.canReach(edge.to, edge.from)) {
                     const cyclePath = graph.findPath(edge.to, edge.from);
                     if (cyclePath) {
+                        explained = true;
                         for (const [pa, pb] of cyclePath) {
                             const provenance = graph.getEdgeProvenance(pa, pb);
                             if (provenance) {
@@ -3064,10 +3237,11 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 // Alignment conflicts are now caught by the same cycle path check above,
                 // since alignment is represented as zero-weight edges in the graph.
             }
+            if (!explained) eachAlternativeExplained = false;
         }
 
         // If we found specific involved assignments, build a targeted clause
-        if (involvedAssignments.size > 0) {
+        if (eachAlternativeExplained && involvedAssignments.size > 0) {
             const clause: LearnedClause = [];
             let maxLevel = 0, secondMaxLevel = 0;
 
@@ -3277,6 +3451,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
     private pruneDisjunctions(): void {
         const pruned: DisjunctiveConstraint[] = [];
+        this.pruneFoundDeadDisjunction = false;
 
         for (const disj of this.allDisjunctions) {
             const impliedAlt = this.findImpliedAlternative(disj);
@@ -3287,11 +3462,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
             const validAlternatives: LayoutConstraint[][] = [];
             for (const alt of disj.alternatives) {
-                if (this.isAlternativeFeasible(alt)) validAlternatives.push(alt);
+                if (this.isAlternativeAddable(alt)) validAlternatives.push(alt);
             }
 
             if (validAlternatives.length === 0) {
+                // No alternative fits the constraints that hold without any
+                // decision. That is a proof: no search is necessary.
                 pruned.push(disj);
+                this.pruneFoundDeadDisjunction = true;
             } else if (validAlternatives.length === 1) {
                 for (const constraint of validAlternatives[0]) {
                     const error = this.addConjunctiveConstraint(constraint);
@@ -3303,6 +3481,110 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         this.allDisjunctions = pruned;
+    }
+
+    /** Largest number of alternatives (all disjunctions together) that probeAlternatives examines. */
+    private static readonly PROBE_MAX_ALTERNATIVES = 4000;
+
+    /**
+     * Largest number of "does this alternative fit" checks in one call of
+     * probeAlternatives. One probe looks at each other disjunction, so the
+     * work grows with the square of the number of alternatives. The
+     * validator runs synchronously in the browser, so the work has a limit.
+     * A count, not a time, so that the result is the same on each run.
+     */
+    private static readonly PROBE_MAX_CHECKS = 100_000;
+    private probeChecksLeft = 0;
+
+    /**
+     * One-step look-ahead on the disjunctions that the prune left.
+     *
+     * For each alternative: add it to the graphs, then look at each other
+     * disjunction. If one of them has no alternative that fits, this
+     * alternative can never be part of a solution, and it is removed.
+     *
+     * The prune alone does not find these, because each alternative is
+     * possible by itself. Example (#661): a never-group on A and B, which are
+     * two members of group G. "N is between A and B" is possible for a node
+     * N outside G. "N is on one side of G" has four alternatives, and each
+     * is possible. But "N is between A and B" leaves none of those four. The
+     * search found this only after many conflicts, one combination of other
+     * decisions at a time.
+     *
+     * Removal is safe: an alternative is removed only when it contradicts
+     * every alternative of some other disjunction, and a solution must
+     * select one alternative from each disjunction.
+     *
+     * Runs once, before the search. Repeats while it removes something,
+     * because a removal can make another alternative impossible. Stops when
+     * the work limit is reached; the alternatives not examined stay, which
+     * is safe, and the search handles them.
+     */
+    private probeAlternatives(): void {
+        const MAX_ROUNDS = 8;
+        this.probeChecksLeft = QualitativeConstraintValidator.PROBE_MAX_CHECKS;
+        for (let round = 0; round < MAX_ROUNDS && this.probeChecksLeft > 0; round++) {
+            const disjunctions = this.allDisjunctions;
+            let total = 0;
+            for (const disj of disjunctions) total += disj.alternatives.length;
+            if (disjunctions.length < 2 || total > QualitativeConstraintValidator.PROBE_MAX_ALTERNATIVES) return;
+
+            let removedAny = false;
+            for (let i = 0; i < disjunctions.length && this.probeChecksLeft > 0; i++) {
+                const disj = disjunctions[i];
+                const kept: LayoutConstraint[][] = [];
+                for (const alternative of disj.alternatives) {
+                    // At the work limit, keep the alternatives not examined.
+                    if (this.probeChecksLeft <= 0
+                        || this.alternativeLeavesEachDisjunctionAnOption(alternative, i, disjunctions)) {
+                        kept.push(alternative);
+                    }
+                }
+                if (kept.length === disj.alternatives.length) continue;
+                removedAny = true;
+                if (kept.length === 0) {
+                    this.pruneFoundDeadDisjunction = true;
+                    return;
+                }
+                // Later probes in this round see the smaller disjunction.
+                disjunctions[i] = new DisjunctiveConstraint(disj.sourceConstraint, kept);
+            }
+            if (!removedAny) return;
+
+            // Commit the disjunctions that now have one alternative, and
+            // remove the alternatives that those commits make impossible.
+            this.pruneDisjunctions();
+            if (this.pruneFoundDeadDisjunction || this.allDisjunctions.length === 0) return;
+        }
+    }
+
+    /**
+     * With `alternative` added to the graphs, does each OTHER disjunction
+     * still have an alternative that fits? Leaves the graphs as they were.
+     */
+    private alternativeLeavesEachDisjunctionAnOption(
+        alternative: LayoutConstraint[],
+        ownIndex: number,
+        disjunctions: DisjunctiveConstraint[],
+    ): boolean {
+        for (const constraint of alternative) {
+            if (!this.addQualitativeEdge(constraint)) {
+                this.undoAlternativeEdges(alternative, constraint);
+                return false;
+            }
+        }
+        let ok = true;
+        for (let j = 0; j < disjunctions.length && ok; j++) {
+            if (j === ownIndex) continue;
+            // At the work limit the answer is "yes": the alternative stays.
+            if (this.probeChecksLeft <= 0) break;
+            ok = disjunctions[j].alternatives.some(other => {
+                this.probeChecksLeft--;
+                return this.isAlternativeFeasible(other);
+            });
+        }
+        for (const constraint of alternative) this.removeQualitativeEdge(constraint);
+        return ok;
     }
 
     // ─── Utility ─────────────────────────────────────────────────────────────
@@ -3555,13 +3837,31 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const disjSource = this.originalDisjunctions.length > 0
             ? this.originalDisjunctions
             : this.allDisjunctions;
+        // Sort by the highest search activity of each disjunction, lowest
+        // first, so that the disjunctions the search had conflicts on are
+        // tried last.
+        //
+        // Activity is stored by position in `allDisjunctions`, the list after
+        // presolve and prune. `disjSource` is the list before them, so a
+        // position here is not a position there (#652). The alternative
+        // arrays are the same objects in the two lists, so they identify
+        // each alternative.
+        const activityOfAlternative = new Map<LayoutConstraint[], number>();
+        this.allDisjunctions.forEach((disj, d) => disj.alternatives.forEach((alt, a) => {
+            activityOfAlternative.set(alt, this.activityAt(d, a));
+        }));
+        const order = new Map<DisjunctiveConstraint, { index: number; activity: number }>();
+        disjSource.forEach((disj, index) => {
+            let activity = 0;
+            for (const alt of disj.alternatives) {
+                activity = Math.max(activity, activityOfAlternative.get(alt) ?? 0);
+            }
+            order.set(disj, { index, activity });
+        });
         const sortedDisjunctions = [...disjSource].sort((a, b) => {
-            const aIdx = disjSource.indexOf(a);
-            const bIdx = disjSource.indexOf(b);
-            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activityAt(aIdx, ai)));
-            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activityAt(bIdx, bi)));
+            const oa = order.get(a)!, ob = order.get(b)!;
             // Stable tiebreaker: use original index when activity scores are equal
-            return aMax - bMax || aIdx - bIdx;
+            return oa.activity - ob.activity || oa.index - ob.index;
         });
 
         for (const disj of sortedDisjunctions) {

@@ -114,6 +114,16 @@ describe('never-group over aligned members', () => {
         expect(validate('a <x c, c <x b, a =y b, c =y a, {!G: a, b}').error).toBeNull();
     });
 
+    it('holds when the other nodes are members of other groups', () => {
+        // A goes between E and F in their column, and J goes to the side.
+        // The search reported a conflict here: after a conflict that an
+        // alignment caused, it learned a clause that removed this solution.
+        expect(validate('F =x E, {G1: A, J}, {G2: C, I}, {!N1: E, F}').error).toBeNull();
+        expect(validate(
+            'F =x E, C =x G, I =x D, {G0: D, G}, {G1: A, J}, {G2: C, I}, {!N1: E, F}',
+        ).error).toBeNull();
+    });
+
     it('holds when a free node can move between two members of one row', () => {
         expect(validate('a <x b, a =y b, c <x d, {!G: a, b}').error).toBeNull();
     });
