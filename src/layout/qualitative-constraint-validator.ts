@@ -1315,6 +1315,13 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
+            // The error was made in the middle of presolve, so its feasible
+            // subset had only the constraints committed up to that point. It
+            // had nothing for a disjunction that presolve did not commit.
+            // Use the same global subset as the other error paths: one
+            // alternative for each disjunction that can still hold (#651).
+            this.emptyDisjunctionError.maximalFeasibleSubset =
+                this.computeMaximalFeasibleSubset().feasibleConstraints;
             return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
         }
 
