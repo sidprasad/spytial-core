@@ -2138,9 +2138,26 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private solveCDCL(): { satisfiable: boolean; error?: PositionalConstraintError } {
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
+        const addedBeforePrune = this.addedConstraints.length;
+
         // Geometric pruning pass
         this.pruneDisjunctions();
         if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+
+        // One-step look-ahead: remove each alternative that leaves some
+        // other disjunction with no alternative.
+        if (this.allDisjunctions.length > 0) this.probeAlternatives();
+        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+
+        // The prune and the probe commit a disjunction when it has one
+        // alternative left, and remove it from the list. Each such commit
+        // holds in every solution. The modal queries (getMust, getCannot)
+        // read the snapshot graphs and the disjunctions that stay, so the
+        // snapshot must include these commits or the queries lose them.
+        if (this.addedConstraints.length !== addedBeforePrune && this.mustHGraph && this.mustVGraph) {
+            this.mustHGraph = this.hGraph.clone();
+            this.mustVGraph = this.vGraph.clone();
+        }
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
@@ -3181,6 +3198,110 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         }
 
         this.allDisjunctions = pruned;
+    }
+
+    /** Largest number of alternatives (all disjunctions together) that probeAlternatives examines. */
+    private static readonly PROBE_MAX_ALTERNATIVES = 4000;
+
+    /**
+     * Largest number of "does this alternative fit" checks in one call of
+     * probeAlternatives. One probe looks at each other disjunction, so the
+     * work grows with the square of the number of alternatives. The
+     * validator runs synchronously in the browser, so the work has a limit.
+     * A count, not a time, so that the result is the same on each run.
+     */
+    private static readonly PROBE_MAX_CHECKS = 100_000;
+    private probeChecksLeft = 0;
+
+    /**
+     * One-step look-ahead on the disjunctions that the prune left.
+     *
+     * For each alternative: add it to the graphs, then look at each other
+     * disjunction. If one of them has no alternative that fits, this
+     * alternative can never be part of a solution, and it is removed.
+     *
+     * The prune alone does not find these, because each alternative is
+     * possible by itself. Example (#661): a never-group on A and B, which are
+     * two members of group G. "N is between A and B" is possible for a node
+     * N outside G. "N is on one side of G" has four alternatives, and each
+     * is possible. But "N is between A and B" leaves none of those four. The
+     * search found this only after many conflicts, one combination of other
+     * decisions at a time.
+     *
+     * Removal is safe: an alternative is removed only when it contradicts
+     * every alternative of some other disjunction, and a solution must
+     * select one alternative from each disjunction.
+     *
+     * Runs once, before the search. Repeats while it removes something,
+     * because a removal can make another alternative impossible. Stops when
+     * the work limit is reached; the alternatives not examined stay, which
+     * is safe, and the search handles them.
+     */
+    private probeAlternatives(): void {
+        const MAX_ROUNDS = 8;
+        this.probeChecksLeft = QualitativeConstraintValidator.PROBE_MAX_CHECKS;
+        for (let round = 0; round < MAX_ROUNDS && this.probeChecksLeft > 0; round++) {
+            const disjunctions = this.allDisjunctions;
+            let total = 0;
+            for (const disj of disjunctions) total += disj.alternatives.length;
+            if (disjunctions.length < 2 || total > QualitativeConstraintValidator.PROBE_MAX_ALTERNATIVES) return;
+
+            let removedAny = false;
+            for (let i = 0; i < disjunctions.length && this.probeChecksLeft > 0; i++) {
+                const disj = disjunctions[i];
+                const kept: LayoutConstraint[][] = [];
+                for (const alternative of disj.alternatives) {
+                    // At the work limit, keep the alternatives not examined.
+                    if (this.probeChecksLeft <= 0
+                        || this.alternativeLeavesEachDisjunctionAnOption(alternative, i, disjunctions)) {
+                        kept.push(alternative);
+                    }
+                }
+                if (kept.length === disj.alternatives.length) continue;
+                removedAny = true;
+                if (kept.length === 0) {
+                    this.pruneFoundDeadDisjunction = true;
+                    return;
+                }
+                // Later probes in this round see the smaller disjunction.
+                disjunctions[i] = new DisjunctiveConstraint(disj.sourceConstraint, kept);
+            }
+            if (!removedAny) return;
+
+            // Commit the disjunctions that now have one alternative, and
+            // remove the alternatives that those commits make impossible.
+            this.pruneDisjunctions();
+            if (this.pruneFoundDeadDisjunction || this.allDisjunctions.length === 0) return;
+        }
+    }
+
+    /**
+     * With `alternative` added to the graphs, does each OTHER disjunction
+     * still have an alternative that fits? Leaves the graphs as they were.
+     */
+    private alternativeLeavesEachDisjunctionAnOption(
+        alternative: LayoutConstraint[],
+        ownIndex: number,
+        disjunctions: DisjunctiveConstraint[],
+    ): boolean {
+        for (const constraint of alternative) {
+            if (!this.addQualitativeEdge(constraint)) {
+                this.undoAlternativeEdges(alternative, constraint);
+                return false;
+            }
+        }
+        let ok = true;
+        for (let j = 0; j < disjunctions.length && ok; j++) {
+            if (j === ownIndex) continue;
+            // At the work limit the answer is "yes": the alternative stays.
+            if (this.probeChecksLeft <= 0) break;
+            ok = disjunctions[j].alternatives.some(other => {
+                this.probeChecksLeft--;
+                return this.isAlternativeFeasible(other);
+            });
+        }
+        for (const constraint of alternative) this.removeQualitativeEdge(constraint);
+        return ok;
     }
 
     // ─── Utility ─────────────────────────────────────────────────────────────
