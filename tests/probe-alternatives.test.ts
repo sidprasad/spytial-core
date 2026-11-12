@@ -51,4 +51,15 @@ describe('one-step look-ahead before the search (#661)', () => {
         const result = solve('A <x B, [B <x C | C <x A], [C <y A | A <y C], {G: A, B}');
         expect(result.sat).toBe(true);
     });
+
+    it('keeps the facts that the look-ahead commits in the modal queries', () => {
+        // Each alternative of the second disjunction has "B <x A". Thus the
+        // look-ahead removes "A <x B" and commits "B <x C & C <x A". B and
+        // C are left of A in every solution.
+        const result = solve('[A <x B | B <x C & C <x A], [B <x A & B <x C | B <x A & B <x D]');
+        expect(result.sat).toBe(true);
+        const validator = result.validator as QualitativeConstraintValidator;
+        expect(validator.getMust('A', 'leftOf')).toEqual(new Set(['B', 'C']));
+        expect(validator.getCannot('A', 'rightOf').has('B')).toBe(true);
+    });
 });

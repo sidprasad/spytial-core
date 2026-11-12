@@ -2141,15 +2141,26 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private solveCDCL(): { satisfiable: boolean; error?: PositionalConstraintError } {
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
+        const addedBeforePrune = this.addedConstraints.length;
+
         // Geometric pruning pass
         this.pruneDisjunctions();
         if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
-        if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         // One-step look-ahead: remove each alternative that leaves some
         // other disjunction with no alternative.
-        this.probeAlternatives();
+        if (this.allDisjunctions.length > 0) this.probeAlternatives();
         if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+
+        // The prune and the probe commit a disjunction when it has one
+        // alternative left, and remove it from the list. Each such commit
+        // holds in every solution. The modal queries (getMust, getCannot)
+        // read the snapshot graphs and the disjunctions that stay, so the
+        // snapshot must include these commits or the queries lose them.
+        if (this.addedConstraints.length !== addedBeforePrune && this.mustHGraph && this.mustVGraph) {
+            this.mustHGraph = this.hGraph.clone();
+            this.mustVGraph = this.vGraph.clone();
+        }
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         let assigned = new Int32Array(this.allDisjunctions.length).fill(-1);
@@ -3196,6 +3207,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private static readonly PROBE_MAX_ALTERNATIVES = 4000;
 
     /**
+     * Largest number of "does this alternative fit" checks in one call of
+     * probeAlternatives. One probe looks at each other disjunction, so the
+     * work grows with the square of the number of alternatives. The
+     * validator runs synchronously in the browser, so the work has a limit.
+     * A count, not a time, so that the result is the same on each run.
+     */
+    private static readonly PROBE_MAX_CHECKS = 100_000;
+    private probeChecksLeft = 0;
+
+    /**
      * One-step look-ahead on the disjunctions that the prune left.
      *
      * For each alternative: add it to the graphs, then look at each other
@@ -3215,22 +3236,27 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      * select one alternative from each disjunction.
      *
      * Runs once, before the search. Repeats while it removes something,
-     * because a removal can make another alternative impossible.
+     * because a removal can make another alternative impossible. Stops when
+     * the work limit is reached; the alternatives not examined stay, which
+     * is safe, and the search handles them.
      */
     private probeAlternatives(): void {
         const MAX_ROUNDS = 8;
-        for (let round = 0; round < MAX_ROUNDS; round++) {
+        this.probeChecksLeft = QualitativeConstraintValidator.PROBE_MAX_CHECKS;
+        for (let round = 0; round < MAX_ROUNDS && this.probeChecksLeft > 0; round++) {
             const disjunctions = this.allDisjunctions;
             let total = 0;
             for (const disj of disjunctions) total += disj.alternatives.length;
             if (disjunctions.length < 2 || total > QualitativeConstraintValidator.PROBE_MAX_ALTERNATIVES) return;
 
             let removedAny = false;
-            for (let i = 0; i < disjunctions.length; i++) {
+            for (let i = 0; i < disjunctions.length && this.probeChecksLeft > 0; i++) {
                 const disj = disjunctions[i];
                 const kept: LayoutConstraint[][] = [];
                 for (const alternative of disj.alternatives) {
-                    if (this.alternativeLeavesEachDisjunctionAnOption(alternative, i, disjunctions)) {
+                    // At the work limit, keep the alternatives not examined.
+                    if (this.probeChecksLeft <= 0
+                        || this.alternativeLeavesEachDisjunctionAnOption(alternative, i, disjunctions)) {
                         kept.push(alternative);
                     }
                 }
@@ -3270,7 +3296,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         let ok = true;
         for (let j = 0; j < disjunctions.length && ok; j++) {
             if (j === ownIndex) continue;
-            ok = disjunctions[j].alternatives.some(other => this.isAlternativeFeasible(other));
+            // At the work limit the answer is "yes": the alternative stays.
+            if (this.probeChecksLeft <= 0) break;
+            ok = disjunctions[j].alternatives.some(other => {
+                this.probeChecksLeft--;
+                return this.isAlternativeFeasible(other);
+            });
         }
         for (const constraint of alternative) this.removeQualitativeEdge(constraint);
         return ok;
