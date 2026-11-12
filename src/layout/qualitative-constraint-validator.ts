@@ -2231,7 +2231,24 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             if (this.allAssigned(assigned, numDisjunctions)) return { satisfiable: true };
 
             const { dIdx, aIdx } = this.pickBranch(assigned);
-            if (dIdx === -1) return { satisfiable: true };
+            if (dIdx === -1) {
+                // A disjunction has no assignment (checked above), and
+                // learned clauses remove all its alternatives. That is a
+                // conflict, not a solution. unitPropagate usually finds it,
+                // but not when graphPropagate made the assignments that
+                // complete those clauses (#657).
+                if (this.decisionLevel === 0) return { satisfiable: false, provedUnsat: true };
+                const { learnedClause, backtrackLevel } = this.analyzeConflict(assigned);
+                if (!learnedClause) return { satisfiable: false, provedUnsat: true };
+                this.learnedClauses.push(learnedClause);
+                this.bumpActivity(learnedClause);
+                this.decayActivity();
+                this.conflictCount++;
+                conflictsSinceRestart++;
+                this.backtrackTo(backtrackLevel, assigned);
+                if (conflictsSinceRestart >= this.restartThreshold) return { satisfiable: false, provedUnsat: false };
+                continue;
+            }
 
             this.decisionLevel++;
             const ok = this.tryAssign(dIdx, aIdx, assigned, true);
