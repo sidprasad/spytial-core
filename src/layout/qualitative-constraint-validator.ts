@@ -3526,13 +3526,31 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const disjSource = this.originalDisjunctions.length > 0
             ? this.originalDisjunctions
             : this.allDisjunctions;
+        // Sort by the highest search activity of each disjunction, lowest
+        // first, so that the disjunctions the search had conflicts on are
+        // tried last.
+        //
+        // Activity is stored by position in `allDisjunctions`, the list after
+        // presolve and prune. `disjSource` is the list before them, so a
+        // position here is not a position there (#652). The alternative
+        // arrays are the same objects in the two lists, so they identify
+        // each alternative.
+        const activityOfAlternative = new Map<LayoutConstraint[], number>();
+        this.allDisjunctions.forEach((disj, d) => disj.alternatives.forEach((alt, a) => {
+            activityOfAlternative.set(alt, this.activityAt(d, a));
+        }));
+        const order = new Map<DisjunctiveConstraint, { index: number; activity: number }>();
+        disjSource.forEach((disj, index) => {
+            let activity = 0;
+            for (const alt of disj.alternatives) {
+                activity = Math.max(activity, activityOfAlternative.get(alt) ?? 0);
+            }
+            order.set(disj, { index, activity });
+        });
         const sortedDisjunctions = [...disjSource].sort((a, b) => {
-            const aIdx = disjSource.indexOf(a);
-            const bIdx = disjSource.indexOf(b);
-            const aMax = Math.max(...a.alternatives.map((_, ai) => this.activityAt(aIdx, ai)));
-            const bMax = Math.max(...b.alternatives.map((_, bi) => this.activityAt(bIdx, bi)));
+            const oa = order.get(a)!, ob = order.get(b)!;
             // Stable tiebreaker: use original index when activity scores are equal
-            return aMax - bMax || aIdx - bIdx;
+            return oa.activity - ob.activity || oa.index - ob.index;
         });
 
         for (const disj of sortedDisjunctions) {
