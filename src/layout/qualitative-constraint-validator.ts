@@ -49,6 +49,7 @@ import {
 
 import {
     RelativeOrientationConstraint,
+    GroupBySelector,
 } from './layoutspec';
 
 import {
@@ -1183,6 +1184,14 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private conflictCount: number = 0;
     private restartThreshold: number = 32;
     private emptyDisjunctionError: PositionalConstraintError | null = null;
+    /**
+     * Alternatives to try only when the others of their disjunction do not
+     * fit (a never-group's aligned pairings). Keyed by the alternative array,
+     * which presolve keeps by reference when it prunes a disjunction.
+     */
+    private fallbackAlternatives: WeakSet<LayoutConstraint[]> = new WeakSet();
+    /** Ids of the zero-size helper nodes a large never-group adds to the graphs. */
+    private proxyNodeIds: Set<string> = new Set();
     /** Set by pruneDisjunctions when a disjunction has no alternative that fits. */
     private pruneFoundDeadDisjunction = false;
     private lubyIndex: number = 0;
@@ -1347,7 +1356,8 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // constraints were dropped when presolve resolved everything.
         const chosenConstraints = this.addedConstraints.slice(constraintsBeforeDisjunctions);
         if (chosenConstraints.length > 0) {
-            this.layout.constraints = this.layout.constraints.concat(chosenConstraints);
+            this.layout.constraints = this.layout.constraints.concat(
+                this.withoutProxyNodes(chosenConstraints));
         }
 
         // Phase 5b: Modal query state (must/can/cannot) is built LAZILY on the
@@ -1385,6 +1395,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
      */
     private enforceMaximalFeasibleSubset(error: PositionalConstraintError): PositionalConstraintError {
         if (error.maximalFeasibleSubset) {
+            error.maximalFeasibleSubset = this.withoutProxyNodes(error.maximalFeasibleSubset);
             this.layout.constraints = error.maximalFeasibleSubset;
         }
         // Every error return in validatePositionalConstraints funnels through
@@ -1480,31 +1491,31 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             }
         }
 
-        // Also include infeasible disjunctions (with representative constraints)
+        // Also include infeasible disjunctions. A disjunction is infeasible
+        // because EVERY alternative is blocked, so the report needs the blocker
+        // of each alternative — not only of the first one. Without this, a
+        // group rule that fails only because of a `hold: never` group rule (or
+        // the other way round) is reported alone (#401).
+        const lineOverrides = new Map<LayoutConstraint, string>();
         for (const disj of infeasibleDisjunctions) {
-            if (disj.alternatives.length > 0 && disj.alternatives[0].length > 0) {
-                const rep = disj.alternatives[0][0];
-                if (!seen.has(rep)) {
-                    seen.add(rep);
-                    iisSet.add(rep);
-                }
-                // Trace conflict path for the representative
-                const edge = this.constraintToEdge(rep);
-                if (edge) {
-                    const graph = edge.axis === 'h' ? mfsH : mfsV;
-                    const path = graph.findPath(edge.to, edge.from);
-                    if (path) {
-                        for (const [a, b] of path) {
-                            const provenance = graph.getEdgeProvenance(a, b);
-                            if (provenance && !seen.has(provenance)) {
-                                seen.add(provenance);
-                                iisSet.add(provenance);
-                            }
-                        }
+            const rep = disj.alternatives[0]?.[0];
+            if (!rep) continue; // Empty disjunction — add source to maps below
+            if (!seen.has(rep)) {
+                seen.add(rep);
+                iisSet.add(rep);
+            }
+            // One alternative of a never-group rule reads as "A can be left of
+            // B", which says nothing about the rule. Say what failed instead.
+            if (QualitativeConstraintValidator.isNegatedGroupSource(disj.sourceConstraint)) {
+                lineOverrides.set(rep, QualitativeConstraintValidator.NEVER_GROUP_BLOCKED);
+            }
+            for (const alternative of disj.alternatives) {
+                for (const blocker of this.findAlternativeBlockers(alternative, mfsH, mfsV)) {
+                    if (!seen.has(blocker)) {
+                        seen.add(blocker);
+                        iisSet.add(blocker);
                     }
                 }
-            } else {
-                // Empty disjunction — add source to maps below
             }
         }
 
@@ -1515,8 +1526,10 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const src = c.sourceConstraint;
             if (!srcToLayout.has(src)) srcToLayout.set(src, []);
             if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
+            // A helper node has no name to show: keep the rule, skip the line.
+            if (this.mentionsProxyNode(c) && !lineOverrides.has(c)) continue;
             srcToLayout.get(src)!.push(c);
-            htmlMap.get(src.toHTML())!.push(orientationConstraintToString(c));
+            htmlMap.get(src.toHTML())!.push(lineOverrides.get(c) ?? orientationConstraintToString(c));
         }
 
         // Empty disjunctions with no alternatives
@@ -1525,7 +1538,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 const src = disj.sourceConstraint;
                 if (!srcToLayout.has(src)) srcToLayout.set(src, []);
                 if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
-                htmlMap.get(src.toHTML())!.push(`unsatisfiable: ${src.toHTML()}`);
+                htmlMap.get(src.toHTML())!.push(QualitativeConstraintValidator.emptyDisjunctionLine(src));
             }
         }
 
@@ -1533,7 +1546,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const iisArray = [...iisSet];
         const representative = iisArray[0] ?? this.orientationConstraints[0];
 
-        const repString = representative ? orientationConstraintToString(representative) : '';
+        const repString = representative
+            ? (lineOverrides.get(representative) ?? orientationConstraintToString(representative))
+            : '';
         const repSource = representative?.sourceConstraint
             ?? infeasibleDisjunctions[0]?.sourceConstraint
             ?? this.orientationConstraints[0]?.sourceConstraint;
@@ -1629,25 +1644,205 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const constraint = disj.alternatives[0]?.[0]
             ?? this.addedConstraints[this.addedConstraints.length - 1]
             ?? this.orientationConstraints[0];
-        const minimalConflictingSet = new Map();
-        minimalConflictingSet.set(disj.sourceConstraint, disj.alternatives[0] ?? []);
-        // Include existing constraints that may contribute to the conflict
-        for (const c of this.addedConstraints) {
-            if (!minimalConflictingSet.has(c.sourceConstraint)) {
-                minimalConflictingSet.set(c.sourceConstraint, []);
-            }
-            minimalConflictingSet.get(c.sourceConstraint)!.push(c);
-        }
+        // A disjunction with no alternatives fails by itself: no other rule
+        // takes part, so the report names this rule only.
+        const source = disj.sourceConstraint;
+        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
+        minimalConflictingSet.set(source, disj.alternatives[0] ?? []);
+
+        const sourceHTML = source?.toHTML?.() ?? 'unknown';
+        const line = disj.alternatives.length === 0
+            ? QualitativeConstraintValidator.emptyDisjunctionLine(source)
+            : `unsatisfiable: ${sourceHTML}`;
 
         return {
             name: 'PositionalConstraintError',
             type: 'positional-conflict',
-            message: `No satisfiable alternative for disjunction from ${disj.sourceConstraint?.toHTML?.() ?? 'unknown'}`,
+            message: `No satisfiable alternative for disjunction from ${sourceHTML}`,
             conflictingConstraint: constraint,
-            conflictingSourceConstraint: disj.sourceConstraint,
+            conflictingSourceConstraint: source,
             minimalConflictingSet,
             maximalFeasibleSubset: [...this.addedConstraints],
+            errorMessages: {
+                conflictingConstraint: line,
+                conflictingSourceConstraint: sourceHTML,
+                minimalConflictingConstraints: new Map([[sourceHTML, [line]]]),
+            },
         } as PositionalConstraintError;
+    }
+
+    /**
+     * Rewrite constraints so that none mentions a never-group helper node.
+     *
+     * A large never-group orders nodes through zero-size helper nodes that
+     * exist only in the solver's graphs: `member → helper → other node`. The
+     * layout has no such node, so each chain is replaced by the direct
+     * ordering it implies (`member → other node`) and the helper constraints
+     * are dropped.
+     */
+    private withoutProxyNodes(constraints: LayoutConstraint[]): LayoutConstraint[] {
+        if (this.proxyNodeIds.size === 0) return constraints;
+        const isProxy = (n: LayoutNode) => this.proxyNodeIds.has(n.id);
+
+        type Link = { node: LayoutNode; source: LayoutConstraint['sourceConstraint'] };
+        const before = new Map<string, Link[]>(); // real nodes ordered before a helper
+        const after = new Map<string, Link[]>();  // real nodes ordered after a helper
+        const axisOf = new Map<string, 'h' | 'v'>();
+        const add = (map: Map<string, Link[]>, proxyId: string, link: Link) => {
+            if (!map.has(proxyId)) map.set(proxyId, []);
+            map.get(proxyId)!.push(link);
+        };
+
+        const kept: LayoutConstraint[] = [];
+        for (const c of constraints) {
+            let first: LayoutNode, second: LayoutNode, axis: 'h' | 'v';
+            if (isLeftConstraint(c)) { first = c.left; second = c.right; axis = 'h'; }
+            else if (isTopConstraint(c)) { first = c.top; second = c.bottom; axis = 'v'; }
+            else { kept.push(c); continue; }
+
+            if (isProxy(second) && !isProxy(first)) {
+                axisOf.set(second.id, axis);
+                add(before, second.id, { node: first, source: c.sourceConstraint });
+            } else if (isProxy(first) && !isProxy(second)) {
+                axisOf.set(first.id, axis);
+                add(after, first.id, { node: second, source: c.sourceConstraint });
+            } else if (!isProxy(first) && !isProxy(second)) {
+                kept.push(c);
+            }
+        }
+
+        for (const [proxyId, preds] of before) {
+            for (const pred of preds) {
+                for (const succ of after.get(proxyId) ?? []) {
+                    if (pred.node.id === succ.node.id) continue;
+                    kept.push(axisOf.get(proxyId) === 'h'
+                        ? { left: pred.node, right: succ.node, minDistance: 0, sourceConstraint: succ.source } as LeftConstraint
+                        : { top: pred.node, bottom: succ.node, minDistance: 0, sourceConstraint: succ.source } as TopConstraint);
+                }
+            }
+        }
+        return kept;
+    }
+
+    /** True for a constraint on a never-group helper node, which has no name to show. */
+    private mentionsProxyNode(c: LayoutConstraint): boolean {
+        if (this.proxyNodeIds.size === 0) return false;
+        const has = (n: LayoutNode) => this.proxyNodeIds.has(n.id);
+        if (isLeftConstraint(c)) return has(c.left) || has(c.right);
+        if (isTopConstraint(c)) return has(c.top) || has(c.bottom);
+        return false;
+    }
+
+    private static readonly NEVER_GROUP_BLOCKED =
+        'No other node can sit inside the box around these members, so they form a group';
+
+    private static isNegatedGroupSource(source: SourceConstraint | undefined): boolean {
+        return source instanceof GroupBySelector && source.negated;
+    }
+
+    /** The report line for a rule whose disjunction has no alternatives at all. */
+    private static emptyDisjunctionLine(source: SourceConstraint | undefined): string {
+        if (QualitativeConstraintValidator.isNegatedGroupSource(source)) {
+            return 'Each selected group has a single member, or no node is left outside it, so it always forms a group';
+        }
+        return `unsatisfiable: ${source?.toHTML?.() ?? 'unknown'}`;
+    }
+
+    /**
+     * The orderings a constraint imposes on the expanded (per-member) graphs
+     * that `computeMaximalFeasibleSubset` builds. Mirrors
+     * `addEdgeToGraphsExpanded`. Alignment constraints impose none.
+     */
+    private static expandedEdges(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string }[] {
+        const edges: { axis: 'h' | 'v'; from: string; to: string }[] = [];
+        if (isBoundingBoxConstraint(constraint)) {
+            const bc = constraint as BoundingBoxConstraint;
+            for (const m of bc.group.nodeIds) {
+                switch (bc.side) {
+                    case 'left':   edges.push({ axis: 'h', from: bc.node.id, to: m }); break;
+                    case 'right':  edges.push({ axis: 'h', from: m, to: bc.node.id }); break;
+                    case 'top':    edges.push({ axis: 'v', from: bc.node.id, to: m }); break;
+                    case 'bottom': edges.push({ axis: 'v', from: m, to: bc.node.id }); break;
+                }
+            }
+        } else if (isGroupBoundaryConstraint(constraint)) {
+            const gc = constraint as GroupBoundaryConstraint;
+            for (const aId of gc.groupA.nodeIds) {
+                for (const bId of gc.groupB.nodeIds) {
+                    switch (gc.side) {
+                        case 'left':   edges.push({ axis: 'h', from: aId, to: bId }); break;
+                        case 'right':  edges.push({ axis: 'h', from: bId, to: aId }); break;
+                        case 'top':    edges.push({ axis: 'v', from: aId, to: bId }); break;
+                        case 'bottom': edges.push({ axis: 'v', from: bId, to: aId }); break;
+                    }
+                }
+            }
+        } else if (isLeftConstraint(constraint)) {
+            edges.push({ axis: 'h', from: constraint.left.id, to: constraint.right.id });
+        } else if (isTopConstraint(constraint)) {
+            edges.push({ axis: 'v', from: constraint.top.id, to: constraint.bottom.id });
+        }
+        return edges;
+    }
+
+    /**
+     * Why can this alternative not be added to the feasible subset? Returns the
+     * feasible constraints that block it: the ones on the path that would close
+     * a cycle with one of the alternative's orderings.
+     *
+     * Returns [] when no single blocking path is found (the alternative's own
+     * constraints contradict each other, or only a dual-axis overlap blocks it).
+     */
+    private findAlternativeBlockers(
+        alternative: LayoutConstraint[],
+        hGraph: DifferenceConstraintGraph,
+        vGraph: DifferenceConstraintGraph,
+    ): LayoutConstraint[] {
+        const own = new Set<LayoutConstraint>(alternative);
+        const pathBlockers = (graph: DifferenceConstraintGraph, from: string, to: string): LayoutConstraint[] => {
+            const path = graph.findPath(from, to);
+            return path ? graph.getPathConstraints(path).filter(c => !own.has(c)) : [];
+        };
+        // The first constraint of the alternative that the given graphs reject.
+        const blockedBy = (h: DifferenceConstraintGraph, v: DifferenceConstraintGraph, c: LayoutConstraint): LayoutConstraint[] | null => {
+            if (isAlignmentConstraint(c)) {
+                const ac = c as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? h : v;
+                const a = ac.node1.id, b = ac.node2.id;
+                if (graph.areAligned(a, b)) return null;
+                // Blocked when the two nodes are already ordered either way.
+                const found = [
+                    ...(graph.canReach(a, b) ? pathBlockers(graph, a, b) : []),
+                    ...(graph.canReach(b, a) ? pathBlockers(graph, b, a) : []),
+                ];
+                return found.length > 0 ? found : null;
+            }
+            for (const e of QualitativeConstraintValidator.expandedEdges(c)) {
+                const graph = e.axis === 'h' ? h : v;
+                // addEdge rejects a → b exactly when b already reaches a.
+                if (e.from !== e.to && graph.canReach(e.to, e.from)) {
+                    return pathBlockers(graph, e.to, e.from);
+                }
+            }
+            return null;
+        };
+
+        // Common case: one constraint is blocked by the feasible subset alone.
+        for (const c of alternative) {
+            const found = blockedBy(hGraph, vGraph, c);
+            if (found) return found;
+        }
+
+        // Otherwise the alternative is only blocked as a whole: add its
+        // constraints one at a time to a copy and explain the one that fails.
+        const hClone = hGraph.clone();
+        const vClone = vGraph.clone();
+        for (const c of alternative) {
+            if (!QualitativeConstraintValidator.addEdgeToGraphsExpanded(c, hClone, vClone)) {
+                return blockedBy(hClone, vClone, c) ?? [];
+            }
+        }
+        return [];
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -1792,15 +1987,26 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // NOT GROUP(members) per key = "any rectangle containing all members
         // also contains a non-member"
         //
+        // A non-member N is inside the members' span on one axis when either
+        //   - N sits strictly between two different members, or
+        //   - N is aligned with a member on that axis.
+        // The second case matters: members in one row can never have a node
+        // strictly between them vertically, yet a node in that row between
+        // them does break up the group. NOT GROUP needs N inside on both axes.
+        // (N aligned with the SAME member on both axes would overlap it, so
+        // that pairing is left out.)
+        //
         // Two encodings, selected per-group by member count:
         //
-        // FLAT encoding (M ≤ BBOX_THRESHOLD): enumerate all (mL,mR,mT,mB,N) tuples
-        //   into a single disjunction.  O(K × M²(M-1)²) alternatives, but only 1
-        //   disjunction per group → shallower CDCL search tree.
+        // FLAT encoding (M ≤ BBOX_THRESHOLD): enumerate every pairing of a
+        //   horizontal and a vertical option per non-member into a single
+        //   disjunction.  O(K × M⁴) alternatives, but only 1 disjunction per
+        //   group → shallower CDCL search tree.
         //
         // BBOX encoding (M > BBOX_THRESHOLD): 4 virtual proxy nodes per group act
         //   as intermediaries; 4 member-selection disjunctions (M alts each) + 1
-        //   merged inclusion disjunction. O(M + K) alternatives total but 5 extra
+        //   merged inclusion disjunction. O(M + K × M²) alternatives total (the
+        //   M² part is the aligned pairings) but 5 extra
         //   disjunctions → deeper search tree, worthwhile only when M⁴ is large.
         const BBOX_THRESHOLD = 5; // use bbox encoding when M > 5
         const negatedBySource = new Map<NonNullable<LayoutGroup['sourceConstraint']>, LayoutGroup[]>();
@@ -1811,8 +2017,41 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             negatedBySource.get(key)!.push(group);
         }
 
+        // One way for a non-member to be inside the members' span on one axis.
+        type SpanOption = { constraints: LayoutConstraint[]; alignedWith?: string };
+
         for (const [source, groups] of negatedBySource) {
             const inclusionAlternatives: LayoutConstraint[][] = [];
+
+            const alignedOptions = (n: LayoutNode, members: LayoutNode[], axis: 'x' | 'y'): SpanOption[] =>
+                members.map(m => ({
+                    constraints: [{ axis, node1: n, node2: m, sourceConstraint: source } as AlignmentConstraint],
+                    alignedWith: m.id,
+                }));
+
+            // Every pairing of a horizontal option with a vertical one. The
+            // strictly-between pairings go first and the aligned ones are
+            // marked as fallbacks, so layouts that already had room for a
+            // strictly-between placement keep choosing it. (The BBOX encoding
+            // can still land on an aligned pairing: it picks the members that
+            // bound the box first, and those picks may leave no room between.)
+            const pushSpanCombinations = (hOptions: SpanOption[], vOptions: SpanOption[]) => {
+                const aligned: LayoutConstraint[][] = [];
+                for (const h of hOptions) {
+                    for (const v of vOptions) {
+                        // Aligned with one member on both axes = on top of it.
+                        if (h.alignedWith !== undefined && h.alignedWith === v.alignedWith) continue;
+                        const alternative = [...h.constraints, ...v.constraints];
+                        if (h.alignedWith === undefined && v.alignedWith === undefined) {
+                            inclusionAlternatives.push(alternative);
+                        } else {
+                            aligned.push(alternative);
+                            this.fallbackAlternatives.add(alternative);
+                        }
+                    }
+                }
+                inclusionAlternatives.push(...aligned);
+            };
 
             for (const group of groups) {
                 const memberIds = new Set(group.nodeIds);
@@ -1826,12 +2065,16 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                 if (members.length > BBOX_THRESHOLD) {
                     // ── BBOX encoding for large groups ──────────────────────
                     // Virtual bbox proxy nodes (zero-size, unique per group)
-                    const mkProxy = (suffix: string): LayoutNode => ({
-                        id: `_ng_${group.name}_${suffix}`,
-                        label: '', color: '', groups: [], attributes: {},
-                        width: 0, height: 0,
-                        mostSpecificType: '', types: [], showLabels: false,
-                    });
+                    const mkProxy = (suffix: string): LayoutNode => {
+                        const id = `_ng_${group.name}_${suffix}`;
+                        this.proxyNodeIds.add(id);
+                        return {
+                            id,
+                            label: '', color: '', groups: [], attributes: {},
+                            width: 0, height: 0,
+                            mostSpecificType: '', types: [], showLabels: false,
+                        };
+                    };
                     const ngl = mkProxy('l'), ngr = mkProxy('r');
                     const ngt = mkProxy('t'), ngb = mkProxy('b');
 
@@ -1855,36 +2098,46 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                         { top: ngb, bottom: m, minDistance: 0, sourceConstraint: source } as TopConstraint,
                     ]));
 
-                    // Non-member inclusion via proxy nodes
+                    // Non-member inclusion: strictly between via the proxy
+                    // nodes, or aligned with a member directly.
                     for (const n of nonMembers) {
-                        inclusionAlternatives.push([
+                        const betweenH: SpanOption = { constraints: [
                             { left: ngl, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
                             { left: n, right: ngr, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                        ] };
+                        const betweenV: SpanOption = { constraints: [
                             { top: ngt, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
                             { top: n, bottom: ngb, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                        ]);
+                        ] };
+                        pushSpanCombinations(
+                            [betweenH, ...alignedOptions(n, members, 'x')],
+                            [betweenV, ...alignedOptions(n, members, 'y')],
+                        );
                     }
                 } else {
                     // ── FLAT encoding for small groups ──────────────────────
                     // Enumerate all (mL,mR,mT,mB,N) tuples into a single disjunction.
                     // O(K × M²(M-1)²) alternatives but only 1 disjunction → shallow search.
                     for (const n of nonMembers) {
-                        for (const mL of members) {
-                            for (const mR of members) {
-                                if (mL.id === mR.id) continue;
-                                for (const mT of members) {
-                                    for (const mB of members) {
-                                        if (mT.id === mB.id) continue;
-                                        inclusionAlternatives.push([
-                                            { left: mL, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                                            { left: n, right: mR, minDistance: 0, sourceConstraint: source } as LeftConstraint,
-                                            { top: mT, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                                            { top: n, bottom: mB, minDistance: 0, sourceConstraint: source } as TopConstraint,
-                                        ]);
-                                    }
-                                }
+                        const betweenH: SpanOption[] = [];
+                        const betweenV: SpanOption[] = [];
+                        for (const m1 of members) {
+                            for (const m2 of members) {
+                                if (m1.id === m2.id) continue;
+                                betweenH.push({ constraints: [
+                                    { left: m1, right: n, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                    { left: n, right: m2, minDistance: 0, sourceConstraint: source } as LeftConstraint,
+                                ] });
+                                betweenV.push({ constraints: [
+                                    { top: m1, bottom: n, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                    { top: n, bottom: m2, minDistance: 0, sourceConstraint: source } as TopConstraint,
+                                ] });
                             }
                         }
+                        pushSpanCombinations(
+                            [...betweenH, ...alignedOptions(n, members, 'x')],
+                            [...betweenV, ...alignedOptions(n, members, 'y')],
+                        );
                     }
                 }
             }
@@ -2757,7 +3010,21 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (isAlignmentConstraint(constraint)) {
             const ac = constraint as AlignmentConstraint;
             const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
-            return graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint);
+            if (!graph.addAlignmentEdges(ac.node1.id, ac.node2.id, constraint)) return false;
+            // Aligned on both axes = two nodes in the same place. Reject it
+            // here, as addEdgeToGraphs does, so the search treats it as a
+            // conflict and tries another alternative. Left to the overlap
+            // check after the search, it fails a layout that has a solution.
+            if (ac.node1.id !== ac.node2.id) {
+                const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                    graph, otherGraph, ac.node1.id, ac.node2.id, true,
+                )) {
+                    graph.removeAlignmentEdges(ac.node1.id, ac.node2.id);
+                    return false;
+                }
+            }
+            return true;
         }
         return true;
     }
@@ -3164,7 +3431,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             const alts = this.allDisjunctions[d].alternatives;
             const base = d * this.branchStride;
             for (let a = 0; a < alts.length; a++) {
-                this.simplicityFlat[base + a] = 1.0 / (1 + alts[a].length);
+                const simplicity = 1.0 / (1 + alts[a].length);
+                // A fallback ranks below every regular alternative until
+                // conflicts raise its activity.
+                this.simplicityFlat[base + a] = this.fallbackAlternatives.has(alts[a])
+                    ? simplicity * 1e-3
+                    : simplicity;
             }
         }
     }

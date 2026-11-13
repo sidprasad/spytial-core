@@ -43,7 +43,11 @@ describe('the clause from a theory conflict is correct (#649, #650)', () => {
         // A clause that names only an assignment made by propagation does
         // not stop the search: the same decisions give the same propagation
         // and the same conflict. The clause must name decisions.
-        const result = solve('E <x D, E =x A, C =x D, {G0: D, A}, {G1: A, B}, {!N1: A, D, B}');
+        //
+        // E and C are in the column of A, so each one is above or below
+        // the boxes of G0 and G1. Neither can be inside the box around A,
+        // D and B, so the never-group cannot hold.
+        const result = solve('E <x D, E =x A, C =x E, {G0: D, A}, {G1: A, B}, {!N1: A, D, B}');
         expect(result.sat).toBe(false);
         expect(conflicts(result)).toBeLessThan(FAR_BELOW_THE_LIMIT);
     });

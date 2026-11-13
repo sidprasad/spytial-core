@@ -4,8 +4,8 @@ import { QualitativeConstraintValidator } from '../src/layout/qualitative-constr
 
 /**
  * Issue #650. The search had a restart limit. At the limit it stopped with
- * no proof, and the validator reported a conflict. These systems reached the
- * limit after 3776 conflicts and several seconds.
+ * no proof, and the validator reported a conflict. Systems of this type
+ * reached the limit after 3776 conflicts and several seconds.
  *
  * Two changes make them quick:
  *  - the prune passes check all constraints of an alternative together;
@@ -17,13 +17,14 @@ const stats = (r: ReturnType<typeof solve>) =>
     (r.validator as QualitativeConstraintValidator).getStats();
 
 describe('the prune proves a conflict without a search (#650)', () => {
-    // In each system the two members of the never-group are aligned, so no
-    // node can be between them on that axis. On main each one reached the
-    // restart limit.
+    // In each system the never-group is on the two members of a group. No
+    // other node can be inside the box around them, so the never-group
+    // cannot hold. Before the fix each system needed more than 1500 search
+    // conflicts.
     const LIMIT_CASES = [
-        'A =x J, H =x C, F =x G, {G0: F, G, E}, {G1: A, I}, {G2: B, C}, {!N1: A, J}',
-        'J =x E, J <x G, F <x H, B =y J, {G0: A, E}, {G1: F, I}, {!N1: J, E}',
-        'J <y G, H =y J, {G0: B, E, J}, {G1: F, I}, {G2: C, D}, {!N1: H, J}',
+        'E =x J, A =y E, H <y C, E =x B, A <y I, C =y F, {G0: D, C}, {!N1: D, C}',
+        'A <y B, J =y D, E <y G, E =y F, {G0: D, H}, {!N1: D, H}',
+        'J <y E, I <y F, G <x F, B <y C, C <x G, H <x G, {G0: B, I}, {!N1: I, B}',
     ];
 
     it.each(LIMIT_CASES)('reports a conflict with no search conflicts: %s', (spec) => {

@@ -313,7 +313,7 @@ Only the exact value `never` negates: `always`, any other string, and an absent 
 | `cyclic clockwise` | No valid clockwise rotation holds (De Morgan over rotational alternatives) |
 | `group` | No clean bounding rectangle can contain exactly these members |
 
-For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. No visual rectangle is drawn. The `name` field is optional (auto-generated if omitted).
+For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. A non-member counts as inside when, on each axis, it sits between two members or is aligned with one — so a node between two members of the same row breaks up the group. No visual rectangle is drawn. The `name` field is optional (auto-generated if omitted).
 
 **Examples:**
 
