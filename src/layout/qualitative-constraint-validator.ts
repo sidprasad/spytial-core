@@ -1756,17 +1756,18 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             for (const node of this.nodes) {
                 if (memberIds.has(node.id)) continue;
 
-                // Skip nodes in other non-singleton groups. When no overlap exists this is
-                // always safe. For overlapping groups, check hierarchical relationships.
+                // Skip the node only when one of its groups has no member in
+                // common with this group. The group-to-group separation below
+                // then keeps that whole group, and thus the node, out of this
+                // group's box.
+                //
+                // In all other cases the node needs its own rule. The usual
+                // case is a nested group: the node is a member of an outer
+                // group only, and no group-to-group rule exists between an
+                // inner and an outer group (#645).
                 const nodeGroups = nodeToGroups.get(node.id);
-                if (nodeGroups && nodeGroups.size > 0) {
-                    if (!group.overlapping) continue;
-                    const allHierarchical = [...nodeGroups].every(ng =>
-                        ng === group ||
-                        this.isSubGroup(ng, group) ||
-                        this.isSubGroup(group, ng)
-                    );
-                    if (allHierarchical) continue;
+                if (nodeGroups && [...nodeGroups].some(ng => this.groupIntersection(ng, group).length === 0)) {
+                    continue;
                 }
 
                 const sourceConstraint = group.sourceConstraint;
