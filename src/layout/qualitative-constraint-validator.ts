@@ -2929,45 +2929,47 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     ): { learnedClause: LearnedClause | null; backtrackLevel: number } {
         const conflictDisj = this.allDisjunctions[conflictDisjunctionIdx];
 
-        // Collect all trail assignments that caused infeasibility of ANY alternative.
-        // Each infeasible alternative was blocked by edges in the graph. We find
-        // those edges via provenance, then map them to trail entries.
+        // Collect the trail assignments that make each alternative
+        // infeasible. The learned clause says "these assignments cannot all
+        // hold", so it is correct only if they block EVERY alternative. If
+        // one alternative has no explanation, a clause from the others
+        // forbids too much, and the search can then reject a system that has
+        // a solution (#649, #650). In that case use the blunt clause.
         const involvedAssignments = new Set<number>(); // trail indices
-
-        for (let a = 0; a < conflictDisj.alternatives.length; a++) {
-            const alt = conflictDisj.alternatives[a];
-            for (const constraint of alt) {
-                const edge = this.constraintToEdge(constraint);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
-
-                // Check what blocks this edge: a return path from edge.to → edge.from
-                // (using canReach to include zero-weight alignment edges)
-                if (graph.canReach(edge.to, edge.from)) {
-                    const cyclePath = graph.findPath(edge.to, edge.from);
-                    if (cyclePath) {
-                        for (const [pa, pb] of cyclePath) {
-                            const provenance = graph.getEdgeProvenance(pa, pb);
-                            if (provenance) {
-                                // Find which trail entry introduced this constraint
-                                const trailIdx = this.findTrailEntryForConstraint(provenance);
-                                if (trailIdx !== -1) involvedAssignments.add(trailIdx);
-                            }
-                        }
-                    }
-                }
-
-                // Alignment conflicts are now caught by the same cycle path check above,
-                // since alignment is represented as zero-weight edges in the graph.
+        for (const alternative of conflictDisj.alternatives) {
+            if (!this.explainInfeasibleAlternative(alternative, involvedAssignments)) {
+                return this.analyzeConflict(assigned);
             }
         }
 
-        // If we found specific involved assignments, build a targeted clause
-        if (involvedAssignments.size > 0) {
+        // Build the clause from DECISIONS only.
+        //
+        // An involved assignment can be one that propagation made. The graph
+        // propagation does not read the learned clauses. Thus a clause that
+        // names a propagated assignment does not stop the search: after the
+        // backtrack, the same decisions give the same propagation and the
+        // same conflict, without end (#650).
+        //
+        // A propagated assignment at level k follows from the decisions at
+        // levels 1 to k. Replace it with those decisions. The clause is then
+        // weaker than the exact reason, but it is correct, and pickBranch
+        // obeys it.
+        let propagatedLevel = 0;
+        const decisionIndices = new Set<number>();
+        for (const idx of involvedAssignments) {
+            const a = this.assignmentTrail[idx];
+            if (a.isDecision) decisionIndices.add(idx);
+            else if (a.decisionLevel > propagatedLevel) propagatedLevel = a.decisionLevel;
+        }
+        for (let idx = 0; idx < this.assignmentTrail.length; idx++) {
+            const a = this.assignmentTrail[idx];
+            if (a.isDecision && a.decisionLevel <= propagatedLevel) decisionIndices.add(idx);
+        }
+
+        if (decisionIndices.size > 0) {
             const clause: LearnedClause = [];
             let maxLevel = 0, secondMaxLevel = 0;
-
-            for (const idx of involvedAssignments) {
+            for (const idx of decisionIndices) {
                 const a = this.assignmentTrail[idx];
                 clause.push({
                     disjunctionIndex: a.disjunctionIndex,
@@ -2981,14 +2983,110 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     secondMaxLevel = a.decisionLevel;
                 }
             }
-
-            if (clause.length > 0) {
-                return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
-            }
+            return { learnedClause: clause, backtrackLevel: Math.max(0, secondMaxLevel) };
         }
 
         // Fall back to blunt analysis if provenance didn't yield results
         return this.analyzeConflict(assigned);
+    }
+
+    /**
+     * Find why `alternative` is infeasible in the current graphs, and add the
+     * trail assignments that cause it to `involved`.
+     *
+     * This mirrors `isAlternativeFeasible`: same checks, same order. At the
+     * first check that fails, it follows the path that the check found and
+     * collects the trail assignment behind each edge. An edge with no trail
+     * assignment is a level-0 fact and needs no entry.
+     *
+     * Returns false when it cannot give a complete explanation:
+     * - no single constraint of the alternative is infeasible (the
+     *   constraints fail only together, or the alternative failed in
+     *   tryAssign), or
+     * - the reason is a dual-axis overlap, or
+     * - a graph has a zero-weight ordering edge, so a path that BFS finds is
+     *   not necessarily the strict path that the check used.
+     */
+    private explainInfeasibleAlternative(alternative: LayoutConstraint[], involved: Set<number>): boolean {
+        if (this.hGraph.hasZeroWeightOrderingEdge || this.vGraph.hasZeroWeightOrderingEdge) return false;
+
+        const addPath = (graph: DifferenceConstraintGraph, from: string, to: string): void => {
+            const path = graph.findPath(from, to);
+            if (!path) return;
+            for (const [pa, pb] of path) {
+                const provenance = graph.getEdgeProvenance(pa, pb);
+                if (!provenance) continue;
+                const trailIdx = this.findTrailEntryForConstraint(provenance);
+                if (trailIdx !== -1) involved.add(trailIdx);
+            }
+        };
+
+        for (const constraint of alternative) {
+            if (isGroupBoundaryConstraint(constraint)) {
+                for (const edge of this.groupBoundaryEdges(constraint)) {
+                    const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+                    // A common member: infeasible with no assignment.
+                    if (edge.from === edge.to) return true;
+                    if (graph.canReach(edge.to, edge.from)) {
+                        addPath(graph, edge.to, edge.from);
+                        return true;
+                    }
+                }
+                continue;
+            }
+
+            if (isBoundingBoxConstraint(constraint)) {
+                const bc = constraint as BoundingBoxConstraint;
+                const nodeId = bc.node.id;
+                const graph = bc.side === 'left' || bc.side === 'right' ? this.hGraph : this.vGraph;
+                // The node is aligned with a member.
+                for (const memberId of bc.group.nodeIds) {
+                    if (graph.areAligned(nodeId, memberId)) {
+                        addPath(graph, nodeId, memberId);
+                        addPath(graph, memberId, nodeId);
+                        return true;
+                    }
+                }
+                // A member is on the wrong side of the node.
+                const nodeFirst = bc.side === 'left' || bc.side === 'top';
+                for (const memberId of bc.group.nodeIds) {
+                    const [from, to] = nodeFirst ? [memberId, nodeId] : [nodeId, memberId];
+                    if (graph.isOrdered(from, to)) {
+                        addPath(graph, from, to);
+                        return true;
+                    }
+                }
+                // Then the edge to the virtual group node, below.
+            }
+
+            if (isAlignmentConstraint(constraint)) {
+                const ac = constraint as AlignmentConstraint;
+                const graph = ac.axis === 'x' ? this.hGraph : this.vGraph;
+                const aToB = graph.canReach(ac.node1.id, ac.node2.id);
+                const bToA = graph.canReach(ac.node2.id, ac.node1.id);
+                if (aToB !== bToA) {
+                    if (aToB) addPath(graph, ac.node1.id, ac.node2.id);
+                    else addPath(graph, ac.node2.id, ac.node1.id);
+                    return true;
+                }
+                if (ac.node1.id !== ac.node2.id) {
+                    const otherGraph = ac.axis === 'x' ? this.vGraph : this.hGraph;
+                    if (QualitativeConstraintValidator.classHasDualAxisOverlap(
+                        graph, otherGraph, ac.node1.id, ac.node2.id, false,
+                    )) return false;
+                }
+                continue;
+            }
+
+            const edge = this.constraintToEdge(constraint);
+            if (!edge) continue;
+            const graph = edge.axis === 'h' ? this.hGraph : this.vGraph;
+            if (graph.canReach(edge.to, edge.from)) {
+                addPath(graph, edge.to, edge.from);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
