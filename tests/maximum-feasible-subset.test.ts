@@ -10,6 +10,7 @@ import { isBoundingBoxConstraint, isLeftConstraint } from '../src/layout/interfa
 import { WebColaTranslator } from '../src/translators/webcola/webcolatranslator';
 import { runHeadlessLayout } from '../src/evaluation/headless-layout';
 import { describeConstraint, solve } from './helpers/constraint-dsl';
+import { maximumFeasibleSubset } from '../src/layout/maximum-feasible-subset';
 
 function recover(spec: string) {
     const { error, validator: { layout } } = solve(spec);
@@ -141,5 +142,29 @@ describe('maximum-cardinality counterfactuals on the reported branch', () => {
             const outsider = rendered.nodes.find(n => n.id === side.node.id)!;
             expect(hull.x - outsider.bounds!.X).toBeGreaterThanOrEqual(side.minDistance - 0.01);
         }
+    });
+
+    it('does not search the smaller budgets when the conflicts are independent', () => {
+        // 14 pairs; the two constraints of a pair contradict each other and
+        // no pair touches another. One deletion for each pair is necessary.
+        // Before the fix the search tried each budget from 1 to 13 in full
+        // and the validator needed some seconds for this input.
+        const pairs = 14;
+        let calls = 0;
+        const firstFailure = (subset: number[]) => {
+            calls++;
+            const seen = new Set<number>();
+            return subset.findIndex(i => {
+                seen.add(i);
+                return seen.has(i ^ 1);
+            });
+        };
+        const { kept, iis } = maximumFeasibleSubset(2 * pairs, firstFailure);
+        expect(kept).toHaveLength(pairs);
+        expect(iis).toEqual([0, 1]);
+        expect(calls).toBeLessThan(1000);
+
+        const spec = Array.from({ length: pairs }, (_, i) => `a${i} <x b${i}, b${i} <x a${i}`).join(', ');
+        expect(recover(spec).kept).toEqual(Array.from({ length: pairs }, (_, i) => `a${i} <x b${i}`));
     });
 });

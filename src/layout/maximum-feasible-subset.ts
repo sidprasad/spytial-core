@@ -19,7 +19,20 @@ export function maximumFeasibleSubset(size: number, firstFailure: (subset: numbe
     // Search by increasing deletion count. Every repair must remove a
     // member of the current conflict. The first feasible leaf is optimal.
     if (!iis.length) return { kept: ids, iis };
-    for (let budget = 1; budget <= ids.length; budget++) {
+
+    // Conflicts with no common member each need a deletion of their own, so
+    // a smaller budget cannot succeed. Without this start, independent
+    // conflicts make each smaller budget an exhaustive search that fails.
+    let fewestDeletions = 0;
+    for (let rest = ids, core = iis; core.length;) {
+        fewestDeletions++;
+        const members = new Set(core);
+        rest = rest.filter(i => !members.has(i));
+        const failed = firstFailure(rest);
+        core = failed < 0 ? [] : iisOf(rest, failed);
+    }
+
+    for (let budget = fewestDeletions; budget <= ids.length; budget++) {
         const pending = [ids];
         const visited = new Set<string>();
         while (pending.length) {
