@@ -28,11 +28,9 @@ describe('feasible subset uses the activity of the correct disjunction (#652)', 
         validator.branchStride = 1;
         validator.activityFlat = new Float64Array([5]);
 
-        const { feasibleConstraints, infeasibleDisjunctions } = validator.computeMaximalFeasibleSubset();
-
-        // `last` has the search activity, so it is tried last and is the one
-        // that cannot be added.
-        expect(infeasibleDisjunctions).toEqual([last]);
+        const branch = validator.selectDiagnosticBranch();
+        expect(branch.slice(-3)).toEqual([first.alternatives[0][0], middle.alternatives[0][0], last.alternatives[0][0]]);
+        const feasibleConstraints = validator.recoverBranch(branch).maximalFeasibleSubset;
         expect(feasibleConstraints.map(describeConstraint)).toContain('A <x B');
         expect(feasibleConstraints.map(describeConstraint)).not.toContain('B <x A');
     });

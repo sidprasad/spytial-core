@@ -236,39 +236,41 @@ clause learning.
 
 ---
 
-## 10. Conflict Diagnosis: IIS and Maximal Feasible Subsets
+## 10. Positional conflicts and maximum feasible subsets
 
-When the solver proves UNSAT, it produces two diagnostic artifacts:
+Recovery fixes a representative branch of the original disjunctions. It tries
+the existing activity and entailment ordering, commits a compatible alternative
+when possible, and uses the first ranked alternative when every choice is blocked.
+The IIS and the counterfactual use this same conjunction. An empty disjunction
+has no branch. Its source is reported separately and recovery operates on the
+remaining positional requirements.
 
-### Irreducible Infeasible Subsystem (IIS)
+One distinct positional requirement counts once. An alignment, a box outside
+a group on one side, and the separation of two groups each count once even if
+they compile to multiple graph edges. A selected never-group inclusion witness
+counts once as a conjunction of its visible relations after helper elimination.
+A selected cyclic rotation contributes its individual diagram-element relations.
+An explicitly requested ordering that was transitively implied during normal
+solving also counts. A repair can remove an edge of the path that implied it.
 
-A **minimal set of constraints** that is itself infeasible — removing any single constraint from the IIS would make it feasible. The solver computes this differently depending on the conflict type:
+The validator minimizes an infeasible prefix by deletion to obtain the reported
+IIS. To recover the diagram it searches in order of the number of requirements
+removed. Every feasible subset must omit some member of each conflict encountered.
+The first feasible result therefore retains a maximum number of requirements.
+Equal optima are resolved deterministically by search order. The API exposes the
+IIS as `minimalConflictingSet` and its branch's optimal subset (flattened for
+rendering) as `maximalFeasibleSubset`. The counterfactual layout records the
+omitted requirements in `relaxedConstraints`. Structural group-overlap errors
+have a separate diagnostic.
 
-- **Ordering cycle** (conjunctive phase): `findMinimalConflictSet` finds the cycle path in the H/V graph via BFS from the conflicting edge's target back to its source, then maps each path edge back to the `addedConstraints` that created it.
-
-- **Alignment-ordering conflict** (within-class or cross-class): `findAlignmentConflictSet` identifies the conflicting alignment classes and ordering paths:
-  - *Within-class*: finds two aligned nodes `(a, b)` that are transitively ordered, collects the alignment constraints forming their class + the ordering path `a → ... → b`.
-  - *Cross-class cycle*: finds two alignment classes mutually ordered (A→B and B→A), collects alignment constraints forming both classes + one ordering path in each direction.
-
-- **CDCL UNSAT** (disjunctive phase): `buildUnsatResult` uses `computeMaximalFeasibleSubset` (see below) to identify which disjunctions are infeasible.
-
-### Maximal Feasible Subset (MFS)
-
-The **largest subset of constraints that can be simultaneously satisfied**. This tells the user "here's what we *can* keep."
-
-- For **CDCL UNSAT**: `computeMaximalFeasibleSubset` builds a fresh pair of H/V graphs, greedily adds disjunctions (prioritizing low-activity ones — i.e., those least involved in conflicts), and reports which disjunctions couldn't be added.
-
-- For **alignment conflicts**: the MFS is `addedConstraints \ IIS` — all committed constraints not in the irreducible infeasible set. Since any single removal from the IIS breaks the cycle, this is a valid maximal feasible subset.
-
-Both are exposed on the `PositionalConstraintError` return type as `minimalConflictingSet` (IIS, grouped by source constraint) and `maximalFeasibleSubset` (MFS, flat list of layout constraints).
+For example, a horizontal row orders 0, 1, and 2, and a group selects 0 and 2.
+When the repair keeps the row, the rectangle spans both endpoints and contains
+1. The selected members are still 0 and 2. The position of 1 visibly violates
+the requirement that the rectangle contain exactly the selected members.
 
 ### Determinism
 
-IIS extraction is **deterministic**: the same (input, spec) pair always produces the same IIS. This is important for UX consistency — users should not see different error explanations on repeated runs.
-
-Determinism is enforced by canonical ordering at every decision point in the IIS computation:
-
-- **`findPath` BFS**: successors are sorted lexicographically before exploration, so the same shortest path is always selected when multiple exist.
-- **`UnionFind.classes()`**: members within each equivalence class are sorted, ensuring alignment class iteration order is stable.
-- **`findAlignmentConflictSet` / `hasAlignmentClassCycle`**: alignment class roots are sorted before iterating, so the same conflict is found first when multiple exist.
-- **`computeMaximalFeasibleSubset`**: the VSIDS activity sort uses the original disjunction index as a stable tiebreaker for equal scores.
+Branch selection breaks activity ties by original disjunction index and
+entailment ties by alternative order. IIS extraction tries deletions in a fixed
+order. Recovery explores the members of each conflict in a fixed order, so the
+same input yields the same explanation and repair when several qualify.

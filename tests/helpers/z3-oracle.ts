@@ -470,11 +470,25 @@ function buildModel(
             for (const n of nonMembers) {
                 const nx = getOrCreate(varName(n.id, 'x'));
                 const ny = getOrCreate(varName(n.id, 'y'));
+                // Inside the members' span on an axis = strictly between two
+                // members, OR aligned with a member on that axis. (Aligned
+                // with one member on both axes is an overlap, which the
+                // pairwise non-overlap constraints above already rule out.)
                 altExprs.push(ctx.And(
-                    ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'x')).add(m.width).le(nx))),
-                    ctx.Or(...members.map(m => nx.add(n.width).le(getOrCreate(varName(m.id, 'x'))))),
-                    ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'y')).add(m.height).le(ny))),
-                    ctx.Or(...members.map(m => ny.add(n.height).le(getOrCreate(varName(m.id, 'y'))))),
+                    ctx.Or(
+                        ctx.And(
+                            ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'x')).add(m.width).le(nx))),
+                            ctx.Or(...members.map(m => nx.add(n.width).le(getOrCreate(varName(m.id, 'x'))))),
+                        ),
+                        ...members.map(m => nx.eq(getOrCreate(varName(m.id, 'x')))),
+                    ),
+                    ctx.Or(
+                        ctx.And(
+                            ctx.Or(...members.map(m => getOrCreate(varName(m.id, 'y')).add(m.height).le(ny))),
+                            ctx.Or(...members.map(m => ny.add(n.height).le(getOrCreate(varName(m.id, 'y'))))),
+                        ),
+                        ...members.map(m => ny.eq(getOrCreate(varName(m.id, 'y')))),
+                    ),
                 ));
             }
         }

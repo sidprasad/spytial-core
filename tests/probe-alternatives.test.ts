@@ -12,12 +12,12 @@ const stats = (r: ReturnType<typeof solve>) =>
     (r.validator as QualitativeConstraintValidator).getStats();
 
 describe('one-step look-ahead before the search (#661)', () => {
-    it('rejects a never-group on two members of a group, with no search', () => {
-        // The never-group {A, B} needs a node between A and B on the two
-        // axes. A and B are members of G1, so only F, the third member, can
-        // be there. But F is in the row of B.
+    it('rejects a never-group on the two members of a group, with no search', () => {
+        // The never-group {A, D} needs another node inside the box around
+        // A and D. A and D are the only members of G2, so no node can be
+        // there.
         const result = solve(
-            'G <x D, D <x A, E =y H, A <y C, C =x H, B =y F, {G0: H, D}, {G1: A, B, F}, {!N1: A, B}');
+            'B =y C, G =y J, C =y I, B =y F, D =x F, {G0: J, I, E}, {G1: F, H}, {G2: A, D}, {!N1: A, D}');
         expect(result.sat).toBe(false);
         expect(stats(result).conflicts).toBe(0);
     });

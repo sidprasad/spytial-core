@@ -159,6 +159,22 @@ export function orientationConstraintToString(constraint: LayoutConstraint) {
         && constraint.sourceConstraint.negated;
     const verb = negated ? 'can' : 'must';
 
+    // A never-group rule holds when some other node sits inside the box around
+    // the members. Its orderings are the placement that was picked for that, so
+    // "can be" would read as a loose option. Say what the placement is for.
+    if (constraint.sourceConstraint instanceof GroupBySelector && constraint.sourceConstraint.negated
+        && (isTopConstraint(constraint) || isLeftConstraint(constraint) || isAlignmentConstraint(constraint))) {
+        const why = 'to keep the selected members from forming a group';
+        if (isTopConstraint(constraint)) {
+            return `${nodeLabel(constraint.top)} is placed above ${nodeLabel(constraint.bottom)}, ${why}`;
+        }
+        if (isLeftConstraint(constraint)) {
+            return `${nodeLabel(constraint.left)} is placed to the left of ${nodeLabel(constraint.right)}, ${why}`;
+        }
+        const how = constraint.axis === 'x' ? 'vertically' : 'horizontally';
+        return `${nodeLabel(constraint.node1)} is ${how} aligned with ${nodeLabel(constraint.node2)}, ${why}`;
+    }
+
     if (isTopConstraint(constraint)) {
         let tc = constraint as TopConstraint;
         return `${nodeLabel(tc.top)} ${verb} be above ${nodeLabel(tc.bottom)}`;

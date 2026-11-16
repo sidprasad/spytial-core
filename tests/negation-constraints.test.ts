@@ -1221,8 +1221,11 @@ constraints:
         const { layout } = layoutInstance.generateLayout(instance);
 
         // Negated group should produce disjunctive constraints.
-        // With 2 members (≤ BBOX_THRESHOLD), uses flat encoding:
-        // 2 non-members × 2P2 × 2P2 = 2 × 2 × 2 = 8 alternatives in 1 disjunction.
+        // With 2 members (≤ BBOX_THRESHOLD), uses flat encoding. Per axis a
+        // non-member is inside the span when it is strictly between the two
+        // members (2 orders) or aligned with one of them (2 members): 4 options.
+        // 4 × 4 pairings, minus the 2 that align with the SAME member on both
+        // axes (an overlap) = 14 per non-member, 28 for 2 non-members.
         expect(layout.disjunctiveConstraints).toBeDefined();
         expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
 
@@ -1233,12 +1236,15 @@ constraints:
             (isLeftConstraint(d.alternatives[0][0]) || isTopConstraint(d.alternatives[0][0]))
         );
         expect(negGroupDisj).toBeDefined();
-        expect(negGroupDisj!.alternatives).toHaveLength(8); // 2 non-members × (2×1) × (2×1)
+        expect(negGroupDisj!.alternatives).toHaveLength(28);
 
-        // Each alternative should have exactly 4 constraints (mL≤N, N≤mR, mT≤N, N≤mB)
-        for (const alt of negGroupDisj!.alternatives) {
-            expect(alt).toHaveLength(4);
-        }
+        // Strictly between on both axes: 4 orderings (mL<N, N<mR, mT<N, N<mB).
+        // Between on one axis and aligned on the other: 3 constraints.
+        // Aligned on both: 2 constraints.
+        const byLength = (n: number) => negGroupDisj!.alternatives.filter(a => a.length === n).length;
+        expect(byLength(4)).toBe(8);   // 2 non-members × (2 × 2)
+        expect(byLength(3)).toBe(16);  // 2 non-members × (2 × 2 + 2 × 2)
+        expect(byLength(2)).toBe(4);   // 2 non-members × (2 × 2 − 2)
     });
 
     it('negated group does not draw a visual rectangle', () => {

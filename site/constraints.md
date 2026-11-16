@@ -391,7 +391,7 @@ For alignment, negation requires a disjunction — `hold: never` on horizontal m
 
 For cyclic constraints, negation uses **De Morgan's law**: if the positive cyclic constraint is a disjunction of rotational alternatives, `hold: never` becomes a conjunction where each rotation has at least one violated ordering.
 
-For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. No visual rectangle is drawn. The `name` field is optional for negated groups.
+For groups, `hold: never` asserts that no axis-aligned rectangle can contain exactly the group's members without also containing a non-member. A non-member counts as inside when, on each axis, it sits between two members or is aligned with one — so a node between two members of the same row breaks up the group. No visual rectangle is drawn. The `name` field is optional for negated groups.
 
 ### Examples
 
