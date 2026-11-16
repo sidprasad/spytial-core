@@ -10,7 +10,7 @@ import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
     ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint,
-    negateDisjunction, ColorSource
+    negateDisjunction, ColorSource, diagramConstraintKey
 } from './interfaces';
 
 import {
@@ -187,23 +187,7 @@ function removeDuplicateConstraints(constraints: LayoutConstraint[]): LayoutCons
     const seen = new Set<string>();
     
     for (const constraint of constraints) {
-        let key: string;
-        
-        if (isLeftConstraint(constraint)) {
-            // For left constraints: left_node_id|right_node_id|minDistance
-            key = `left|${constraint.left.id}|${constraint.right.id}|${constraint.minDistance}`;
-        } else if (isTopConstraint(constraint)) {
-            // For top constraints: top_node_id|bottom_node_id|minDistance
-            key = `top|${constraint.top.id}|${constraint.bottom.id}|${constraint.minDistance}`;
-        } else if (isAlignmentConstraint(constraint)) {
-            // For alignment constraints: axis|node1_id|node2_id (order normalized)
-            const [node1, node2] = [constraint.node1.id, constraint.node2.id].sort();
-            key = `align|${constraint.axis}|${node1}|${node2}`;
-        } else {
-            // Fallback for unknown constraint types - include all in case they're different
-            key = `unknown|${JSON.stringify(constraint)}`;
-        }
-        
+        const key = diagramConstraintKey(constraint);
         if (!seen.has(key)) {
             seen.add(key);
             uniqueConstraints.push(constraint);
@@ -1717,6 +1701,7 @@ export class LayoutInstance {
 
 
         let constraints: LayoutConstraint[] = [];
+        const impliedOrderings: LayoutConstraint[] = [];
         let orientationConstraintCount = 0;
         let alignConstraintCount = 0;
         let layoutEdges: LayoutEdge[] = [];
@@ -1726,7 +1711,7 @@ export class LayoutInstance {
         let allDisjunctions: DisjunctiveConstraint[] = [];
 
         try {
-            const orientationResult = this.applyRelativeOrientationConstraints(layoutNodes, g);
+            const orientationResult = this.applyRelativeOrientationConstraints(layoutNodes, g, impliedOrderings);
             constraints = orientationResult.conjunctive;
             allDisjunctions.push(...orientationResult.disjunctive);
             orientationConstraintCount = constraints.length;
@@ -1798,7 +1783,7 @@ export class LayoutInstance {
         }
 
         // Validate all constraints (conjunctive + disjunctive) in one pass
-        const validator: IConstraintValidator = new QualitativeConstraintValidator(layout);
+        const validator: IConstraintValidator = new QualitativeConstraintValidator(layout, impliedOrderings);
         const constraintError = validator.validateConstraints();
 
         if (constraintError) {
@@ -1981,6 +1966,7 @@ export class LayoutInstance {
             // in, the diagram would box exactly the members the rule forbids.
             groups: layout.groups.filter(g => !g.negated),
             conflictingConstraints: [...minimalConflictingSet.values()].flat(),
+            relaxedConstraints: layout.relaxedConstraints,
             warnings: this.warnings,
             hiddenAtoms: layout.hiddenAtoms,
             cyclicFragments: layout.cyclicFragments
@@ -2293,7 +2279,7 @@ export class LayoutInstance {
      * @param layoutNodes - The layout nodes to which the constraints will be applied.
      * @returns Conjunctive constraints and disjunctive constraints (from negation).
      */
-    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph): {
+    applyRelativeOrientationConstraints(layoutNodes: LayoutNode[], g: Graph, impliedOrderings: LayoutConstraint[] = []): {
         conjunctive: LayoutConstraint[];
         disjunctive: DisjunctiveConstraint[];
     } {
@@ -2303,13 +2289,29 @@ export class LayoutInstance {
         let relativeOrientationConstraints = this._layoutSpec.constraints.orientation.relative;
         
         // Track generated constraints to avoid duplicates
-        // Key format: "type:node1:node2:distance" (e.g., "left:a:b:15")
         const generatedConstraints = new Set<string>();
         
         // Track transitive relationships for left/right and top/bottom
         // Maps: node → set of nodes it's left of / above
         const leftOfGraph = new Map<string, Set<string>>();
         const aboveGraph = new Map<string, Set<string>>();
+
+        const addOrdering = (axis: 'x' | 'y', before: string, after: string, source: RelativeOrientationConstraint) => {
+            const graph = axis === 'x' ? leftOfGraph : aboveGraph;
+            const order = axis === 'x'
+                ? this.leftConstraint(before, after, this.minSepWidth, layoutNodes, source)
+                : this.topConstraint(before, after, this.minSepHeight, layoutNodes, source);
+            const key = diagramConstraintKey(order);
+            if (generatedConstraints.has(key)) return;
+            generatedConstraints.add(key);
+            if (this.hasTransitivePath(graph, before, after)) {
+                // A repair can remove an edge of the path that currently implies this rule.
+                impliedOrderings.push(order);
+            } else {
+                this.addToTransitiveGraph(graph, before, after);
+                constraints.push(order);
+            }
+        };
 
         relativeOrientationConstraints.forEach((c: RelativeOrientationConstraint, specIndex: number) => {
 
@@ -2392,89 +2394,28 @@ export class LayoutInstance {
                         g.setEdge(sourceNodeId, targetNodeId, alignmentEdgeLabel, alignmentEdgeLabel);
                     }
 
-                    if (direction == "left") {
-                        const key = `left:${targetNodeId}:${sourceNodeId}:${this.minSepWidth}`;
-                        // Check if transitively implied: is there a path targetNodeId -> ... -> sourceNodeId?
-                        if (!generatedConstraints.has(key) && !this.hasTransitivePath(leftOfGraph, targetNodeId, sourceNodeId)) {
+                    switch (direction) {
+                        case 'left': case 'directlyLeft':
+                            addOrdering('x', targetNodeId, sourceNodeId, c);
+                            break;
+                        case 'right': case 'directlyRight':
+                            addOrdering('x', sourceNodeId, targetNodeId, c);
+                            break;
+                        case 'above': case 'directlyAbove':
+                            addOrdering('y', targetNodeId, sourceNodeId, c);
+                            break;
+                        case 'below': case 'directlyBelow':
+                            addOrdering('y', sourceNodeId, targetNodeId, c);
+                            break;
+                    }
+                    if (direction.startsWith('directly')) {
+                        const alignment = direction === 'directlyLeft' || direction === 'directlyRight'
+                            ? this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c)
+                            : this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c);
+                        const key = diagramConstraintKey(alignment);
+                        if (!generatedConstraints.has(key)) {
                             generatedConstraints.add(key);
-                            this.addToTransitiveGraph(leftOfGraph, targetNodeId, sourceNodeId);
-                            constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "above") {
-                        const key = `top:${targetNodeId}:${sourceNodeId}:${this.minSepHeight}`;
-                        if (!generatedConstraints.has(key) && !this.hasTransitivePath(aboveGraph, targetNodeId, sourceNodeId)) {
-                            generatedConstraints.add(key);
-                            this.addToTransitiveGraph(aboveGraph, targetNodeId, sourceNodeId);
-                            constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "right") {
-                        const key = `left:${sourceNodeId}:${targetNodeId}:${this.minSepWidth}`;
-                        if (!generatedConstraints.has(key) && !this.hasTransitivePath(leftOfGraph, sourceNodeId, targetNodeId)) {
-                            generatedConstraints.add(key);
-                            this.addToTransitiveGraph(leftOfGraph, sourceNodeId, targetNodeId);
-                            constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "below") {
-                        const key = `top:${sourceNodeId}:${targetNodeId}:${this.minSepHeight}`;
-                        if (!generatedConstraints.has(key) && !this.hasTransitivePath(aboveGraph, sourceNodeId, targetNodeId)) {
-                            generatedConstraints.add(key);
-                            this.addToTransitiveGraph(aboveGraph, sourceNodeId, targetNodeId);
-                            constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "directlyLeft") {
-                        const leftKey = `left:${targetNodeId}:${sourceNodeId}:${this.minSepWidth}`;
-                        const alignKey = `align-y:${targetNodeId}:${sourceNodeId}`;
-                        if (!generatedConstraints.has(leftKey) && !this.hasTransitivePath(leftOfGraph, targetNodeId, sourceNodeId)) {
-                            generatedConstraints.add(leftKey);
-                            this.addToTransitiveGraph(leftOfGraph, targetNodeId, sourceNodeId);
-                            constraints.push(this.leftConstraint(targetNodeId, sourceNodeId, this.minSepWidth, layoutNodes, c));
-                        }
-                        if (!generatedConstraints.has(alignKey)) {
-                            generatedConstraints.add(alignKey);
-                            constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "directlyAbove") {
-                        const topKey = `top:${targetNodeId}:${sourceNodeId}:${this.minSepHeight}`;
-                        const alignKey = `align-x:${targetNodeId}:${sourceNodeId}`;
-                        if (!generatedConstraints.has(topKey) && !this.hasTransitivePath(aboveGraph, targetNodeId, sourceNodeId)) {
-                            generatedConstraints.add(topKey);
-                            this.addToTransitiveGraph(aboveGraph, targetNodeId, sourceNodeId);
-                            constraints.push(this.topConstraint(targetNodeId, sourceNodeId, this.minSepHeight, layoutNodes, c));
-                        }
-                        if (!generatedConstraints.has(alignKey)) {
-                            generatedConstraints.add(alignKey);
-                            constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "directlyRight") {
-                        const leftKey = `left:${sourceNodeId}:${targetNodeId}:${this.minSepWidth}`;
-                        const alignKey = `align-y:${targetNodeId}:${sourceNodeId}`;
-                        if (!generatedConstraints.has(leftKey) && !this.hasTransitivePath(leftOfGraph, sourceNodeId, targetNodeId)) {
-                            generatedConstraints.add(leftKey);
-                            this.addToTransitiveGraph(leftOfGraph, sourceNodeId, targetNodeId);
-                            constraints.push(this.leftConstraint(sourceNodeId, targetNodeId, this.minSepWidth, layoutNodes, c));
-                        }
-                        if (!generatedConstraints.has(alignKey)) {
-                            generatedConstraints.add(alignKey);
-                            constraints.push(this.ensureSameYConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
-                        }
-                    }
-                    else if (direction == "directlyBelow") {
-                        const topKey = `top:${sourceNodeId}:${targetNodeId}:${this.minSepHeight}`;
-                        const alignKey = `align-x:${targetNodeId}:${sourceNodeId}`;
-                        if (!generatedConstraints.has(topKey) && !this.hasTransitivePath(aboveGraph, sourceNodeId, targetNodeId)) {
-                            generatedConstraints.add(topKey);
-                            this.addToTransitiveGraph(aboveGraph, sourceNodeId, targetNodeId);
-                            constraints.push(this.topConstraint(sourceNodeId, targetNodeId, this.minSepHeight, layoutNodes, c));
-                        }
-                        if (!generatedConstraints.has(alignKey)) {
-                            generatedConstraints.add(alignKey);
-                            constraints.push(this.ensureSameXConstraint(targetNodeId, sourceNodeId, layoutNodes, c));
+                            constraints.push(alignment);
                         }
                     }
                 });

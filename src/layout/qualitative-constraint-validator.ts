@@ -1,3 +1,4 @@
+import { maximumFeasibleSubset } from './maximum-feasible-subset';
 /**
  * QualitativeConstraintValidator — merged best-of-both constraint validator.
  *
@@ -29,6 +30,7 @@
 
 import {
     DisjunctiveConstraint,
+    diagramConstraintKey,
     InstanceLayout,
     LayoutNode,
     LayoutEdge,
@@ -1160,7 +1162,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private addedConstraints: LayoutConstraint[] = [];
     private allDisjunctions: DisjunctiveConstraint[] = [];
     /** Snapshot of allDisjunctions before presolve modifies it. Used by
-     *  computeMaximalFeasibleSubset to work with the full constraint set. */
+     *  diagnostic branch selection to see all original alternatives. */
     private originalDisjunctions: DisjunctiveConstraint[] = [];
 
     // ─── CDCL state ───
@@ -1264,7 +1266,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     private mustHAlignmentClasses: Map<string, Set<string>> | null = null;
     private mustVAlignmentClasses: Map<string, Set<string>> | null = null;
 
-    constructor(layout: InstanceLayout) {
+    constructor(layout: InstanceLayout, private readonly impliedOrderings: readonly LayoutConstraint[] = []) {
         this.layout = layout;
         this.nodes = layout.nodes;
         this.edges = layout.edges;
@@ -1312,9 +1314,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         // Save before presolve modifies allDisjunctions (removes resolved, prunes alternatives)
         this.originalDisjunctions = [...this.allDisjunctions];
 
-        // If Phase 1 failed, compute global MFS across all constraints and return
+        // Diagnose the selected conjunction even when failure preceded disjunctive search.
         if (phase1Failed) {
-            return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+            return this.enforceMaximalFeasibleSubset(this.recoverBranch(this.selectDiagnosticBranch()));
         }
 
         const constraintsBeforeDisjunctions = this.addedConstraints.length;
@@ -1324,14 +1326,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
 
         // Phase 4b: Handle truly empty disjunctions (no alternatives at all)
         if (this.emptyDisjunctionError) {
-            // The error was made in the middle of presolve, so its feasible
-            // subset had only the constraints committed up to that point. It
-            // had nothing for a disjunction that presolve did not commit.
-            // Use the same global subset as the other error paths: one
-            // alternative for each disjunction that can still hold (#651).
-            this.emptyDisjunctionError.maximalFeasibleSubset =
-                this.computeMaximalFeasibleSubset().feasibleConstraints;
-            return this.enforceMaximalFeasibleSubset(this.emptyDisjunctionError);
+            return this.enforceMaximalFeasibleSubset(this.recoverBranch(this.selectDiagnosticBranch()));
         }
 
         // Snapshot graphs after conjunctive + presolve (before CDCL commits disjunctive choices).
@@ -1344,10 +1339,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         if (this.allDisjunctions.length > 0) {
             const result = this.solveCDCL();
             if (!result.satisfiable) {
-                // buildGlobalMFSError traces conflict paths in the MFS graph,
-                // including the conjunctive constraints that block infeasible
-                // disjunctions — so both positive and negated sources appear in the IIS.
-                return this.enforceMaximalFeasibleSubset(this.buildGlobalMFSError());
+                return this.enforceMaximalFeasibleSubset(this.recoverBranch(this.selectDiagnosticBranch()));
             }
         }
 
@@ -1372,8 +1364,9 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         const implicitConstraints = this.computeAlignmentOrders();
 
         // Phase 7: Node overlap detection
-        const overlapError = this.detectNodeOverlaps();
-        if (overlapError) return this.enforceMaximalFeasibleSubset(overlapError);
+        if (this.hasOverlappingAlignedNodes()) {
+            return this.enforceMaximalFeasibleSubset(this.recoverBranch(this.layout.constraints));
+        }
 
         this.layout.constraints = this.layout.constraints.concat(implicitConstraints);
         // Only now may modal queries build their state: every error path above
@@ -1410,161 +1403,72 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return error;
     }
 
-    /**
-     * Build an error by computing a global greedy MFS across ALL constraints
-     * (conjunctive + disjunctive), then tracing conflict paths in the MFS
-     * graph to produce a proper IIS for each excluded constraint.
-     *
-     * The IIS always contains >= 2 constraints: the excluded constraint(s)
-     * plus the MFS constraints they conflict with.
-     *
-     * Uses `computeMaximalFeasibleSubset()` which builds fresh graphs from
-     * scratch, so it is independent of the main validation state.
-     */
-    private buildGlobalMFSError(): PositionalConstraintError {
-        const { feasibleConstraints, infeasibleDisjunctions, hGraph: mfsH, vGraph: mfsV } = this.computeMaximalFeasibleSubset();
-
-        // Excluded conjunctive = all orientation constraints not in the MFS
-        const feasibleSet = new Set<LayoutConstraint>(feasibleConstraints);
-        const excludedConjunctive = this.orientationConstraints.filter(c => !feasibleSet.has(c));
-
-        // Build IIS: for each excluded constraint, trace the conflict path
-        // in the MFS graph (the path that creates a cycle with the constraint).
-        // IIS = excluded constraints + their conflict paths from the MFS.
-        const iisSet = new Set<LayoutConstraint>();
-        const seen = new Set<LayoutConstraint>();
-
-        // Helper: trace a conflict path in an MFS graph and add provenances to IIS
-        const traceConflictPath = (graph: DifferenceConstraintGraph, from: string, to: string) => {
-            const path = graph.findPath(from, to);
-            if (path) {
-                for (const [a, b] of path) {
-                    const provenance = graph.getEdgeProvenance(a, b);
-                    if (provenance && !seen.has(provenance)) {
-                        seen.add(provenance);
-                        iisSet.add(provenance);
-                    }
+    /** One scored requirement may need several inequalities. A selected never-group
+     * witness is indivisible; solver-only helper nodes disappear before counting. */
+    private recoverBranch(selected: LayoutConstraint[]): PositionalConstraintError {
+        const branch = this.withoutProxyNodes([...selected, ...this.impliedOrderings]);
+        const witnesses = new Map<SourceConstraint, LayoutConstraint[]>();
+        const requirements: LayoutConstraint[][] = [];
+        for (const c of branch) {
+            if (QualitativeConstraintValidator.isNegatedGroupSource(c.sourceConstraint)) {
+                let witness = witnesses.get(c.sourceConstraint);
+                if (!witness) {
+                    witness = [];
+                    witnesses.set(c.sourceConstraint, witness);
+                    requirements.push(witness);
                 }
-            }
-        };
-
-        for (const c of excludedConjunctive) {
-            if (seen.has(c)) continue;
-            seen.add(c);
-            iisSet.add(c);
-
-            if (isAlignmentConstraint(c)) {
-                // Alignment constraint align(A,B) was excluded because A and B are
-                // strictly ordered in the MFS graph. Trace the ordering path(s).
-                const ac = c as AlignmentConstraint;
-                const graph = ac.axis === 'x' ? mfsH : mfsV;
-                const a = ac.node1.id, b = ac.node2.id;
-                // Check both directions — the ordering path that blocks alignment
-                if (graph.canReach(a, b)) traceConflictPath(graph, a, b);
-                if (graph.canReach(b, a)) traceConflictPath(graph, b, a);
-
-                // No order between A and B: the alignment was excluded
-                // because it puts two nodes in the same position. Some node P
-                // aligned with A and some node Q aligned with B (on this
-                // axis) are already aligned on the other axis. The conflict
-                // is the three alignment chains A..P, B..Q and P..Q (#646).
-                if (!graph.isStrictlyOrdered(a, b) && !graph.isStrictlyOrdered(b, a)) {
-                    const otherGraph = ac.axis === 'x' ? mfsV : mfsH;
-                    const classA = [...new Set([a, ...graph.getAlignmentClassOf(a)])].sort();
-                    const classB = [...new Set([b, ...graph.getAlignmentClassOf(b)])].sort();
-                    search:
-                    for (const p of classA) {
-                        for (const q of classB) {
-                            if (p === q || !otherGraph.areAligned(p, q)) continue;
-                            traceConflictPath(graph, a, p);
-                            traceConflictPath(graph, b, q);
-                            traceConflictPath(otherGraph, p, q);
-                            break search;
-                        }
-                    }
-                }
+                witness.push(c);
             } else {
-                const edge = this.constraintToEdge(c);
-                if (!edge) continue;
-                const graph = edge.axis === 'h' ? mfsH : mfsV;
-                traceConflictPath(graph, edge.to, edge.from);
+                requirements.push([c]);
             }
         }
 
-        // Also include infeasible disjunctions. A disjunction is infeasible
-        // because EVERY alternative is blocked, so the report needs the blocker
-        // of each alternative — not only of the first one. Without this, a
-        // group rule that fails only because of a `hold: never` group rule (or
-        // the other way round) is reported alone (#401).
-        const lineOverrides = new Map<LayoutConstraint, string>();
-        for (const disj of infeasibleDisjunctions) {
-            const rep = disj.alternatives[0]?.[0];
-            if (!rep) continue; // Empty disjunction — add source to maps below
-            if (!seen.has(rep)) {
-                seen.add(rep);
-                iisSet.add(rep);
-            }
-            // One alternative of a never-group rule reads as "A can be left of
-            // B", which says nothing about the rule. Say what failed instead.
-            if (QualitativeConstraintValidator.isNegatedGroupSource(disj.sourceConstraint)) {
-                lineOverrides.set(rep, QualitativeConstraintValidator.NEVER_GROUP_BLOCKED);
-            }
-            for (const alternative of disj.alternatives) {
-                for (const blocker of this.findAlternativeBlockers(alternative, mfsH, mfsV)) {
-                    if (!seen.has(blocker)) {
-                        seen.add(blocker);
-                        iisSet.add(blocker);
-                    }
-                }
+        // Different source rules can emit the same positional requirement.
+        const unique = new Map<string, LayoutConstraint[]>();
+        for (const unit of requirements) {
+            const key = JSON.stringify([...new Set(unit.map(diagramConstraintKey))].sort());
+            if (!unique.has(key)) unique.set(key, unit);
+        }
+        const units = [...unique.values()];
+        const firstFailure = (subset: number[]): number => {
+            const [h, v] = this.freshRecoveryGraphs();
+            return subset.findIndex(i => units[i].some(c =>
+                !QualitativeConstraintValidator.addEdgeToGraphsExpanded(c, h, v)));
+        };
+        const { kept, iis } = maximumFeasibleSubset(units.length, firstFailure);
+        const feasible = kept.flatMap(i => units[i]);
+        const retained = new Set(kept);
+        this.layout.relaxedConstraints = units.flatMap((unit, i) => retained.has(i) ? [] : unit);
+        const empty = this.originalDisjunctions.find(d => d.alternatives.length === 0);
+        if (empty) {
+            const error = this.buildDisjunctiveError(empty);
+            error.maximalFeasibleSubset = feasible;
+            return error;
+        }
+        const bySource = new Map<SourceConstraint, LayoutConstraint[]>();
+        const messages = new Map<string, string[]>();
+        for (const id of iis) {
+            for (const c of units[id]) {
+                const src = c.sourceConstraint;
+                if (!bySource.has(src)) bySource.set(src, []);
+                bySource.get(src)!.push(c);
+                const html = src.toHTML();
+                if (!messages.has(html)) messages.set(html, []);
+                messages.get(html)!.push(orientationConstraintToString(c));
             }
         }
-
-        // Group IIS by source constraint
-        const srcToLayout = new Map<SourceConstraint, LayoutConstraint[]>();
-        const htmlMap = new Map<string, string[]>();
-        for (const c of iisSet) {
-            const src = c.sourceConstraint;
-            if (!srcToLayout.has(src)) srcToLayout.set(src, []);
-            if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
-            // A helper node has no name to show: keep the rule, skip the line.
-            if (this.mentionsProxyNode(c) && !lineOverrides.has(c)) continue;
-            srcToLayout.get(src)!.push(c);
-            htmlMap.get(src.toHTML())!.push(lineOverrides.get(c) ?? orientationConstraintToString(c));
-        }
-
-        // Empty disjunctions with no alternatives
-        for (const disj of infeasibleDisjunctions) {
-            if (disj.alternatives.length === 0) {
-                const src = disj.sourceConstraint;
-                if (!srcToLayout.has(src)) srcToLayout.set(src, []);
-                if (!htmlMap.has(src.toHTML())) htmlMap.set(src.toHTML(), []);
-                htmlMap.get(src.toHTML())!.push(QualitativeConstraintValidator.emptyDisjunctionLine(src));
-            }
-        }
-
-        // Pick a representative for backward-compat singular fields
-        const iisArray = [...iisSet];
-        const representative = iisArray[0] ?? this.orientationConstraints[0];
-
-        const repString = representative
-            ? (lineOverrides.get(representative) ?? orientationConstraintToString(representative))
-            : '';
-        const repSource = representative?.sourceConstraint
-            ?? infeasibleDisjunctions[0]?.sourceConstraint
-            ?? this.orientationConstraints[0]?.sourceConstraint;
-
+        // CDCL can also stop at its restart limit. Never invent an IIS when
+        // the visible branch is fully feasible under the recovery checker.
+        const trigger = units[iis[iis.length - 1]]?.[0] ?? branch[0];
+        const message = !iis.length ? 'Validation stopped without a conflict on the selected positional branch'
+            : orientationConstraintToString(trigger);
         return {
-            name: 'PositionalConstraintError', type: 'positional-conflict',
-            message: `Constraint "${repString}" conflicts with existing constraints`,
-            conflictingConstraint: representative ?? (undefined as any),
-            conflictingSourceConstraint: repSource ?? (undefined as any),
-            minimalConflictingSet: srcToLayout,
-            maximalFeasibleSubset: feasibleConstraints,
-            errorMessages: {
-                conflictingConstraint: repString,
-                conflictingSourceConstraint: repSource?.toHTML() ?? '',
-                minimalConflictingConstraints: htmlMap,
-            },
+            name: 'PositionalConstraintError', type: 'positional-conflict', message,
+            conflictingConstraint: trigger, conflictingSourceConstraint: trigger?.sourceConstraint,
+            minimalConflictingSet: bySource, maximalFeasibleSubset: feasible,
+            errorMessages: { conflictingConstraint: message,
+                conflictingSourceConstraint: trigger?.sourceConstraint.toHTML() ?? '',
+                minimalConflictingConstraints: messages },
         };
     }
 
@@ -1724,18 +1628,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return kept;
     }
 
-    /** True for a constraint on a never-group helper node, which has no name to show. */
-    private mentionsProxyNode(c: LayoutConstraint): boolean {
-        if (this.proxyNodeIds.size === 0) return false;
-        const has = (n: LayoutNode) => this.proxyNodeIds.has(n.id);
-        if (isLeftConstraint(c)) return has(c.left) || has(c.right);
-        if (isTopConstraint(c)) return has(c.top) || has(c.bottom);
-        return false;
-    }
-
-    private static readonly NEVER_GROUP_BLOCKED =
-        'No other node can sit inside the box around these members, so they form a group';
-
     private static isNegatedGroupSource(source: SourceConstraint | undefined): boolean {
         return source instanceof GroupBySelector && source.negated;
     }
@@ -1746,103 +1638,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             return 'Each selected group has a single member, or no node is left outside it, so it always forms a group';
         }
         return `unsatisfiable: ${source?.toHTML?.() ?? 'unknown'}`;
-    }
-
-    /**
-     * The orderings a constraint imposes on the expanded (per-member) graphs
-     * that `computeMaximalFeasibleSubset` builds. Mirrors
-     * `addEdgeToGraphsExpanded`. Alignment constraints impose none.
-     */
-    private static expandedEdges(constraint: LayoutConstraint): { axis: 'h' | 'v'; from: string; to: string }[] {
-        const edges: { axis: 'h' | 'v'; from: string; to: string }[] = [];
-        if (isBoundingBoxConstraint(constraint)) {
-            const bc = constraint as BoundingBoxConstraint;
-            for (const m of bc.group.nodeIds) {
-                switch (bc.side) {
-                    case 'left':   edges.push({ axis: 'h', from: bc.node.id, to: m }); break;
-                    case 'right':  edges.push({ axis: 'h', from: m, to: bc.node.id }); break;
-                    case 'top':    edges.push({ axis: 'v', from: bc.node.id, to: m }); break;
-                    case 'bottom': edges.push({ axis: 'v', from: m, to: bc.node.id }); break;
-                }
-            }
-        } else if (isGroupBoundaryConstraint(constraint)) {
-            const gc = constraint as GroupBoundaryConstraint;
-            for (const aId of gc.groupA.nodeIds) {
-                for (const bId of gc.groupB.nodeIds) {
-                    switch (gc.side) {
-                        case 'left':   edges.push({ axis: 'h', from: aId, to: bId }); break;
-                        case 'right':  edges.push({ axis: 'h', from: bId, to: aId }); break;
-                        case 'top':    edges.push({ axis: 'v', from: aId, to: bId }); break;
-                        case 'bottom': edges.push({ axis: 'v', from: bId, to: aId }); break;
-                    }
-                }
-            }
-        } else if (isLeftConstraint(constraint)) {
-            edges.push({ axis: 'h', from: constraint.left.id, to: constraint.right.id });
-        } else if (isTopConstraint(constraint)) {
-            edges.push({ axis: 'v', from: constraint.top.id, to: constraint.bottom.id });
-        }
-        return edges;
-    }
-
-    /**
-     * Why can this alternative not be added to the feasible subset? Returns the
-     * feasible constraints that block it: the ones on the path that would close
-     * a cycle with one of the alternative's orderings.
-     *
-     * Returns [] when no single blocking path is found (the alternative's own
-     * constraints contradict each other, or only a dual-axis overlap blocks it).
-     */
-    private findAlternativeBlockers(
-        alternative: LayoutConstraint[],
-        hGraph: DifferenceConstraintGraph,
-        vGraph: DifferenceConstraintGraph,
-    ): LayoutConstraint[] {
-        const own = new Set<LayoutConstraint>(alternative);
-        const pathBlockers = (graph: DifferenceConstraintGraph, from: string, to: string): LayoutConstraint[] => {
-            const path = graph.findPath(from, to);
-            return path ? graph.getPathConstraints(path).filter(c => !own.has(c)) : [];
-        };
-        // The first constraint of the alternative that the given graphs reject.
-        const blockedBy = (h: DifferenceConstraintGraph, v: DifferenceConstraintGraph, c: LayoutConstraint): LayoutConstraint[] | null => {
-            if (isAlignmentConstraint(c)) {
-                const ac = c as AlignmentConstraint;
-                const graph = ac.axis === 'x' ? h : v;
-                const a = ac.node1.id, b = ac.node2.id;
-                if (graph.areAligned(a, b)) return null;
-                // Blocked when the two nodes are already ordered either way.
-                const found = [
-                    ...(graph.canReach(a, b) ? pathBlockers(graph, a, b) : []),
-                    ...(graph.canReach(b, a) ? pathBlockers(graph, b, a) : []),
-                ];
-                return found.length > 0 ? found : null;
-            }
-            for (const e of QualitativeConstraintValidator.expandedEdges(c)) {
-                const graph = e.axis === 'h' ? h : v;
-                // addEdge rejects a → b exactly when b already reaches a.
-                if (e.from !== e.to && graph.canReach(e.to, e.from)) {
-                    return pathBlockers(graph, e.to, e.from);
-                }
-            }
-            return null;
-        };
-
-        // Common case: one constraint is blocked by the feasible subset alone.
-        for (const c of alternative) {
-            const found = blockedBy(hGraph, vGraph, c);
-            if (found) return found;
-        }
-
-        // Otherwise the alternative is only blocked as a whole: add its
-        // constraints one at a time to a copy and explain the one that fails.
-        const hClone = hGraph.clone();
-        const vClone = vGraph.clone();
-        for (const c of alternative) {
-            if (!QualitativeConstraintValidator.addEdgeToGraphsExpanded(c, hClone, vClone)) {
-                return blockedBy(hClone, vClone, c) ?? [];
-            }
-        }
-        return [];
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -2389,19 +2184,19 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // CDCL solver (from V1, unchanged core)
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private solveCDCL(): { satisfiable: boolean; error?: PositionalConstraintError } {
+    private solveCDCL(): { satisfiable: boolean } {
         if (this.allDisjunctions.length === 0) return { satisfiable: true };
 
         const addedBeforePrune = this.addedConstraints.length;
 
         // Geometric pruning pass
         this.pruneDisjunctions();
-        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+        if (this.pruneFoundDeadDisjunction) return { satisfiable: false };
 
         // One-step look-ahead: remove each alternative that leaves some
         // other disjunction with no alternative.
         if (this.allDisjunctions.length > 0) this.probeAlternatives();
-        if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+        if (this.pruneFoundDeadDisjunction) return { satisfiable: false };
 
         // The prune and the probe commit a disjunction when it has one
         // alternative left, and remove it from the list. Each such commit
@@ -2468,21 +2263,21 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     // Same list shape: keep the clauses and the activity.
                     this.rebuildBranchIndex(false);
                 }
-                if (this.pruneFoundDeadDisjunction) return this.buildUnsatResult(new Int32Array(0));
+                if (this.pruneFoundDeadDisjunction) return { satisfiable: false };
                 if (after.length === 0) return { satisfiable: true };
                 assigned = new Int32Array(after.length).fill(-1);
             }
 
             const result = this.cdclSearchLoop(assigned);
             if (result.satisfiable) return { satisfiable: true };
-            if (result.provedUnsat) return this.buildUnsatResult(assigned);
+            if (result.provedUnsat) return { satisfiable: false };
 
             totalRestarts++;
             this.updateRestartThreshold();
         }
 
         // Limit reached: no proof. See the comment at MAX_RESTARTS.
-        return this.buildUnsatResult(new Int32Array(this.allDisjunctions.length).fill(-1));
+        return { satisfiable: false };
     }
 
     /**
@@ -3890,12 +3685,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // Maximal feasible subset
     // ═══════════════════════════════════════════════════════════════════════════
 
-    private computeMaximalFeasibleSubset(): {
-        feasibleConstraints: LayoutConstraint[];
-        infeasibleDisjunctions: DisjunctiveConstraint[];
-        hGraph: DifferenceConstraintGraph;
-        vGraph: DifferenceConstraintGraph;
-    } {
+    private freshRecoveryGraphs(): [DifferenceConstraintGraph, DifferenceConstraintGraph] {
         const freshH = new DifferenceConstraintGraph(this.minPadding);
         const freshV = new DifferenceConstraintGraph(this.minPadding);
 
@@ -3909,19 +3699,22 @@ class QualitativeConstraintValidator implements IConstraintValidator {
             freshV.ensureNode(gid);
         }
 
-        const feasibleConstraints: LayoutConstraint[] = [];
-        for (const constraint of this.orientationConstraints) {
-            // Use expanded encoding: BoundingBox/GroupBoundary are expanded to
-            // per-member edges so cross-group conflicts are detected correctly.
-            const ok = QualitativeConstraintValidator.addEdgeToGraphsExpanded(
-                constraint, freshH, freshV);
-            if (ok) feasibleConstraints.push(constraint);
-        }
-        const infeasibleDisjunctions: DisjunctiveConstraint[] = [];
+        return [freshH, freshV];
+    }
 
-        // Use originalDisjunctions (pre-presolve snapshot) so that disjunctions
-        // resolved/committed by presolve are re-evaluated from scratch. This ensures
-        // computeMaximalFeasibleSubset works with the full constraint set.
+    /** Choose a complete representative branch for both diagnostics. Prefer a
+     * compatible whole alternative; if all are blocked, use the highest-ranked
+     * candidate. Recovery can subsequently relax requirements on that branch. */
+    private selectDiagnosticBranch(): LayoutConstraint[] {
+        let [freshH, freshV] = this.freshRecoveryGraphs();
+        const selected = [...this.orientationConstraints];
+        for (const c of selected) {
+            const h = freshH.clone(), v = freshV.clone();
+            if (QualitativeConstraintValidator.addEdgeToGraphsExpanded(c, h, v)) {
+                freshH = h;
+                freshV = v;
+            }
+        }
         const disjSource = this.originalDisjunctions.length > 0
             ? this.originalDisjunctions
             : this.allDisjunctions;
@@ -3953,7 +3746,7 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         });
 
         for (const disj of sortedDisjunctions) {
-            let added = false;
+            let chosen: LayoutConstraint[] | undefined;
             // Prefer an alternative whose separation already holds in the current
             // graphs (adds no new ordering) over the first merely-addable one, and
             // among those prefer the side asserted by *direct* edges. This keeps a
@@ -3980,19 +3773,15 @@ class QualitativeConstraintValidator implements IConstraintValidator {
                     }
                 }
                 if (ok) {
-                    for (const constraint of alternative) {
-                        QualitativeConstraintValidator.addEdgeToGraphsExpanded(
-                            constraint, freshH, freshV);
-                        feasibleConstraints.push(constraint);
-                    }
-                    added = true;
+                    freshH = hClone;
+                    freshV = vClone;
+                    chosen = alternative;
                     break;
                 }
             }
-            if (!added) infeasibleDisjunctions.push(disj);
+            for (const c of chosen ?? orderedAlternatives[0]?.alt ?? []) selected.push(c);
         }
-
-        return { feasibleConstraints, infeasibleDisjunctions, hGraph: freshH, vGraph: freshV };
+        return selected;
     }
 
     private addEdgeToGraphs(constraint: LayoutConstraint, hGraph: DifferenceConstraintGraph, vGraph: DifferenceConstraintGraph): boolean {
@@ -4044,58 +3833,6 @@ class QualitativeConstraintValidator implements IConstraintValidator {
     // ═══════════════════════════════════════════════════════════════════════════
     // Error building
     // ═══════════════════════════════════════════════════════════════════════════
-
-    private buildUnsatResult(_assigned: Int32Array): { satisfiable: boolean; error: PositionalConstraintError } {
-        const { feasibleConstraints, infeasibleDisjunctions, hGraph: _h, vGraph: _v } = this.computeMaximalFeasibleSubset();
-
-        const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-        for (const disj of infeasibleDisjunctions) {
-            const source = disj.sourceConstraint;
-            if (!minimalConflictingSet.has(source)) minimalConflictingSet.set(source, []);
-            if (disj.alternatives.length > 0 && disj.alternatives[0].length > 0) {
-                minimalConflictingSet.get(source)!.push(disj.alternatives[0][0]);
-            }
-        }
-
-        let representativeConstraint: LayoutConstraint | undefined;
-        if (infeasibleDisjunctions.length > 0 && infeasibleDisjunctions[0].alternatives.length > 0) {
-            representativeConstraint = infeasibleDisjunctions[0].alternatives[0][0];
-        } else if (this.orientationConstraints.length > 0) {
-            representativeConstraint = this.orientationConstraints[0];
-        }
-        if (!representativeConstraint) {
-            representativeConstraint = this.orientationConstraints[0] || this.allDisjunctions[0]?.alternatives[0]?.[0];
-        }
-
-        const firstString = orientationConstraintToString(representativeConstraint);
-        const htmlMap = new Map<string, string[]>();
-        for (const [source, constraints] of minimalConflictingSet.entries()) {
-            const html = source.toHTML();
-            if (!htmlMap.has(html)) htmlMap.set(html, []);
-            constraints.forEach(c => htmlMap.get(html)!.push(orientationConstraintToString(c)));
-        }
-
-        const conflictSource = infeasibleDisjunctions.length > 0
-            ? infeasibleDisjunctions[0].sourceConstraint
-            : representativeConstraint.sourceConstraint;
-
-        return {
-            satisfiable: false,
-            error: {
-                name: 'PositionalConstraintError', type: 'positional-conflict',
-                message: `Constraint "${firstString}" conflicts with existing constraints`,
-                conflictingConstraint: representativeConstraint,
-                conflictingSourceConstraint: conflictSource,
-                minimalConflictingSet,
-                maximalFeasibleSubset: feasibleConstraints,
-                errorMessages: {
-                    conflictingConstraint: firstString,
-                    conflictingSourceConstraint: conflictSource.toHTML(),
-                    minimalConflictingConstraints: htmlMap,
-                },
-            },
-        };
-    }
 
     private buildConjunctiveError(constraint: LayoutConstraint): PositionalConstraintError {
         const minimalSet = this.findMinimalConflictSet(constraint);
@@ -4433,144 +4170,12 @@ class QualitativeConstraintValidator implements IConstraintValidator {
         return implicitConstraints;
     }
 
-    private detectNodeOverlaps(): PositionalConstraintError | null {
-        for (const hGroup of this.horizontallyAligned) {
-            const hSet = new Set(hGroup.map(n => n.id));
-            for (const vGroup of this.verticallyAligned) {
-                const overlapping = vGroup.filter(n => hSet.has(n.id));
-                if (overlapping.length >= 2) {
-                    const n1 = overlapping[0], n2 = overlapping[1];
-
-                    // Find alignment chains connecting n1↔n2 on each axis.
-                    // Both chains together form the minimal conflicting set;
-                    // breaking either chain resolves the overlap.
-                    const xChain = this.findAlignmentPath(n1.id, n2.id, 'x');
-                    const yChain = this.findAlignmentPath(n1.id, n2.id, 'y');
-                    const allConflicting = [...xChain, ...yChain];
-
-                    const minimalConflictingSet = new Map<SourceConstraint, LayoutConstraint[]>();
-                    const htmlMap = new Map<string, string[]>();
-                    for (const c of allConflicting) {
-                        const src = c.sourceConstraint;
-                        if (!minimalConflictingSet.has(src)) minimalConflictingSet.set(src, []);
-                        minimalConflictingSet.get(src)!.push(c);
-                        const html = src.toHTML();
-                        if (!htmlMap.has(html)) htmlMap.set(html, []);
-                        htmlMap.get(html)!.push(orientationConstraintToString(c));
-                    }
-
-                    // MFS: remove the minimum constraints from one axis to break
-                    // the dual-axis alignment. Pick the cheaper axis.
-                    const toRemove = xChain.length > 0 && xChain.length <= yChain.length
-                        ? this.findConstraintsToBreakAlignment(n1.id, n2.id, 'x')
-                        : this.findConstraintsToBreakAlignment(n1.id, n2.id, 'y');
-                    const removeSet = new Set(toRemove);
-                    const maxFeasible = this.addedConstraints.filter(c => !removeSet.has(c));
-
-                    const first = allConflicting[0] || this.addedConstraints[0];
-                    return {
-                        name: 'PositionalConstraintError', type: 'positional-conflict',
-                        message: `Alignment constraints force ${n1.id} and ${n2.id} to occupy the same position`,
-                        conflictingConstraint: first, conflictingSourceConstraint: first.sourceConstraint,
-                        minimalConflictingSet,
-                        maximalFeasibleSubset: maxFeasible,
-                        errorMessages: {
-                            conflictingConstraint: orientationConstraintToString(first),
-                            conflictingSourceConstraint: first.sourceConstraint.toHTML(),
-                            minimalConflictingConstraints: htmlMap,
-                        },
-                    };
-                }
-            }
-        }
-        return null;
-    }
-
-    /**
-     * BFS to find the alignment constraint path connecting two nodes on a given axis.
-     */
-    private findAlignmentPath(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
-        const adj = new Map<string, { neighbor: string; constraint: LayoutConstraint }[]>();
-        for (const c of this.addedConstraints) {
-            if (!isAlignmentConstraint(c)) continue;
-            const ac = c as AlignmentConstraint;
-            if (ac.axis !== axis) continue;
-            const a = ac.node1.id, b = ac.node2.id;
-            if (!adj.has(a)) adj.set(a, []);
-            if (!adj.has(b)) adj.set(b, []);
-            adj.get(a)!.push({ neighbor: b, constraint: c });
-            adj.get(b)!.push({ neighbor: a, constraint: c });
-        }
-        const visited = new Set<string>([nodeA]);
-        const parent = new Map<string, { node: string; constraint: LayoutConstraint } | null>();
-        parent.set(nodeA, null);
-        const queue = [nodeA];
-        while (queue.length > 0) {
-            const current = queue.shift()!;
-            if (current === nodeB) {
-                const result: LayoutConstraint[] = [];
-                let node = nodeB;
-                while (parent.get(node) !== null) {
-                    const p = parent.get(node)!;
-                    result.push(p.constraint);
-                    node = p.node;
-                }
-                return result.reverse();
-            }
-            for (const { neighbor, constraint } of adj.get(current) || []) {
-                if (!visited.has(neighbor)) {
-                    visited.add(neighbor);
-                    parent.set(neighbor, { node: current, constraint });
-                    queue.push(neighbor);
-                }
-            }
-        }
-        return [];
-    }
-
-    /**
-     * Find the minimum set of alignment constraints to remove on one axis
-     * so that nodeA and nodeB are no longer aligned.
-     */
-    private findConstraintsToBreakAlignment(nodeA: string, nodeB: string, axis: 'x' | 'y'): LayoutConstraint[] {
-        const axisAlignments = this.addedConstraints.filter(c =>
-            isAlignmentConstraint(c) && (c as AlignmentConstraint).axis === axis
-        );
-
-        const connected = (excluded: Set<LayoutConstraint>): boolean => {
-            const adj = new Map<string, string[]>();
-            for (const c of axisAlignments) {
-                if (excluded.has(c)) continue;
-                const ac = c as AlignmentConstraint;
-                if (!adj.has(ac.node1.id)) adj.set(ac.node1.id, []);
-                if (!adj.has(ac.node2.id)) adj.set(ac.node2.id, []);
-                adj.get(ac.node1.id)!.push(ac.node2.id);
-                adj.get(ac.node2.id)!.push(ac.node1.id);
-            }
-            const visited = new Set<string>([nodeA]);
-            const queue = [nodeA];
-            while (queue.length > 0) {
-                const cur = queue.shift()!;
-                if (cur === nodeB) return true;
-                for (const nb of adj.get(cur) || []) {
-                    if (!visited.has(nb)) { visited.add(nb); queue.push(nb); }
-                }
-            }
-            return false;
-        };
-
-        // Try single-constraint removal first (covers tree-shaped alignment graphs)
-        for (const c of axisAlignments) {
-            if (!connected(new Set([c]))) return [c];
-        }
-
-        // Redundant alignment edges — greedily remove until disconnected
-        const toRemove = new Set<LayoutConstraint>();
-        for (const c of axisAlignments) {
-            toRemove.add(c);
-            if (!connected(toRemove)) return [...toRemove];
-        }
-        return [...toRemove];
+    private hasOverlappingAlignedNodes(): boolean {
+        return this.horizontallyAligned.some(horizontal => {
+            const ids = new Set(horizontal.map(n => n.id));
+            return this.verticallyAligned.some(vertical =>
+                vertical.filter(n => ids.has(n.id)).length >= 2);
+        });
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

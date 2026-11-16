@@ -278,12 +278,24 @@ export function isGroupBoundaryConstraint(constraint: LayoutConstraint): constra
            (constraint as GroupBoundaryConstraint).groupB !== undefined;
 }
 
+/** Identity of a diagram-element requirement, independent of its authoring rule. */
+export function diagramConstraintKey(c: LayoutConstraint): string {
+    if (isLeftConstraint(c)) return JSON.stringify(['left', c.left.id, c.right.id, c.minDistance]);
+    if (isTopConstraint(c)) return JSON.stringify(['top', c.top.id, c.bottom.id, c.minDistance]);
+    if (isAlignmentConstraint(c)) return JSON.stringify(['align', c.axis, ...[c.node1.id, c.node2.id].sort()]);
+    if (isBoundingBoxConstraint(c)) return JSON.stringify(['box', c.group.name, c.node.id, c.side, c.minDistance]);
+    if (isGroupBoundaryConstraint(c)) return JSON.stringify(['groups', c.groupA.name, c.groupB.name, c.side, c.minDistance]);
+    return JSON.stringify(c);
+}
+
 export interface InstanceLayout {
     nodes: LayoutNode[];
     edges: LayoutEdge[];
     constraints: LayoutConstraint[]; // Conjunctive constraints that must always be satisfied
     groups: LayoutGroup[];
     conflictingConstraints?: LayoutConstraint[];
+    /** Selected branch requirements omitted from the positional counterfactual, flattened for display. */
+    relaxedConstraints?: LayoutConstraint[];
     overlappingNodes?: LayoutNode[]; // IDs of overlapping nodes
     /**
      * Advisory notes about constraints and directives that quietly had no effect —

@@ -15,6 +15,7 @@ import * as fc from 'fast-check';
 import { QualitativeConstraintValidator } from '../src/layout/qualitative-constraint-validator';
 import { isPositionalConstraintError } from '../src/layout/constraint-types';
 import {
+    diagramConstraintKey,
     DisjunctiveConstraint,
     InstanceLayout,
     LayoutConstraint,
@@ -1104,13 +1105,9 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
             ), { numRuns: NUM_RUNS, timeout: TIMEOUT });
         });
 
-        // On conjunctive-only systems the validator's model coincides with the
-        // oracle's subset model (nodes + non-overlap + the given constraints),
-        // and the MFS comes from the global greedy builder — so maximality is
-        // checkable: adding back ANY excluded constraint must be Z3-UNSAT.
-        // (With groups/disjunctions in play the subset model is a relaxation
-        // and a SAT verdict on an excluded constraint would prove nothing.)
-        it('MFS on conjunctive-only systems is feasible AND maximal per Z3', async () => {
+        // Independent optimality check: any larger feasible set contains a feasible
+        // subset of size kept.length + 1. Count each distinct diagram relation once.
+        it('returns a maximum-cardinality conjunctive subset per Z3', async () => {
             await fc.assert(fc.asyncProperty(
                 arbMixedSystem(5, 8),
                 async (layout) => {
@@ -1121,11 +1118,8 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                         return;
                     }
                     const mfs = error.maximalFeasibleSubset;
-                    // cloneLayout shares constraint object identity, so the
-                    // excluded set is computable from the original array
-                    // (the validator replaces layoutV.constraints, not ours).
-                    const mfsSet = new Set(mfs);
-                    const excluded = layout.constraints.filter(c => !mfsSet.has(c));
+                    const distinct = Array.from(new Map(layout.constraints.map(c => [diagramConstraintKey(c), c])).values());
+                    expect(new Set(mfs.map(diagramConstraintKey)).size).toBe(mfs.length);
 
                     const feasible = await verifyFeasibleSubset(layout, mfs);
                     if (!feasible) {
@@ -1137,15 +1131,11 @@ describe.runIf(available)('Z3 Oracle Equivalence (Property-Based)', () => {
                         throw new Error(detail);
                     }
 
-                    for (const c of excluded) {
-                        const stillFeasible = await verifyFeasibleSubset(layout, [...mfs, c]);
-                        if (stillFeasible) {
-                            const detail =
-                                `MFS is not maximal: adding back "${describeConstraint(c)}" is still feasible per Z3\n` +
-                                `  MFS: ${mfs.map(describeConstraint).join(', ')}\n` +
-                                `  ${describeLayout(layout)}`;
-                            console.error(`[z3-oracle] ${detail}`);
-                            throw new Error(detail);
+                    for (let mask = 0; mask < 2 ** distinct.length; mask++) {
+                        const candidate = distinct.filter((_, i) => (mask & (1 << i)) !== 0);
+                        if (candidate.length === mfs.length + 1) {
+                            expect(await verifyFeasibleSubset(layout, candidate),
+                                describeLayout(layout)).toBe(false);
                         }
                     }
                 }

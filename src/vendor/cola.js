@@ -3968,6 +3968,12 @@
                     v.bounds = new Rectangle(v.x - w2, v.x + w2, v.y - h2, v.y + h2);
                 });
                 computeGroupBounds(rootGroup);
+                // In a positional repair with a relaxed hull boundary, the retained
+                // hull separations have already been translated to node inequalities.
+                // Sweep physical nodes for collisions. Drawing still uses the real
+                // group tree and the padded bounds of its declared members.
+                this.overlapRoot = groups.some(function (g) { return g.explicitGroupSeparations; })
+                    ? { leaves: nodes, groups: [] } : rootGroup;
                 var i = nodes.length;
                 groups.forEach(function (g) {
                     _this.variables[i] = g.minVar = new IndexedVariable(i++, typeof g.stiffness !== "undefined" ? g.stiffness : 0.01);
@@ -4119,7 +4125,7 @@
             this.setupVariablesAndBounds(x0, y0, desired, getDesired);
             if (this.rootGroup && this.avoidOverlaps) {
                 computeGroupBounds(this.rootGroup);
-                cs = cs.concat(generateConstraints(this.rootGroup));
+                cs = cs.concat(generateConstraints(this.overlapRoot || this.rootGroup));
             }
             this.solve(this.variables, cs, start, desired);
             this.nodes.forEach(updateNodeBounds);

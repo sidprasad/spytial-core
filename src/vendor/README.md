@@ -31,3 +31,12 @@ Regression coverage is in `tests/webcola-aligned-group-overlap.test.ts` and
 `tests/webcola-alignment-projection.test.ts`, using `requireCola()` to exercise
 this vendored file. `tests/preserved-group-ordering.test.ts` checks integration
 with Spytial's explicit group ordering.
+
+## Relaxed group exclusion in a counterfactual
+
+When positional recovery drops a group boundary, the translator marks the
+group definitions with `explicitGroupSeparations`. Retained group boundaries
+are already present as inequalities between physical nodes. The overlap
+projection then sweeps those nodes, so it can prevent node collisions while
+allowing an outsider inside a group's hull. The drawing computes each hull
+from its declared members with the usual nesting and padding.

@@ -990,11 +990,18 @@ export class WebColaLayout {
       };
     }
 
-    if(isBoundingBoxConstraint(constraint)) {
-      // Log and ignore for now
-      console.log("BoundingBoxConstraint detected.");
-      // We should return a null constraint or something here
-      return { type: "noop" };
+    if (isBoundingBoxConstraint(constraint)) {
+      const outsider = this.getNodeIndex(constraint.node.id);
+      const axis = constraint.side === 'left' || constraint.side === 'right' ? 'x' : 'y';
+      const dimension = axis === 'x' ? 'width' : 'height';
+      const before = constraint.side === 'left' || constraint.side === 'top';
+      return Array.from(this.groupMemberPadding(constraint.group), ([member, padding]) => ({
+        type: 'separation', axis,
+        left: before ? outsider : member, right: before ? member : outsider,
+        gap: (this.colaNodes[outsider][dimension] ?? 0) / 2
+          + (this.colaNodes[member][dimension] ?? 0) / 2 + padding + constraint.minDistance,
+        groupBoundary: true,
+      }));
     }
     if (isGroupBoundaryConstraint(constraint)) {
       return this.toColaGroupBoundary(constraint);
@@ -1223,6 +1230,9 @@ export class WebColaLayout {
 
       let groupsAndSubgroups = this.determineGroupsAndSubgroups(groupsAsRecord);
 
+      const relaxedGroupBoundary = this.instanceLayout.relaxedConstraints?.some(c =>
+        isBoundingBoxConstraint(c) || isGroupBoundaryConstraint(c));
+
       // `group` gets dynamic layout fields (keyNode/id/showLabel/labelTextStyle)
       // stamped onto it below, so it's typed loosely here.
       groupsAndSubgroups.forEach((group: any) => {
@@ -1236,6 +1246,7 @@ export class WebColaLayout {
         let keyIndex = this.getNodeIndex(keyNode);
         group['keyNode'] = keyIndex;
         group['id'] = grp.name;
+        if (relaxedGroupBoundary) group.explicitGroupSeparations = true;
         group['label'] = grp.label ?? grp.name;
         group['showLabel'] = grp.showLabel;
         // Match the renderer's label clearance before translating boundaries.
