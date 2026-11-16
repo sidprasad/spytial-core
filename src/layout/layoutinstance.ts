@@ -9,7 +9,7 @@ import type { SelectorErrorDetail, LayoutWarning } from './error-state';
 import {
     LayoutNode, LayoutEdge, LayoutConstraint, InstanceLayout,
     LeftConstraint, TopConstraint, AlignmentConstraint, LayoutGroup,
-    ImplicitConstraint, DisjunctiveConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint,
+    ImplicitConstraint, DisjunctiveConstraint,
     negateDisjunction, ColorSource, diagramConstraintKey
 } from './interfaces';
 
