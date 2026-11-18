@@ -12,7 +12,7 @@ This document describes the YAML structure for defining layout constraints and d
 > Both are pinnable per tag over jsDelivr, attached to each GitHub release, and included in the npm package:
 >
 > ```js
-> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v6.6.0/docs/spytial-language.json';
+> const url = 'https://cdn.jsdelivr.net/gh/sidprasad/spytial-core@v6.7.0/docs/spytial-language.json';
 > const manifest = await fetch(url).then(r => r.json());
 > manifest.languageVersion;   // e.g. "2026-07-28" — the date the language last changed
 > ```
@@ -851,9 +851,9 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
 
 **Behavior:**
 - Does NOT remove edges (unlike `attribute`)
-- For binary results: displays as `name: value`
-- For n-ary results: displays as `name[key1,key2]: value`; all intermediate columns form one comma-separated key tuple
-- For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
+- Binary results display as `name value`. To show `age: 30`, write `name: 'age:'`.
+- Higher-arity results display as `name[key1,key2] value`. The intermediate columns form one comma-separated key tuple.
+- Unary results display as `name <the atom's own label>` to indicate membership in the selected set.
 - The first column of every result tuple must match an atom selected by `toTag`. An expression such as `Person.age` returns the ages without their owners, so it cannot attach those values as tags; select `age` or return `(owner, ..., value)` tuples instead.
 - In a comprehension, combine conditions with `and`, not `&` (`&` means set intersection).
 - `textStyle` is the same shared block edges and atoms use. `size` controls the line's font size: `large` renders **bigger** than the node's label, `normal` is the default (smaller than the label), and `small` is smaller still. `color` sets the line's text color (unset = inherit the node's label color).
@@ -867,7 +867,7 @@ Adds computed attributes to nodes based on selector evaluation. Unlike `attribut
     name: age
     value: age
 
-# Ternary selector - shows as score[Math]: 95, score[English]: 87
+# Ternary result shows as score[Math] 95 and score[English] 87
 - tag:
     toTag: Student
     name: score

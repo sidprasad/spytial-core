@@ -42,6 +42,7 @@ type NodeWithMetadata = Node & {
   label: string, // This is the label that will be displayed on the node
   id: string,
   attributes: Record<string, string[]>,
+  tagAttributeOffsets?: LayoutNode['tagAttributeOffsets'],
   /** Per-attribute-key text style (size + color); drives the font size and fill of each attribute line. */
   attributeTextStyles?: Record<string, TextStyle>,
   /**
@@ -830,6 +831,7 @@ export class WebColaLayout {
       borderWidth: node.borderWidth,
       textStyle: node.textStyle,
       attributes: node.attributes || {},
+      tagAttributeOffsets: node.tagAttributeOffsets,
       attributeTextStyles: node.attributeTextStyles || {},
       labels: node.labels,
       // Inflate width/height by padding on each side so WebCola's avoidOverlaps

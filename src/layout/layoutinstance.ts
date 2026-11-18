@@ -36,11 +36,12 @@ import { type ConstraintError, type ErrorMessages } from './constraint-types';
 import { QualitativeConstraintValidator } from './qualitative-constraint-validator';
 import { markAutoSizedNode } from './auto-sized-nodes';
 import { estimateLabelBox, resolveAttrFontSize, SecondaryLine } from './text-extent';
+import { formatNodeAttributeLine, getNodeAttributeLines } from './node-attribute-lines';
 
 /** The strings the renderer will draw inside a node's box. Used to size the box. */
 type NodeDisplayContent = {
     label: string;
-    /** One per attribute key, formatted "key: v1, v2, ..." to match the renderer. */
+    /** Attribute and tag display lines. */
     attributeLines: string[];
     /** Pixel font size for each entry in {@link attributeLines} (same order/length). */
     attributeFontSizes: number[];
@@ -1165,10 +1166,7 @@ export class LayoutInstance {
      * and added to nodes selected by the toTag selector.
      * 
      * For n-ary selector results, the first atom is the owner and the last is
-     * the value: (owner, x, y, z) displays as name[x,y]: z.
-     * 
-     * For unary selector results (single atom), it's just:
-     *   name: value
+     * the value: (owner, x, y, z) displays as name[x,y] z.
      * 
      * @param g - The graph to get node information from.
      * @param existingAttributes - Existing attributes to merge tags into.
@@ -1181,19 +1179,25 @@ export class LayoutInstance {
     ): {
         attributes: Record<string, Record<string, string[]>>;
         textStyles: Record<string, Record<string, TextStyle>>;
+        tagAttributeOffsets: Record<string, Record<string, number>>;
     } {
         const tagDirectives = this._layoutSpec.directives.tags;
+        const tagAttributeOffsets: Record<string, Record<string, number>> = Object.create(null);
 
         if (!tagDirectives || tagDirectives.length === 0) {
-            return { attributes: existingAttributes, textStyles: existingTextStyles };
+            return { attributes: existingAttributes, textStyles: existingTextStyles, tagAttributeOffsets };
         }
 
         const attributes = { ...existingAttributes };
         const textStyles = { ...existingTextStyles };
         const graphNodes = new Set(g.nodes());
 
-        // Stamp the tag's TextStyle (size + color) onto its attribute key (parallel to `attributes`).
-        const recordStyle = (atomId: string, attrKey: string, style: TextStyle | undefined) => {
+        const addTagValue = (atomId: string, attrKey: string, value: string, style: TextStyle | undefined) => {
+            const nodeAttributes = attributes[atomId];
+            const values = nodeAttributes[attrKey] ?? (nodeAttributes[attrKey] = []);
+            const offsets = tagAttributeOffsets[atomId] ?? (tagAttributeOffsets[atomId] = Object.create(null));
+            offsets[attrKey] ??= values.length;
+            values.push(value);
             if (!style) return;
             const nodeStyles = textStyles[atomId] || (textStyles[atomId] = {});
             nodeStyles[attrKey] = style;
@@ -1254,30 +1258,18 @@ export class LayoutInstance {
                     
                     for (const tuple of matchingTuples) {
                         if (tuple.length === 1) {
-                            // Unary tuple: just name: value (the atom itself)
-                            const attrKey = directive.name;
-                            if (!attributes[atomId][attrKey]) {
-                                attributes[atomId][attrKey] = [];
-                            }
                             // For unary, the value is the atom label itself
                             const nodeLabel = g.node(atomId)?.label || atomId;
-                            attributes[atomId][attrKey].push(String(nodeLabel));
-                            recordStyle(atomId, attrKey, tagStyle);
+                            addTagValue(atomId, directive.name, String(nodeLabel), tagStyle);
                         } else if (tuple.length === 2) {
-                            // Binary tuple: name: lastValue
-                            const attrKey = directive.name;
-                            if (!attributes[atomId][attrKey]) {
-                                attributes[atomId][attrKey] = [];
-                            }
                             const lastValue = tuple[tuple.length - 1];
                             // Get the label for the last element if it's a node
                             const valueLabel = graphNodes.has(String(lastValue))
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
-                            attributes[atomId][attrKey].push(valueLabel);
-                            recordStyle(atomId, attrKey, tagStyle);
+                            addTagValue(atomId, directive.name, valueLabel, tagStyle);
                         } else {
-                            // N-ary tuple (n > 2): name[mid1,mid2,...]: lastValue.
+                            // N-ary tuple (n > 2): name[mid1,mid2,...] lastValue.
                             // The key includes all middle elements as one tuple.
                             const middleElements = tuple.slice(1, -1);
                             const lastValue = tuple[tuple.length - 1];
@@ -1295,16 +1287,12 @@ export class LayoutInstance {
                                 .join(',')}]`;
                             
                             const attrKey = `${directive.name}${middlePart}`;
-                            if (!attributes[atomId][attrKey]) {
-                                attributes[atomId][attrKey] = [];
-                            }
                             
                             // Get the label for the last element if it's a node
                             const valueLabel = graphNodes.has(String(lastValue))
                                 ? (g.node(String(lastValue))?.label || String(lastValue))
                                 : String(lastValue);
-                            attributes[atomId][attrKey].push(valueLabel);
-                            recordStyle(atomId, attrKey, tagStyle);
+                            addTagValue(atomId, attrKey, valueLabel, tagStyle);
                         }
                     }
                 }
@@ -1317,7 +1305,7 @@ export class LayoutInstance {
             }
         }
 
-        return { attributes, textStyles };
+        return { attributes, textStyles, tagAttributeOffsets };
     }
 
     /**
@@ -1590,10 +1578,9 @@ export class LayoutInstance {
         // We apply built-in hiding afterwards in `ensureNoExtraNodes` so inferred edges can reconnect them.
         let g: Graph = ai.generateGraph(this.hideDisconnected, false);
 
-        let { attributes, textStyles: attributeTextStyles } = this.generateAttributesAndRemoveEdges(g);
-
-        // Generate and merge tags into attributes (carrying per-key text styles alongside)
-        ({ attributes, textStyles: attributeTextStyles } = this.generateTagsForNodes(g, attributes, attributeTextStyles));
+        const fields = this.generateAttributesAndRemoveEdges(g);
+        const { attributes, textStyles: attributeTextStyles, tagAttributeOffsets } =
+            this.generateTagsForNodes(g, fields.attributes, fields.textStyles);
 
         // This is where we add the inferred edges to the graph.
         this.addinferredEdges(g);
@@ -1617,7 +1604,7 @@ export class LayoutInstance {
         // Compute the display strings once — single source of truth for "what's
         // drawn inside the box" so the box sizer (getNodeSizeMap) and the
         // LayoutNode mapping below see the same content.
-        let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeTextStyles);
+        let contentByNode = this.getNodeDisplayContent(g, ai, attributes, attributeTextStyles, tagAttributeOffsets);
         let nodeSizeMap = this.getNodeSizeMap(g, contentByNode);
 
         let dcN = this.getDisconnectedNodes(g);
@@ -1681,6 +1668,7 @@ export class LayoutInstance {
                 textStyle: atomStyle?.textStyle,
                 groups: nodeGroups,
                 attributes: nodeAttributes,
+                tagAttributeOffsets: tagAttributeOffsets[nodeId],
                 attributeTextStyles: nodeAttributeTextStyles,
                 labels: nodeLabels,
                 icon: iconStyle?.path ?? this.DEFAULT_NODE_ICON_PATH,
@@ -3010,17 +2998,13 @@ export class LayoutInstance {
      * inside its box: main label, attribute lines, and Skolem-label lines.
      * These are the inputs to `estimateLabelBox` so the auto-sized default
      * matches what the user will actually see.
-     *
-     * Line formatting mirrors `webcola-cnd-graph.ts`:
-     *   - main label = `g.node(nodeId).label || nodeId`
-     *   - each attribute key produces one line: `"key: v1, v2, ..."`
-     *   - each Skolem-label key produces one line: `"v1, v2, ..."` (key omitted)
      */
     private getNodeDisplayContent(
         g: Graph,
         ai: IDataInstance,
         attributes: Record<string, Record<string, string[]>>,
-        attributeTextStyles: Record<string, Record<string, TextStyle>>
+        attributeTextStyles: Record<string, Record<string, TextStyle>>,
+        tagAttributeOffsets: Record<string, Record<string, number>>
     ): Record<string, NodeDisplayContent> {
         const result: Record<string, NodeDisplayContent> = {};
         const atoms = ai.getAtoms();
@@ -3029,13 +3013,13 @@ export class LayoutInstance {
             const nodeMetadata = g.node(nodeId);
             const label = nodeMetadata?.label || nodeId;
 
-            const nodeAttrs = attributes[nodeId] || {};
-            const nodeStyles = attributeTextStyles[nodeId] || {};
-            // Sort once so line text and its font size stay index-aligned.
-            const sortedAttrEntries = Object.entries(nodeAttrs)
-                .sort(([a], [b]) => a.localeCompare(b));
-            const attributeLines = sortedAttrEntries.map(([key, values]) => `${key}: ${values.join(', ')}`);
-            const attributeFontSizes = sortedAttrEntries.map(([key]) => resolveAttrFontSize(nodeStyles[key]?.size));
+            const lines = getNodeAttributeLines({
+                attributes: attributes[nodeId],
+                attributeTextStyles: attributeTextStyles[nodeId],
+                tagAttributeOffsets: tagAttributeOffsets[nodeId],
+            });
+            const attributeLines = lines.map(line => formatNodeAttributeLine(line));
+            const attributeFontSizes = lines.map(line => resolveAttrFontSize(line.textStyle?.size));
 
             const atom = atoms.find((x) => x.id === nodeId);
             const skolemLines: string[] = [];

@@ -40,6 +40,7 @@ import {
     isLeftConstraint,
     isAlignmentConstraint,
 } from '../../layout/interfaces';
+import { formatNodeAttributeLine, getNodeAttributeLines } from '../../layout/node-attribute-lines';
 
 // ─── Public Types ──────────────────────────────────────────────────────────
 
@@ -128,6 +129,7 @@ export interface NodeDescription {
     types: string[];
     groups: string[];
     attributes: Record<string, string[]>;
+    tagAttributeOffsets?: LayoutNode['tagAttributeOffsets'];
     labels: Record<string, string[]>;
     disconnected: boolean;
     outgoing: EdgeDescription[];
@@ -482,10 +484,10 @@ function buildNodeDescriptions(layout: InstanceLayout, opts: Required<Accessible
         const summaryParts: string[] = [`${node.label} (${node.mostSpecificType})`];
 
         // Attributes
-        const attrEntries = Object.entries(attrs);
-        if (attrEntries.length > 0) {
-            const attrStr = attrEntries
-                .map(([k, v]) => `${k}: ${v.join(', ')}`)
+        const attributeLines = getNodeAttributeLines(node);
+        if (attributeLines.length > 0) {
+            const attrStr = attributeLines
+                .map(line => formatNodeAttributeLine(line))
                 .join('; ');
             summaryParts.push(`Attributes: ${attrStr}`);
         }
@@ -514,6 +516,7 @@ function buildNodeDescriptions(layout: InstanceLayout, opts: Required<Accessible
             types: node.types,
             groups,
             attributes: attrs,
+            tagAttributeOffsets: node.tagAttributeOffsets,
             labels: node.labels ?? {},
             disconnected: node.disconnected ?? false,
             outgoing: nodeOutgoing,
@@ -790,11 +793,9 @@ function renderNodeTreeItem(
 
     // Build visible attribute chips
     const attrParts: string[] = [];
-    if (nodeDesc.attributes) {
-        for (const [key, values] of Object.entries(nodeDesc.attributes)) {
-            if (values.length > 0) {
-                attrParts.push(`<span class="node-attr"><span class="attr-key">${esc(key)}</span>: ${esc(values.join(', '))}</span>`);
-            }
+    for (const { key, separator, values } of getNodeAttributeLines(nodeDesc)) {
+        if (values.length > 0) {
+            attrParts.push(`<span class="node-attr"><span class="attr-key">${esc(key)}</span>${separator}${esc(values.join(', '))}</span>`);
         }
     }
 

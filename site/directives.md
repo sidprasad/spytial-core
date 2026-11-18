@@ -502,9 +502,9 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
 ### Behavior
 
 - Does **NOT** remove edges (unlike `attribute`)
-- For binary results: displays as `name: value`
-- For higher-arity results: displays as `name[key1,key2]: value`. The intermediate columns form one comma-separated key tuple.
-- For unary results: displays as `name: <the atom's own label>` — a membership tag, saying only that the atom is in the set
+- Binary results display as `name value`. To show `age: 30`, write `name: 'age:'`.
+- Higher-arity results display as `name[key1,key2] value`. The intermediate columns form one comma-separated key tuple.
+- Unary results display as `name <the atom's own label>` to indicate membership in the selected set.
 - The first column of every result tuple must match an atom selected by `toTag`. A selector that returns only values (for example, `Person.age`) has lost the owning atom and cannot attach those values as tags; select the relation (`age`) or return `(owner, ..., value)` tuples instead.
 - In a comprehension, combine conditions with `and`, not `&` (`&` means set intersection).
 - `textStyle` is the same shared block edges and atoms use. `size` scales the line's font (`large` bigger than the node label, `normal` default, `small` smaller still); `color` sets its text color (unset = inherit the node label color)
@@ -518,7 +518,7 @@ Adds computed labels to nodes **without** removing edges. Unlike `attribute`, th
     name: age
     value: age
 
-# Ternary: shows as score[Math]: 95, score[English]: 87
+# Ternary result shows as score[Math] 95 and score[English] 87
 - tag:
     toTag: Student
     name: score

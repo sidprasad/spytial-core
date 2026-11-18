@@ -415,7 +415,7 @@ export interface AttributeDirective extends FieldDirective {
  * and doesn't remove edges or modify the graph structure.
  * 
  * The value selector is evaluated and tuples are attached to selected nodes by
- * their first atom. A unary result displays the atom's label as `name: value`.
+ * their first atom. A unary result displays the atom's label as `name value`.
  * For longer tuples, the last atom is the value and all atoms between the
  * owner and value form one bracketed key: (owner, x, y, z) -> name[x,y]: z.
  */

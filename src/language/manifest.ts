@@ -53,7 +53,7 @@ import type {
  * current. Bump it in the same commit that changes the language; leave it alone
  * for wording and example fixes.
  */
-export const LANGUAGE_VERSION = '2026-09-18';
+export const LANGUAGE_VERSION = '2026-11-18';
 
 /** How the language is versioned. Shipped in the manifest so a consumer need not infer it. */
 export const LANGUAGE_VERSIONING = {
@@ -686,7 +686,7 @@ const TAG: LanguageItem = {
       type: 'string',
       required: true,
       enforcement: 'unchecked',
-      description: 'The literal label shown before the value; this field is not a selector.',
+      description: 'The literal label shown before the value. Add punctuation to this label if desired.',
     },
     {
       name: 'value',
@@ -698,23 +698,23 @@ const TAG: LanguageItem = {
           minColumns: 2,
           meaning:
             'One line per tuple whose first atom is the tagged atom: the last column is the value and any ' +
-            'columns between become one comma-separated key tuple, as `name[k1,k2]: value`. A binary result is the plain ' +
-            '`name: value` case.',
+            'columns between become one comma-separated key tuple, as `name[k1,k2] value`. A binary result shows as ' +
+            '`name value`.',
         },
         {
           arity: 'unary',
           minColumns: 1,
           maxColumns: 1,
           meaning:
-            'A membership tag: an atom in the result is tagged with its own label, as `name: <label>`. ' +
+            'A membership tag: an atom in the result is tagged with its own label, as `name <label>`. ' +
             'The value carries no more than "this atom is in the set".',
         },
       ],
       required: true,
       enforcement: 'unchecked',
       description:
-        'Evaluated once; each tuple is attached to the tagged atom in its first column. A binary result shows as `name: value`; ' +
-        'a longer tuple shows one line per tuple, as `name[k1,k2]: value`. A unary result tags each ' +
+        'Evaluated once; each tuple is attached to the tagged atom in its first column. A binary result shows as `name value`; ' +
+        'a longer tuple shows as `name[k1,k2] value`. A unary result tags each ' +
         "selected atom with its own label.",
     },
     blockField('textStyle', "This tag line's own styling."),

@@ -101,6 +101,8 @@ export interface LayoutNode {
     textStyle?: TextStyle;
     groups?: string[];
     attributes?: Record<string, string[]>;
+    /** Index of the first tag value in {@link attributes} for each key with tags. */
+    tagAttributeOffsets?: Record<string, number>;
     /**
      * Per-attribute-key text style (the shared `textStyle` block: size + color)
      * from an `attribute` or `tag` directive. Keyed by the same attribute key as

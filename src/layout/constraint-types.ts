@@ -1,5 +1,6 @@
 import { LayoutNode, LayoutGroup, LayoutConstraint, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, TopConstraint, LeftConstraint, AlignmentConstraint, BoundingBoxConstraint, GroupBoundaryConstraint, ImplicitConstraint } from './interfaces';
 import { RelativeOrientationConstraint, CyclicOrientationConstraint, AlignConstraint, GroupBySelector } from './layoutspec';
+import { getNodeAttributeLines } from './node-attribute-lines';
 
 
 export type SourceConstraint = RelativeOrientationConstraint | CyclicOrientationConstraint | AlignConstraint | ImplicitConstraint | GroupBySelector;
@@ -102,8 +103,7 @@ export function formatNodeLabel(node: LayoutNode): string {
 
     if (hasAttributes) {
         // Show attributes (truncated if needed) instead of ID
-        const attrs = node.attributes || {};
-        const attrEntries = Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b));
+        const attributeLines = getNodeAttributeLines(node).sort((a, b) => a.key.localeCompare(b.key));
 
         // Format: label with key attributes shown
         // For single attribute with single value: "label (key: value)"
@@ -112,8 +112,7 @@ export function formatNodeLabel(node: LayoutNode): string {
         const maxAttributes = 2; // Show at most 2 attributes to avoid clutter
         const maxValueLength = 20; // Truncate long values
 
-        for (let i = 0; i < Math.min(attrEntries.length, maxAttributes); i++) {
-            const [key, values] = attrEntries[i];
+        for (const { key, separator, values } of attributeLines.slice(0, maxAttributes)) {
             if (values && values.length > 0) {
                 // Take first value, truncate if too long
                 let value = values[0];
@@ -121,11 +120,11 @@ export function formatNodeLabel(node: LayoutNode): string {
                     value = value.substring(0, maxValueLength) + '...';
                 }
                 // Escape HTML to prevent XSS
-                attributeParts.push(`${escapeHtml(key)}: ${escapeHtml(value)}`);
+                attributeParts.push(`${escapeHtml(key)}${separator}${escapeHtml(value)}`);
             }
         }
 
-        if (attrEntries.length > maxAttributes) {
+        if (attributeLines.length > maxAttributes) {
             attributeParts.push('...');
         }
 

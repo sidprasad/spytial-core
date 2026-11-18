@@ -165,7 +165,7 @@ describe('instance-local graph view options', () => {
     const label = graph.shadowRoot!.querySelector('.label')!;
     expect(label.querySelector('.main-label-tspan')!.textContent).toBe('Alpha');
     expect(label.textContent).toContain('description: An attribute that stays visible');
-    expect(label.textContent).toContain('successor:');
+    expect(Array.from(label.querySelectorAll('tspan'), span => span.textContent)).toContain('successor Beta');
     expect(input.nodes[0].attributes.description).toEqual(['An attribute that stays visible']);
     expect(input.nodes[0].width).toBe(260);
     expect(graph.getLayoutState().transform).toEqual(transform);
