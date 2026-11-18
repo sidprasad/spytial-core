@@ -16,6 +16,7 @@ import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, res
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 import { isAutoSizedNode } from '../../layout/auto-sized-nodes';
+import { formatNodeAttributeLine, getNodeAttributeLines } from '../../layout/node-attribute-lines';
 import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewOptions, type GraphControl } from './graph-view-options';
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
@@ -256,8 +257,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       if (!isAutoSizedNode(node)) return node;
       const secondary: SecondaryLine[] = [
         ...Object.values(node.labels ?? {}).map(values => values.join(', ')),
-        ...Object.entries(node.attributes ?? {}).map(([key, values]) => ({
-          text: `${key}: ${values}`, fontSize: resolveAttrFontSize(node.attributeTextStyles?.[key]?.size),
+        ...getNodeAttributeLines(node).map(line => ({
+          text: formatNodeAttributeLine(line, ','), fontSize: resolveAttrFontSize(line.textStyle?.size),
         })),
       ];
       const size = estimateLabelBox(node.label, secondary);
@@ -4652,17 +4653,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
         const textElement = d3.select(nodes[i]);
 
         const displayLabel = d.label || d.name || d.id || "Node";
-        const attributeEntries = Object.entries(d.attributes || {})
-          .sort(([a], [b]) => a.localeCompare(b));
+        const attributeLines = getNodeAttributeLines(d).sort((a, b) => a.key.localeCompare(b.key));
         const labelEntries = Object.entries(d.labels || {});
 
         // Per-attribute text style (the shared `textStyle` block: size + color).
         // Size (small/normal/large tiers → px) drives each line's own line-height,
         // so the secondary block is no longer a uniform grid; we track heights per
         // line to place baselines. Color is applied as the tspan fill below.
-        const attributeStyles = d.attributeTextStyles || {};
-        const attributeFontSizes = attributeEntries.map(
-          ([key]) => resolveAttrFontSize(attributeStyles[key]?.size)
+        const attributeFontSizes = attributeLines.map(
+          line => resolveAttrFontSize(line.textStyle?.size)
         );
         // Secondary line-heights in DOM order: Skolem labels first, then attributes.
         const secondaryHeights = [
@@ -4724,9 +4723,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
             .text(labelText);
         });
 
-        // Attribute lines: "key: value, value, ..." each at its own tier size.
+        // Attribute and tag lines each use their own tier size.
         // These follow the Skolem lines, so tspanDys indices are offset by them.
-        attributeEntries.forEach(([key, value], idx) => {
+        attributeLines.forEach((line, idx) => {
           const fontSize = attributeFontSizes[idx];
           textElement
             .append("tspan")
@@ -4735,8 +4734,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
             .style("font-size", `${fontSize}px`)
             // textStyle.color for this attribute/tag line; null = inherit the
             // themed parent `.label` fill (so dark mode still lightens it).
-            .style("fill", attributeStyles[key]?.color ?? null)
-            .text(`${key}: ${value}`);
+            .style("fill", line.textStyle?.color ?? null)
+            .text(formatNodeAttributeLine(line, ','));
         });
       });
   }

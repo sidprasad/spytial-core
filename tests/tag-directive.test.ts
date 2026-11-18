@@ -3,6 +3,7 @@ import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { LayoutInstance } from '../src/layout/layoutinstance';
 import { JSONDataInstance, IJsonDataInstance } from '../src/data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
+import { AccessibleTranslator } from '../src/translators/accessible/accessible-translator';
 
 function createEvaluator(instance: JSONDataInstance) {
   const evaluator = new SGraphQueryEvaluator();
@@ -162,9 +163,10 @@ directives:
     expect(aliceNode).toBeDefined();
     
     // Check that scores are present with bracket notation
-    // For ternary tuples, format is: name[middle]: last
     expect(aliceNode?.attributes?.['score[Math]']).toContain('95');
     expect(aliceNode?.attributes?.['score[English]']).toContain('87');
+    const { description } = new AccessibleTranslator().translate(result.layout);
+    expect(description.nodes.find(n => n.id === 'Alice')?.summary).toContain('score[Math] 95');
   });
 
   it('keeps every value for one node under one key, in tuple order', () => {
@@ -332,7 +334,7 @@ directives:
     expect(layout.nodes.find(n => n.id === 'interval')?.attributes?.['f[1,10]']).toEqual(['20']);
   });
 
-  it('should not interfere with edge-based attributes', () => {
+  it('keeps colons on attributes and authored punctuation on tags', () => {
     const jsonData: IJsonDataInstance = {
       atoms: [
         { id: 'Alice', type: 'Person', label: 'Alice' },
@@ -365,8 +367,16 @@ directives:
       field: 'age'
   - tag:
       toTag: 'Person'
-      name: 'height'
+      name: 'age'
       value: 'height'
+  - tag:
+      toTag: 'Person'
+      name: 'height:'
+      value: 'height'
+  - tag:
+      toTag: 'Person'
+      name: 'Member'
+      value: 'Person'
 `;
 
     const layoutSpec = parseLayoutSpec(layoutSpecStr);
@@ -376,8 +386,11 @@ directives:
     const aliceNode = result.layout.nodes.find(n => n.id === 'Alice');
     
     expect(aliceNode).toBeDefined();
-    // Both attribute types should be present
-    expect(aliceNode?.attributes?.['age']).toContain('25');
-    expect(aliceNode?.attributes?.['height']).toContain('100');
+    expect(aliceNode?.attributes?.['age']).toEqual(['25', '100']);
+    const accessible = new AccessibleTranslator().translate(result.layout);
+    const template = document.createElement('template');
+    template.innerHTML = accessible.toHTML();
+    expect(Array.from(template.content.querySelectorAll('#node-Alice .node-attr'), chip => chip.textContent))
+      .toEqual(['age: 25', 'age 100', 'height: 100', 'Member Alice']);
   });
 });
