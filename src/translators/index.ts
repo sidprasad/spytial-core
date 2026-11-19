@@ -64,4 +64,5 @@ export {
   registerSequencePolicy,
 } from './webcola/sequence-policy';
 
+export type { DiagramLabelTarget } from './webcola/label-highlights';
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './webcola/graph-view-options';

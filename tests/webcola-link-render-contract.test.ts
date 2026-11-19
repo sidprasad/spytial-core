@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as d3 from 'd3';
+import { LabelHighlights } from '../src/translators/webcola/label-highlights';
 
 /**
  * The render-side half of the link-path lookup coverage.
@@ -46,6 +47,7 @@ function renderLinks(links: any[]) {
 
   const graph: any = {
     container,
+    labelHighlights: new LabelHighlights(),
     // The real markup-producing code — the whole point of this file.
     setupLinks: proto.setupLinks,
     setupLinkPaths: proto.setupLinkPaths,

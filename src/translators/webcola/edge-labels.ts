@@ -13,7 +13,7 @@ export function arrowheadBounds(tip: Point, inside: Point): LabelRect | null {
     width: Math.max(...xs) - Math.min(...xs) + 2, height: Math.max(...ys) - Math.min(...ys) + 2 };
 }
 
-function measuredBox(element: SVGGraphicsElement): LabelRect | null {
+export function measuredBox(element: SVGGraphicsElement): LabelRect | null {
   try {
     const style = element.ownerDocument.defaultView?.getComputedStyle(element);
     if (style?.display === 'none' || style?.visibility === 'hidden') return null;

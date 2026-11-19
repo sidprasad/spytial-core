@@ -411,6 +411,16 @@ export function getGraphCSS({
         fill: var(--cnd-label-text, #1a1a1a);
       }
 
+      .label-highlight-marker {
+        fill: var(--cnd-label-highlight, rgba(255, 212, 59, .55));
+        stroke: none;
+        pointer-events: none;
+      }
+      .label-highlight-marker ~ .linklabel { stroke: none; }
+      @media (forced-colors: active) {
+        .label-highlight-marker { fill: Highlight; fill-opacity: .55; }
+      }
+
       .linklabel {
         text-anchor: middle;
         dominant-baseline: middle;
