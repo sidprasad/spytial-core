@@ -136,6 +136,7 @@ describe('WebColaCnDGraph teardown (#474)', () => {
     function clearableThis(colaLayout: any) {
       return {
         colaLayout,
+        labelHighlights: { clear: vi.fn() },
         container: null,
         svg: null,
         morphSlideTimer: null,
@@ -198,6 +199,7 @@ describe('WebColaCnDGraph overlapping renders', () => {
     const exitLayerSel = { interrupt: vi.fn(() => ({ remove: exitLayerRemove })) };
     const fakeThis: any = {
       colaLayout: { stop, on },
+      labelHighlights: { clear: vi.fn() },
       morphSlideTimer: { stop: slideStop },
       svg: { interrupt: vi.fn(), selectAll: vi.fn(() => exitLayerSel) },
       morphEnteringNodeIds: new Set(['n1']),
@@ -276,6 +278,7 @@ describe('WebColaCnDGraph overlapping renders', () => {
     it('is a no-op before the first render (nothing initialized)', () => {
       const fakeThis: any = {
         colaLayout: null,
+        labelHighlights: { clear: vi.fn() },
         morphSlideTimer: null,
         svg: null,
         morphEnteringNodeIds: new Set(),

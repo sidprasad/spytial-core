@@ -225,13 +225,38 @@ These register themselves automatically when the bundle loads in a browser.
 
 | Tag                     | Class                | Role                                                                          |
 |-------------------------|----------------------|-------------------------------------------------------------------------------|
-| `<webcola-cnd-graph>`   | `WebColaCnDGraph`    | The default visual renderer. Methods: `renderLayout`, `generateSequenceLayouts`, `getLayoutState`, `getNodePositions`, `clear`, `highlightNodes`, `highlightNodePairs`, `clearNodeHighlights`, `getAllRelations`, `highlightRelation`, `clearHighlightRelation`, `resetViewToFitContent`, `addToolbarControl`. |
+| `<webcola-cnd-graph>`   | `WebColaCnDGraph`    | The default visual renderer. Methods: `renderLayout`, `generateSequenceLayouts`, `getLayoutState`, `getNodePositions`, `clear`, `highlightNodes`, `highlightNodePairs`, `clearNodeHighlights`, `hasLabel`, `highlightLabels`, `getAllRelations`, `highlightRelation`, `clearHighlightRelation`, `resetViewToFitContent`, `addToolbarControl`. |
 | `<spytial-explorer>`    | `SpytialExplorer`    | `WebColaCnDGraph` + Data Navigator overlay, must/can spatial REPL, datum REPL, group navigation, modal spatial annotations. Adds `enableAccessibility(layout, validator, dataEvaluator?)`. Opt-in since 4.0.0: `spytial-core/explorer` (npm) or `spytial-core-explorer.global.js` (CDN). |
 | `<structured-input-graph>` | `StructuredInputGraph` | Form-like editor for building specs and instances. |
 
 Set `<webcola-cnd-graph>` dimensions with CSS; `width` and `height` HTML attributes
 are not read. See the [Height and width FAQ](sizing-faq.md) for sizing embedded
 containers and re-fitting after a resize.
+
+### Highlighting labels
+
+To connect a host interaction to a specific caption, pass its layout edge ID or
+its node ID and attribute or tag key. A tag with a bracketed key uses the whole
+key, such as `grade[Alice,Math]`. Attributes and tags can share a key on the same node.
+
+```ts
+import type { DiagramLabelTarget } from 'spytial-core';
+
+const targets: DiagramLabelTarget[] = [
+  { kind: 'edge', edgeId: 'child_0' },
+  { kind: 'attribute', nodeId: 'root', key: 'height' },
+  { kind: 'tag', nodeId: 'root', key: 'Every key <' },
+];
+const release = graph.highlightLabels(targets);
+// When the hover, keyboard focus, or pinned selection ends:
+release();
+```
+
+Each request paints a marker behind the matching text and returns its own
+release function. Concurrent requests can share labels. The marker follows
+the label during dragging and rerouting. `graph.hasLabel(target)` checks whether
+the current render includes that caption. Reapply highlights after replacing
+the diagram. Override `--cnd-label-highlight` to customize the marker color.
 
 ### Embedded graph options
 
