@@ -1,6 +1,10 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { Group, Layout, Node } from 'webcola';
+import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
 import type { InstanceLayout, LayoutConstraint, LayoutNode } from '../src/layout/interfaces';
+import { LayoutInstance } from '../src/layout/layoutinstance';
+import { parseLayoutSpec } from '../src/layout/layoutspec';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { requireCola } from '../src/translators/webcola/routing/cola-runtime';
 
@@ -251,5 +255,56 @@ describe('first settled WebCola spacing', () => {
     const replacement = await render(chain('x'), graph);
     expectNearTargets(replacement);
     expectConstraints(replacement);
+  });
+});
+
+describe('cyclic template geometry', () => {
+  it.each(['clockwise', 'counterclockwise'])('renders a %s square template', async direction => {
+    const ids = ['A', 'B', 'C', 'D'];
+    const data = new JSONDataInstance({
+      atoms: ids.map(id => ({ id, label: id, type: 'Node' })),
+      relations: [{
+        id: 'next', name: 'next', types: ['Node', 'Node'],
+        tuples: ids.map((id, i) => ({ atoms: [id, ids[(i + 1) % ids.length]], types: ['Node', 'Node'] })),
+      }],
+    });
+    const boxSize = { x: 60, y: 40 };
+    const spec = parseLayoutSpec(`
+constraints:
+  - cyclic:
+      selector: next
+      direction: ${direction}
+  - size:
+      selector: Node
+      width: ${boxSize.x}
+      height: ${boxSize.y}
+`);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: data });
+    const { layout, error, selectorErrors } = new LayoutInstance(spec, evaluator).generateLayout(data);
+    expect(error).toBeNull();
+    expect(selectorErrors).toEqual([]);
+
+    const graph = new WebColaCnDGraph();
+    await render(layout, graph);
+    const positions = new Map(graph.getNodePositions().map(node => [node.id, node]));
+    const pairs = ids.flatMap((_, i) => ids.slice(i + 1).map((_, offset) => [i, i + offset + 1]));
+    const axes = ['x', 'y'] as const;
+    const epsilon = 1e-4;
+    const boxRelations = pairs.map(([i, j]) => axes.map(axis => {
+      const gap = positions.get(ids[j])![axis] - positions.get(ids[i])![axis];
+      if (Math.abs(gap) < epsilon) return 0;
+      if (Math.abs(gap) >= boxSize[axis] - epsilon) return Math.sign(gap);
+      return 'overlap';
+    }));
+
+    // In screen coordinates the clockwise template visits right, bottom, left, top.
+    const square = [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }];
+    const step = direction === 'clockwise' ? 1 : -1;
+    const validRelations = square.map((_, shift) => {
+      const template = ids.map((_, i) => square[(shift + step * i + square.length) % square.length]);
+      return pairs.map(([i, j]) => axes.map(axis => Math.sign(template[j][axis] - template[i][axis])));
+    });
+    expect(validRelations).toContainEqual(boxRelations);
   });
 });
