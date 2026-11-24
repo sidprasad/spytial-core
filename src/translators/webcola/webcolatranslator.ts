@@ -1,5 +1,5 @@
 import { Node, Link, Rectangle } from 'webcola';
-import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, isLeftConstraint, isTopConstraint, isAlignmentConstraint, isBoundingBoxConstraint, isGroupBoundaryConstraint, GroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
+import { InstanceLayout, LayoutNode, LayoutEdge, LayoutConstraint, LayoutGroup, isLeftConstraint, isTopConstraint, isAlignmentConstraint, alignmentCenterGap, isBoundingBoxConstraint, isGroupBoundaryConstraint, GroupBoundaryConstraint, ColorSource } from '../../layout/interfaces';
 import { EdgeStyle } from '../../layout/edge-style';
 import type { TextStyle } from '../../layout/style/text-style';
 import type { IconPlacement } from '../../layout/style/atom-style-spec';
@@ -982,12 +982,16 @@ export class WebColaLayout {
     }
 
     if (isAlignmentConstraint(constraint)) {
+      const left = this.getNodeIndex(constraint.node1.id);
+      const right = this.getNodeIndex(constraint.node2.id);
+      // The presentation layout carries the current visual sizes, including font remeasurement.
+      const nodes = this.instanceLayout.nodes;
       return {
         type: "separation",
         axis: constraint.axis,
-        left: this.getNodeIndex(constraint.node1.id),
-        right: this.getNodeIndex(constraint.node2.id),
-        gap: 0,
+        left,
+        right,
+        gap: alignmentCenterGap(constraint.axis, nodes[left], nodes[right]),
         'equality': true
       };
     }

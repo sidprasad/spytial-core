@@ -144,8 +144,8 @@ Ensures pairs of nodes share the same horizontal or vertical position.
 | `selector` | Yes | string | Binary selector returning (source, target) pairs to align |
 | `direction` | Yes | string | `horizontal` or `vertical` |
 
-- **`horizontal`** — Matched node pairs get the same Y coordinate (same row).
-- **`vertical`** — Matched node pairs get the same X coordinate (same column).
+- **`horizontal`** — The top edges of each matched pair share a Y coordinate.
+- **`vertical`** — The left edges of each matched pair share an X coordinate.
 
 ### Examples
 

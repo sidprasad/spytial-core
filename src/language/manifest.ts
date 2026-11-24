@@ -353,7 +353,7 @@ const ALIGN: LanguageItem = {
   id: 'align',
   yamlKey: 'align',
   label: 'Align',
-  description: 'Put the selected atoms on a shared horizontal or vertical line.',
+  description: 'Align the top or left edges of the selected boxes.',
   sections: ['constraints'],
   valueShape: 'mapping',
   supportsHold: true,
@@ -374,7 +374,7 @@ const ALIGN: LanguageItem = {
       required: true,
       enforcement: 'parse-error',
       description:
-        '`horizontal` gives the atoms a shared Y coordinate; `vertical` a shared X coordinate. ' +
+        '`horizontal` gives the top edges a shared Y coordinate. `vertical` gives the left edges a shared X coordinate. ' +
         'An unrecognized value is a parse error.',
     },
   ],

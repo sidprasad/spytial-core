@@ -1,4 +1,8 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { JSONDataInstance } from '../src/data-instance/json-data-instance';
+import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
+import { LayoutInstance } from '../src/layout/layoutinstance';
+import { parseLayoutSpec } from '../src/layout/layoutspec';
 import type { Group, Layout, Node } from 'webcola';
 import { JSONDataInstance } from '../src/data-instance/json-data-instance';
 import { SGraphQueryEvaluator } from '../src/evaluators/data/sgq-evaluator';
@@ -141,6 +145,39 @@ function dragAndRelease(layout: Layout, subject: Node | Group, dx: number, dy: n
 }
 
 describe('first settled WebCola spacing', () => {
+  it.each([
+    ['align: {selector: pair, direction: horizontal}', 'y'],
+    ['align: {selector: pair, direction: vertical}', 'x'],
+    ['orientation: {selector: pair, directions: [directlyRight]}', 'y'],
+  ] as const)('preserves the visible edge alignment of %s through a drag', async (rule, coordinate) => {
+    const instance = new JSONDataInstance({
+      atoms: ['A', 'B'].map(id => ({ id, label: id, type: 'Node' })),
+      relations: [{ id: 'pair', name: 'pair', types: ['Node', 'Node'],
+        tuples: [{ atoms: ['A', 'B'], types: ['Node', 'Node'] }] }],
+    });
+    const spec = parseLayoutSpec(`constraints:
+  - size: {selector: A, width: 100, height: 40}
+  - size: {selector: B, width: 60, height: 80}
+  - ${rule}`);
+    const evaluator = new SGraphQueryEvaluator();
+    evaluator.initialize({ sourceData: instance });
+    const generated = new LayoutInstance(spec, evaluator).generateLayout(instance);
+    expect(generated.error).toBeNull();
+
+    const graph = new WebColaCnDGraph();
+    const layout = await render(generated.layout, graph);
+    // Main.lean: aligned_h equates y_tl; aligned_v equates x_tl.
+    const expectAlignedEdges = () => {
+      const rects = graph.shadowRoot!.querySelectorAll('.node > rect');
+      expect(rects).toHaveLength(2);
+      const [a, b] = Array.from(rects, rect => parseFloat(rect.getAttribute(coordinate)!));
+      expect(a).toBeCloseTo(b, 4);
+    };
+    expectAlignedEdges();
+    dragAndRelease(layout, layout.nodes()[0], 35, 45);
+    expectAlignedEdges();
+  });
+
   it('chooses LR from the measured viewport for a fresh unconstrained chain', async () => {
     const input = chain('x');
     input.nodes = Array.from({ length: 10 }, (_, i) => ({ ...input.nodes[0], id: `n${i}`, width: 100, height: 60 }));

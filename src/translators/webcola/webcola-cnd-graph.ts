@@ -1375,7 +1375,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     */
     function getScaledConstraints(constraints: any[]): any[] {
       return constraints.map(constraint => {
-        if (constraint.type === "separation" && typeof constraint.gap === "number") {
+        // Equality offsets come from box dimensions and stay fixed at every spacing setting.
+        if (constraint.type === "separation" && !constraint.equality && typeof constraint.gap === "number") {
           const oldgap = constraint.gap;
           const newgap = oldgap / adjustedScaleFactor; // or * scaleFactor, depending on your UI logic
           //console.log(`Scaling constraint gap from ${oldgap} to ${newgap} with scale factor ${adjustedScaleFactor}`);

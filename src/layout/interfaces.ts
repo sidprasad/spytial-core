@@ -222,11 +222,17 @@ export function isLeftConstraint(constraint: LayoutConstraint): constraint is Le
     return (constraint as LeftConstraint).left !== undefined;
 }
 
-// Same value along axis
+// Equality of the visible boxes' left edges (x) or top edges (y).
 export interface AlignmentConstraint extends LayoutConstraint {
     axis : "x" | "y";
     node1 : LayoutNode;
     node2 : LayoutNode;
+}
+
+/** Signed center gap equivalent to equal leading edges for two visible boxes. */
+export function alignmentCenterGap(axis: 'x' | 'y', first: LayoutNode, second: LayoutNode): number {
+    const dimension = axis === 'x' ? 'width' : 'height';
+    return (second[dimension] - first[dimension]) / 2;
 }
 
 export function isAlignmentConstraint(constraint: LayoutConstraint): constraint is AlignmentConstraint {
