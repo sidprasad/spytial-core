@@ -7,7 +7,9 @@ import { placeRenderedEdgeLabels } from './edge-labels';
  * No polling is needed while a graph has no rendered geometry.
  */
 export function observeRenderedEdgeLabels(container: SVGGElement, onDeferredPlacement: () => void): () => void {
-  if (!container.querySelector('text.linklabel')) return () => {};
+  const hasEdgeLabels = !!container.querySelector('text.linklabel');
+  // A viewport resize can change the fitted zoom even in an edgeless graph.
+  if (!hasEdgeLabels && !container.querySelector('.node, .error-node')) return () => {};
   const document = container.ownerDocument;
   const view = document.defaultView;
   const svg = container.ownerSVGElement;
@@ -20,7 +22,7 @@ export function observeRenderedEdgeLabels(container: SVGGElement, onDeferredPlac
     // The viewport's client rect establishes that this SVG actually has layout.
     const rect = svg.getClientRects()[0];
     if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-    placeRenderedEdgeLabels(container);
+    if (hasEdgeLabels) placeRenderedEdgeLabels(container);
     return true;
   };
   const schedule = (): void => {

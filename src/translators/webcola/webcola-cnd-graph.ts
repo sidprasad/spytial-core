@@ -945,6 +945,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * Temporary canvas for text measurement
    */
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
+  private singleLineLabels: Array<{ span: SVGTSpanElement; width: number; height: number; maxSize: number }> = [];
+  private lastLabelTarget = 0;
   private stopEdgeLabelObservation?: () => void;
 
   private get root(): ShadowRoot {
@@ -1644,6 +1646,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       })
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
+        this.sizeSingleLineLabels(d3.event.transform.k);
         // Update zoom control states when zoom changes
         this.updateZoomControlStates();
         // Update small node classes based on new zoom level
@@ -3374,6 +3377,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
    * the first render (every step is guarded).
    */
   private teardownInflightRender(): void {
+    this.ownerDocument?.fonts?.removeEventListener('loadingdone', this.measureSingleLineLabels);
+    this.singleLineLabels = [];
     this.stopEdgeLabelObservation?.();
     this.stopEdgeLabelObservation = undefined;
     if (this.colaLayout) {
@@ -4623,14 +4628,33 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
 
 
-  /**
-   * Creates main node labels with attributes using fixed font sizes.
-   *
-   * Box dimensions are decided upstream by `LayoutInstance.getNodeSizeMap`
-   * via `estimateLabelBox`, which sizes each box to fit the same fixed font
-   * sizes used here. No per-node font negotiation; if a user pins a too-small
-   * `size` directive their text overflows (their explicit choice).
-   */
+  /** Aim for a 14 CSS-pixel name when zoomed out, up to the room in its box.
+   * At normal zoom and above, text scales with the rest of the diagram. */
+  private sizeSingleLineLabels(scale: number): void {
+    const target = Math.max(MAIN_LABEL_FONT_SIZE, Math.round(MAIN_LABEL_FONT_SIZE / scale));
+    if (target === this.lastLabelTarget) return;
+    this.lastLabelTarget = target;
+    for (const { span, maxSize } of this.singleLineLabels) {
+      const size = `${Math.min(target, maxSize)}px`;
+      if (span.style.fontSize !== size) span.style.fontSize = size;
+    }
+  }
+
+  // Measure at the base size once per render/font change. Zoom and pan need
+  // no text measurements, box changes or solver passes.
+  private measureSingleLineLabels = (): void => {
+    const context = this.getTextMeasurementContext();
+    if (!context) return;
+    context.font = `bold ${MAIN_LABEL_FONT_SIZE}px ${this.getFontFamily()}`;
+    for (const label of this.singleLineLabels) {
+      const width = context.measureText(label.span.textContent ?? '').width;
+      const fit = Math.min(MAIN_LABEL_FONT_SIZE * label.width / width, label.height / LABEL_LINE_HEIGHT_RATIO);
+      label.maxSize = Math.max(MAIN_LABEL_FONT_SIZE, Math.floor(fit));
+    }
+    this.lastLabelTarget = 0;
+    this.sizeSingleLineLabels(this.getCurrentTransform().k);
+  };
+
   private setupNodeLabels(nodeSelection: d3.Selection<SVGGElement, any, any, unknown>): void {
     const secondaryLineHeight = SECONDARY_FONT_SIZE * LABEL_LINE_HEIGHT_RATIO;
 
@@ -4697,7 +4721,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
         textElement.attr("font-size", `${MAIN_LABEL_FONT_SIZE}px`);
 
-        textElement
+        const mainLabel = textElement
           .append("tspan")
           .attr("x", 0)
           .attr("dy", `${verticalOffset}px`)
@@ -4707,6 +4731,18 @@ export class WebColaCnDGraph extends HTMLElementBase {
           // atomStyle.textStyle.color for the node's own label; null = inherit the default black.
           .style("fill", this.nodeLabelColor(d))
           .text(displayLabel);
+
+        if (!d.icon && secondaryHeights.length === 0) {
+          // Names stay centered. Leave room above them for the type caption
+          // (baseline 10 units from the top) and an inset at both sides.
+          const insetY = d.mostSpecificType ? 14 : WebColaCnDGraph.TEXT_PADDING;
+          this.singleLineLabels.push({
+            span: mainLabel.node()!,
+            width: (d.visualWidth ?? d.width) - 2 * WebColaCnDGraph.TEXT_PADDING,
+            height: (d.visualHeight ?? d.height) - 2 * insetY,
+            maxSize: MAIN_LABEL_FONT_SIZE,
+          });
+        }
 
         // Skolem-style labels: italic, comma-separated values per key. These are
         // the first secondary lines (DOM order), so tspanDys indices 1..N.
@@ -4738,6 +4774,10 @@ export class WebColaCnDGraph extends HTMLElementBase {
             .text(formatNodeAttributeLine(line, ','));
         });
       });
+    if (this.singleLineLabels.length) {
+      this.measureSingleLineLabels();
+      this.ownerDocument.fonts?.addEventListener('loadingdone', this.measureSingleLineLabels);
+    }
   }
 
   /**
