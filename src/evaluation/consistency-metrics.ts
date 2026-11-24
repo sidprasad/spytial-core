@@ -468,7 +468,7 @@ function requiredVerticalSep(
  * Constraint types we score:
  *   - `LeftConstraint(a, b)`:  satisfied iff `b.x − a.x + tol ≥ required horizontal sep`.
  *   - `TopConstraint(a, b)`:   satisfied iff `b.y − a.y + tol ≥ required vertical sep`.
- *   - `AlignmentConstraint(a, b, axis)`: satisfied iff `|a.axis − b.axis| ≤ tol`.
+ *   - `AlignmentConstraint(a, b, axis)`: satisfied iff the two leading edges on that axis are within tolerance.
  *
  * `BoundingBoxConstraint` and `GroupBoundaryConstraint` are not
  * translated to WebCola today, so they don't enter the denominator.
@@ -515,8 +515,10 @@ export function constraintAdherence(
       const n1 = byId.get(c.node1.id);
       const n2 = byId.get(c.node2.id);
       if (!n1 || !n2) continue;
-      const a = c.axis === 'x' ? (n1.x ?? 0) : (n1.y ?? 0);
-      const b = c.axis === 'x' ? (n2.x ?? 0) : (n2.y ?? 0);
+      const visualSize = c.axis === 'x' ? 'visualWidth' : 'visualHeight';
+      const size = c.axis === 'x' ? 'width' : 'height';
+      const a = (n1[c.axis] ?? 0) - (n1[visualSize] ?? n1[size] ?? c.node1[size]) / 2;
+      const b = (n2[c.axis] ?? 0) - (n2[visualSize] ?? n2[size] ?? c.node2[size]) / 2;
       total += 1;
       if (Math.abs(a - b) <= tol) satisfied += 1;
     }

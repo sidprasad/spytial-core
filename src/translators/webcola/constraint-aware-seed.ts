@@ -197,17 +197,14 @@ function solveAxis(
 }
 
 /**
- * Mirrors computeHorizontalSeparation/computeVerticalSeparation in
- * webcolatranslator.ts: half-extents + minDistance + adaptive padding.
- * Exact agreement with the solver's (later scaled) gaps is not required —
- * near-satisfaction keeps the constraint projection phases near-no-ops.
+ * Gap between leading edges: the first box's extent plus the clearance
+ * used by the translator. Alignment classes then share a leading edge.
  */
-function separationGap(a: LayoutNode, b: LayoutNode, minDistance: number, axis: 'x' | 'y'): number {
+function leadingEdgeGap(a: LayoutNode, b: LayoutNode, minDistance: number, axis: 'x' | 'y'): number {
   const extentA = (axis === 'x' ? a.width : a.height) ?? 100;
   const extentB = (axis === 'x' ? b.width : b.height) ?? 100;
-  const base = extentA / 2 + extentB / 2 + minDistance;
-  const adaptive = Math.min(Math.max(extentA, extentB) * 0.1, 20);
-  return base + adaptive;
+  const adaptive = Math.min(Math.max(extentA, extentB) * 0.1, axis === 'x' ? 20 : 15);
+  return extentA + minDistance + adaptive;
 }
 
 /** Organ-pipe arrangement: sorted input -> palindromic output, so equal
@@ -341,6 +338,7 @@ export function computeConstraintAwareSeed(
     return null;
   }
   // ── 1. Solve each axis's constraint system exactly ──────────────────
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
   const xSeparations: SeparationPair[] = [];
   const ySeparations: SeparationPair[] = [];
   const xAlignments: Array<[string, string]> = [];
@@ -350,17 +348,15 @@ export function computeConstraintAwareSeed(
       xSeparations.push({
         before: constraint.left.id,
         after: constraint.right.id,
-        gap: separationGap(constraint.left, constraint.right, constraint.minDistance, 'x'),
+        gap: leadingEdgeGap(nodeById.get(constraint.left.id)!, nodeById.get(constraint.right.id)!, constraint.minDistance, 'x'),
       });
     } else if (isTopConstraint(constraint)) {
       ySeparations.push({
         before: constraint.top.id,
         after: constraint.bottom.id,
-        gap: separationGap(constraint.top, constraint.bottom, constraint.minDistance, 'y'),
+        gap: leadingEdgeGap(nodeById.get(constraint.top.id)!, nodeById.get(constraint.bottom.id)!, constraint.minDistance, 'y'),
       });
     } else if (isAlignmentConstraint(constraint)) {
-      // Cola semantics: separation with equality on `axis`, i.e. the nodes
-      // share that coordinate.
       if (constraint.axis === 'x') {
         xAlignments.push([constraint.node1.id, constraint.node2.id]);
       } else {
@@ -456,25 +452,27 @@ export function computeConstraintAwareSeed(
   // the component stays exact.
   const anchorAxis = (
     axis: AxisSolution,
-    tree: Map<string, number>
+    tree: Map<string, number>,
+    dimension: 'width' | 'height'
   ): Map<string, number> => {
     const sums = new Map<number, { delta: number; count: number }>();
     for (const [id, rawCoord] of axis.raw) {
       const comp = axis.component.get(id)!;
       const entry = sums.get(comp) ?? { delta: 0, count: 0 };
-      entry.delta += (tree.get(id) ?? 0) - rawCoord;
+      const center = rawCoord + nodeById.get(id)![dimension] / 2;
+      entry.delta += (tree.get(id) ?? 0) - center;
       entry.count += 1;
       sums.set(comp, entry);
     }
     const final = new Map<string, number>();
     for (const [id, rawCoord] of axis.raw) {
       const { delta, count } = sums.get(axis.component.get(id)!)!;
-      final.set(id, rawCoord + delta / count);
+      final.set(id, rawCoord + nodeById.get(id)![dimension] / 2 + delta / count);
     }
     return final;
   };
-  const pinnedX = anchorAxis(xAxis, treeX);
-  const pinnedY = anchorAxis(yAxis, treeY);
+  const pinnedX = anchorAxis(xAxis, treeX, 'width');
+  const pinnedY = anchorAxis(yAxis, treeY, 'height');
 
   // ── 4. Assemble and recenter on the figure ──────────────────────────
   const seed = new Map<string, SeedPosition>();

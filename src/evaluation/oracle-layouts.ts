@@ -43,6 +43,7 @@ import {
   isLeftConstraint,
   isTopConstraint,
   isAlignmentConstraint,
+  alignmentCenterGap,
   type LayoutConstraint,
 } from '../layout/interfaces';
 import { Solver, Variable, Constraint as KiwiConstraint, Operator, Strength } from 'kiwi.js';
@@ -116,7 +117,7 @@ export function positionalOracle(
     } else if (isAlignmentConstraint(c)) {
       const v1 = c.axis === 'x' ? xs.get(c.node1.id)! : ys.get(c.node1.id)!;
       const v2 = c.axis === 'x' ? xs.get(c.node2.id)! : ys.get(c.node2.id)!;
-      solver.addConstraint(new KiwiConstraint(v1, Operator.Eq, v2, Strength.required));
+      solver.addConstraint(new KiwiConstraint(v1.plus(alignmentCenterGap(c.axis, c.node1, c.node2)), Operator.Eq, v2, Strength.required));
     }
   }
 
@@ -266,7 +267,7 @@ export function pairwiseDistanceOracle(
           axis: c.axis,
           left: i1,
           right: i2,
-          gap: 0,
+          gap: alignmentCenterGap(c.axis, c.node1, c.node2),
           equality: true,
         });
       }
