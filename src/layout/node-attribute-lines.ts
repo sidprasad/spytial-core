@@ -4,6 +4,7 @@ import type { TextStyle } from './style/text-style';
 type NodeAttributes = Pick<LayoutNode, 'attributes' | 'attributeTextStyles' | 'tagAttributeOffsets'>;
 
 export interface NodeAttributeLine {
+    kind: 'attribute' | 'tag';
     key: string;
     values: string[];
     separator: string;
@@ -13,11 +14,11 @@ export interface NodeAttributeLine {
 export function getNodeAttributeLines(node: NodeAttributes): NodeAttributeLine[] {
     return Object.entries(node.attributes ?? {}).flatMap(([key, values]) => {
         const textStyle = node.attributeTextStyles?.[key];
-        const attribute = { key, values, textStyle, separator: ': ' };
+        const attribute = { kind: 'attribute' as const, key, values, textStyle, separator: ': ' };
         const tagOffset = node.tagAttributeOffsets?.[key];
         if (typeof tagOffset !== 'number' || tagOffset >= values.length) return [attribute];
 
-        const tag = { key, values: values.slice(tagOffset), textStyle, separator: key ? ' ' : '' };
+        const tag = { kind: 'tag' as const, key, values: values.slice(tagOffset), textStyle, separator: key ? ' ' : '' };
         return tagOffset === 0 ? [tag] : [{ ...attribute, values: values.slice(0, tagOffset) }, tag];
     });
 }

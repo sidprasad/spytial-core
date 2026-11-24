@@ -298,4 +298,5 @@ export type {
   HoldRules,
 } from './language';
 
+export type { DiagramLabelTarget } from './translators/webcola/label-highlights';
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './translators/webcola/graph-view-options';

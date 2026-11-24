@@ -16,6 +16,7 @@ import { MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE, LABEL_LINE_HEIGHT_RATIO, res
 import { FALLBACK_ICON, getInlinableIconSvg } from '../../layout/icon-registry';
 import { setLabLightness, type NodeColorParams } from '../../layout/colorpicker';
 import { isAutoSizedNode } from '../../layout/auto-sized-nodes';
+import { LabelHighlights, type DiagramLabelTarget } from './label-highlights';
 import { formatNodeAttributeLine, getNodeAttributeLines } from '../../layout/node-attribute-lines';
 import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewOptions, type GraphControl } from './graph-view-options';
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
@@ -458,6 +459,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private static readonly DARK_THEME: Record<string, string> = {
     '--cnd-canvas-bg': '#1e1e1e',
     '--cnd-label-text': '#e6e6e6',
+    '--cnd-label-highlight': 'rgba(102, 80, 9, .94)',
     '--cnd-edge-color': '#7d828b',
     '--cnd-node-border': '#8b919b',
     '--cnd-edge-highlight': '#f0f0f0',
@@ -863,6 +865,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private isGridifyingInProgress: boolean = false;
 
   // We use these to store state and references.
+  private readonly labelHighlights = new LabelHighlights();
   private svgNodes : any;
   private svgLinkGroups : any;
   private svgGroups : any;
@@ -2215,6 +2218,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.colaLayout.links(this.currentLayout.links);
 
     // Re-render links
+    this.labelHighlights.clear(true);
     this.container.selectAll('.link-group').remove();
     this.renderLinks(this.currentLayout.links, this.colaLayout);
 
@@ -3379,6 +3383,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private teardownInflightRender(): void {
     this.ownerDocument?.fonts?.removeEventListener('loadingdone', this.measureSingleLineLabels);
     this.singleLineLabels = [];
+    this.labelHighlights.clear();
     this.stopEdgeLabelObservation?.();
     this.stopEdgeLabelObservation = undefined;
     if (this.colaLayout) {
@@ -3737,7 +3742,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .style("font-size", (d: any) => this.edgeLabelFontSize(d))
       .style("fill", (d: any) => this.edgeLabelFill(d))
       .attr("pointer-events", "none")
-      .text((d: any) => d.label || d.relName || "");
+      .text((d: any) => d.label || d.relName || "")
+      .each((d, i, labels) => this.labelHighlights.register({ kind: 'edge', edgeId: d.id }, labels[i]));
   }
 
   /**
@@ -4771,7 +4777,9 @@ export class WebColaCnDGraph extends HTMLElementBase {
             // textStyle.color for this attribute/tag line; null = inherit the
             // themed parent `.label` fill (so dark mode still lightens it).
             .style("fill", line.textStyle?.color ?? null)
-            .text(formatNodeAttributeLine(line, ','));
+            .text(formatNodeAttributeLine(line, ','))
+            .each((_d: unknown, i: number, spans: SVGTSpanElement[]) =>
+              this.labelHighlights.register({ kind: line.kind, nodeId: d.id, key: line.key }, spans[i]));
         });
       });
     if (this.singleLineLabels.length) {
@@ -6886,6 +6894,17 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .classed('highlighted', false);
     this.updateArrowheads();
     return true;
+  }
+
+  /** Whether the current diagram renders this specific label. */
+  public hasLabel(target: DiagramLabelTarget): boolean {
+    return this.labelHighlights.has(target);
+  }
+
+  /** Mark exact captions in the current render. Call the returned function to
+   * release this request; other active requests retain their own marks. */
+  public highlightLabels(targets: readonly DiagramLabelTarget[]): () => void {
+    return this.labelHighlights.highlight(targets);
   }
 
   /** Public API for node highlighting */
