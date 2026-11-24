@@ -10,9 +10,9 @@
  *     unconstrained node so its label and any secondary lines fit at
  *     {MAIN_LABEL_FONT_SIZE, SECONDARY_FONT_SIZE} with visual breathing
  *     room.
- *   - webcola-cnd-graph renders at those exact font sizes — no per-node
- *     resizing, no wrapping. If the user pins a too-small `size` directive,
- *     text overflows the rect (their explicit choice; sat_size still holds).
+ *   - webcola-cnd-graph uses these as base sizes. At reduced zoom, a lone
+ *     node name can use spare room inside its existing box for legibility.
+ *     Text at the base size can overflow a small explicit `size`.
  *
  * Stays canvas/document-free so this module is node-runnable for tests.
  * The estimator's per-glyph width table is calibrated to slightly

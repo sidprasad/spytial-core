@@ -64,6 +64,18 @@ function fixture(attached = true) {
 }
 
 describe('late edge-label geometry', () => {
+  it('refits on viewport resize when nodes have no labeled edges', () => {
+    const f = fixture();
+    f.container.querySelector('.link-group')!.remove();
+    const refit = vi.fn();
+    const stop = observeRenderedEdgeLabels(f.container, refit);
+    expect(observers[0].targets).toContain(f.svg);
+    f.notifyResize();
+    flushFrame();
+    expect(refit).toHaveBeenCalledOnce();
+    stop();
+  });
+
   it('remeasures when a pending font settles, without moving nodes or routes', async () => {
     const f = fixture();
     const onPlacement = vi.fn();

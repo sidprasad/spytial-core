@@ -192,6 +192,35 @@ describe('instance-local graph view options', () => {
     expect(nodes.find(n => n.id === 'a').visualHeight).toBe(90);
   });
 
+  it('uses spare room for lone names at fitted zoom, including in explicitly sized nodes', async () => {
+    const graph = mount(new WebColaCnDGraph());
+    // A 480px viewport has 400px left after fit padding for an 800px graph.
+    Object.defineProperty(element(graph, 'svg'), 'clientWidth', { configurable: true, value: 480 });
+    vi.spyOn(graph as any, 'calculateContentBounds').mockReturnValue({ x: 0, y: 0, width: 800, height: 200 });
+    const input = layout(data(), 'constraints:\n  - size: {selector: a, width: 150, height: 100}');
+    const names = () => [...graph.shadowRoot!.querySelectorAll<SVGTSpanElement>('.main-label-tspan')];
+    await graph.renderLayout(input, { transitionMode: 'replace' });
+    expect(graph.getCurrentTransform().k).toBeCloseTo(0.5);
+    const [alpha, beta] = names();
+    expect(alpha.style.fontSize).toBe('28px');
+    expect(beta.style.fontSize).toBe('23px'); // type caption limits the 60px-high box
+    expect(alpha.closest('.node')!.querySelector('rect')!.getAttribute('width')).toBe('150');
+    const positions = graph.getNodePositions();
+    graph.zoomIn();
+    await vi.waitFor(() => expect(graph.getCurrentTransform().k).toBeCloseTo(0.75, 5));
+    expect(alpha.style.fontSize).toBe('19px');
+    expect(beta.style.fontSize).toBe('19px');
+    expect(graph.getNodePositions()).toEqual(positions);
+
+    // Restore a small zoom into a fresh DOM with an already crowded name
+    // and an attribute-bearing node. Both use the original typography.
+    input.nodes[0].label = 'This name is already wider than its authored node';
+    input.nodes[1].attributes = { role: ['Reviewer'] };
+    await graph.renderLayout(input, { priorPositions: graph.getLayoutState(), transitionMode: 'replace' });
+    expect(names().map(span => span.style.fontSize)).toEqual(['14px', '14px']);
+    expect(graph.shadowRoot!.querySelector<SVGTSpanElement>('.label tspan + tspan')!.style.fontSize).toBe('11px');
+  });
+
   it('enforces exploration across modifiers, delete, context menus, forms and edge requests', async () => {
     const instance = data();
     const graph = mount(new StructuredInputGraph(instance));
