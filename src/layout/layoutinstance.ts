@@ -4,6 +4,7 @@ import { uniqueTuples } from '../data-instance/relation-identity';
 import { type PositionalConstraintError, type GroupOverlapError, type HiddenNodeConflictError, type IConstraintValidator, isPositionalConstraintError, isGroupOverlapError, isHiddenNodeConflictError } from './constraint-types';
 import { EdgeStyle, normalizeEdgeStyle } from './edge-style';
 import type { SelectorErrorDetail, LayoutWarning } from './error-state';
+import { compareCyclicCoordinates } from './cyclic-coordinate';
 
 
 import {
@@ -2141,23 +2142,15 @@ export class LayoutInstance {
         layoutNodes: LayoutNode[],
         perturbationIdx: number,
         c: RelativeOrientationConstraint | CyclicOrientationConstraint | ImplicitConstraint): LayoutConstraint[] {
-        const minRadius = 100;
-
-
         if (fragment.length <= 2) {
             return []; // No constraints needed for a two-node fragment.
         }
 
         const angleStep = (2 * Math.PI) / fragment.length;
-
-        let fragmentNodePositions: Record<string, { x: number, y: number }> = {};
-
-        for (var i = 0; i < fragment.length; i++) {
-            let theta = (i + perturbationIdx) * angleStep;
-            let x = minRadius * Math.cos(theta);
-            let y = minRadius * Math.sin(theta);
-            fragmentNodePositions[fragment[i]] = { x: x, y: y };
-        }
+        const fragmentNodePositions = fragment.map((_, i) => {
+            const theta = (i + perturbationIdx) * angleStep;
+            return { x: Math.cos(theta), y: Math.sin(theta) };
+        });
 
         let fragmentConstraintsForCurrentOffset: LayoutConstraint[] = [];
         for (var k = 0; k < fragment.length; k++) {
@@ -2165,28 +2158,28 @@ export class LayoutInstance {
                 if (k !== j) {
                     let node1 = fragment[k];
                     let node2 = fragment[j];
-                    let node1_pos = fragmentNodePositions[node1];
-                    let node2_pos = fragmentNodePositions[node2];
+                    const node1Position = fragmentNodePositions[k];
+                    const node2Position = fragmentNodePositions[j];
+                    const xOrder = compareCyclicCoordinates(node1Position.x, node2Position.x);
+                    const yOrder = compareCyclicCoordinates(node1Position.y, node2Position.y);
 
-                    if (node1_pos.x > node2_pos.x) {
+                    if (xOrder > 0) {
                         fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node2, node1, this.minSepWidth, layoutNodes, c));
                     }
-                    else if (node1_pos.x < node2_pos.x) {
+                    else if (xOrder < 0) {
                         fragmentConstraintsForCurrentOffset.push(this.leftConstraint(node1, node2, this.minSepWidth, layoutNodes, c));
                     }
                     else {
-                        // If they are on the same x-axis, we need to ensure that they are not on top of each other
                         fragmentConstraintsForCurrentOffset.push(this.ensureSameXConstraint(node1, node2, layoutNodes, c));
                     }
 
-                    if (node1_pos.y > node2_pos.y) {
+                    if (yOrder > 0) {
                         fragmentConstraintsForCurrentOffset.push(this.topConstraint(node2, node1, this.minSepHeight, layoutNodes, c));
                     }
-                    else if (node1_pos.y < node2_pos.y) {
+                    else if (yOrder < 0) {
                         fragmentConstraintsForCurrentOffset.push(this.topConstraint(node1, node2, this.minSepHeight, layoutNodes, c));
                     }
                     else {
-                        // If they are on the same y-axis, we need to ensure that they are not on top of each other
                         fragmentConstraintsForCurrentOffset.push(this.ensureSameYConstraint(node1, node2, layoutNodes, c));
                     }
                 }

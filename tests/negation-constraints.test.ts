@@ -1043,25 +1043,12 @@ constraints:
         const layoutInstance = new LayoutInstance(spec, evaluator, 0, true, undefined, ConstraintValidatorStrategy.QUALITATIVE);
         const { layout } = layoutInstance.generateLayout(instance);
 
-        // Negated cyclic should produce multiple DisjunctiveConstraints
-        // (one per rotational alternative that was negated)
-        expect(layout.disjunctiveConstraints).toBeDefined();
-        expect(layout.disjunctiveConstraints!.length).toBeGreaterThan(0);
-
-        // Each negated alternative should have alternatives with minDistance=0
+        // Each triangle rotation has ordinary orderings and an aligned pair.
+        // Negating an ordering uses gap 0, while breaking an alignment uses gap 1.
+        expect(layout.disjunctiveConstraints).toHaveLength(3);
         for (const disj of layout.disjunctiveConstraints!) {
-            expect(disj.alternatives.length).toBeGreaterThan(0);
-            // Check that negated atoms have minDistance=0
-            for (const alt of disj.alternatives) {
-                for (const c of alt) {
-                    if (isTopConstraint(c)) {
-                        expect((c as TopConstraint).minDistance).toBe(0);
-                    }
-                    if (isLeftConstraint(c)) {
-                        expect((c as LeftConstraint).minDistance).toBe(0);
-                    }
-                }
-            }
+            const orderings = disj.alternatives.flat().filter(c => isTopConstraint(c) || isLeftConstraint(c));
+            expect(new Set(orderings.map(c => c.minDistance))).toEqual(new Set([0, 1]));
         }
     });
 
