@@ -1,20 +1,28 @@
 import { placeRenderedEdgeLabels } from './edge-labels';
 
+export interface EdgeLabelObservation {
+  setZoom(scale: number): void;
+  disconnect(): void;
+}
+
 /**
  * Keep final-route labels current when their first measurement happens before
  * attachment, while hidden, or before a web font arrives. Observe sizes, not
  * positions: writing label x/y or zooming must not trigger another placement.
  * No polling is needed while a graph has no rendered geometry.
  */
-export function observeRenderedEdgeLabels(container: SVGGElement, onDeferredPlacement: () => void): () => void {
+export function observeRenderedEdgeLabels(
+  container: SVGGElement, onDeferredPlacement: () => void, zoom = 1,
+): EdgeLabelObservation {
   const hasEdgeLabels = !!container.querySelector('text.linklabel');
   // A viewport resize can change the fitted zoom even in an edgeless graph.
-  if (!hasEdgeLabels && !container.querySelector('.node, .error-node')) return () => {};
+  if (!hasEdgeLabels && !container.querySelector('.node, .error-node')) return { setZoom() {}, disconnect() {} };
   const document = container.ownerDocument;
   const view = document.defaultView;
   const svg = container.ownerSVGElement;
   let active = true;
   let frame: number | undefined;
+  let sizeLabels: ((zoom: number) => void) | undefined;
 
   const placeIfRendered = (): boolean => {
     if (!active || !svg?.isConnected) return false;
@@ -22,7 +30,11 @@ export function observeRenderedEdgeLabels(container: SVGGElement, onDeferredPlac
     // The viewport's client rect establishes that this SVG actually has layout.
     const rect = svg.getClientRects()[0];
     if (!rect || rect.width <= 0 || rect.height <= 0) return false;
-    if (hasEdgeLabels) placeRenderedEdgeLabels(container);
+    if (hasEdgeLabels) {
+      sizeLabels?.(1);
+      sizeLabels = placeRenderedEdgeLabels(container);
+      sizeLabels(zoom);
+    }
     return true;
   };
   const schedule = (): void => {
@@ -70,13 +82,23 @@ export function observeRenderedEdgeLabels(container: SVGGElement, onDeferredPlac
   fonts?.addEventListener('loadingerror', schedule);
   placeIfRendered();
 
-  return () => {
+  const disconnect = () => {
     active = false;
+    sizeLabels?.(1);
+    sizeLabels = undefined;
     observer?.disconnect();
     visibilityObserver?.disconnect();
     fonts?.removeEventListener('loadingdone', schedule);
     fonts?.removeEventListener('loadingerror', schedule);
     if (frame !== undefined) view?.cancelAnimationFrame(frame);
     frame = undefined;
+  };
+  return {
+    disconnect,
+    setZoom(scale) {
+      if (scale === zoom) return;
+      zoom = scale;
+      sizeLabels?.(zoom);
+    },
   };
 }

@@ -12,6 +12,31 @@ describe('edge-attached label placement', () => {
     expect(place(label())).toMatchObject({ x: 50, y: 0 });
   });
 
+  it('allows magnification in clear space, up to the node or foreign stroke beside the label', () => {
+    const short = label(horizontal, 14, 10);
+    expect(place(short).maxScale).toBe(2);
+    const obstacle = { x: 64, y: -8, width: 20, height: 16 };
+    expect(place(short, [obstacle])).toMatchObject({ x: 50, y: 0, maxScale: 1.25 });
+    const parallel = { id: 'unlabeled', points: [{ x: 0, y: 15 }, { x: 100, y: 15 }], strokeWidth: 8 };
+    expect(place(short, [], [horizontal, parallel]).maxScale).toBe(1.25);
+    expect(place(short, [{ ...obstacle, x: 61 }]).maxScale).toBe(1);
+  });
+
+  it('leaves at least half the routed line visible when growing a caption', () => {
+    const wide = label(horizontal, 44, 10);
+    expect(place(wide).maxScale).toBe(1);
+    const vertical = { id: 'vertical', points: [{ x: 0, y: 0 }, { x: 0, y: 100 }] };
+    expect(place(label(vertical, 44, 10)).maxScale).toBe(2);
+  });
+
+  it('reserves the combined growth of neighboring captions in a stable order', () => {
+    const routes = [0, 20].map(y => ({ id: String(y), points: [{ x: 0, y }, { x: 100, y }] }));
+    const labels = routes.map(r => label(r, 10, 10));
+    const result = placeEdgeLabels(labels, [], routes);
+    expect([...result.values()].map(p => p.maxScale)).toEqual([1.25, 1]);
+    expect(placeEdgeLabels([...labels].reverse(), [], routes)).toEqual(result);
+  });
+
   it('makes a long label readable beside a short vertical connection', () => {
     const route = { id: 'short', points: [{ x: 0, y: 0 }, { x: 0, y: 18 }] };
     const obstacles = [

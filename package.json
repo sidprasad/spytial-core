@@ -1,6 +1,6 @@
 {
   "name": "spytial-core",
-  "version": "6.8.1",
+  "version": "6.8.2",
   "description": "A fully client-side application for Spytial.",
   "main": "./dist/browser/spytial-core-complete.global.js",
   "types": "./dist/types/index.d.ts",

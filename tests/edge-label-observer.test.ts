@@ -68,18 +68,18 @@ describe('late edge-label geometry', () => {
     const f = fixture();
     f.container.querySelector('.link-group')!.remove();
     const refit = vi.fn();
-    const stop = observeRenderedEdgeLabels(f.container, refit);
+    const observation = observeRenderedEdgeLabels(f.container, refit);
     expect(observers[0].targets).toContain(f.svg);
     f.notifyResize();
     flushFrame();
     expect(refit).toHaveBeenCalledOnce();
-    stop();
+    observation.disconnect();
   });
 
   it('remeasures when a pending font settles, without moving nodes or routes', async () => {
     const f = fixture();
     const onPlacement = vi.fn();
-    const stop = observeRenderedEdgeLabels(f.container, onPlacement);
+    const observation = observeRenderedEdgeLabels(f.container, onPlacement);
     expect(Number(f.text.getAttribute('x'))).toBe(50);
     const pathBefore = f.container.querySelector('path')!.outerHTML;
     const nodeBefore = f.node.outerHTML;
@@ -90,14 +90,14 @@ describe('late edge-label geometry', () => {
     expect(f.container.querySelector('path')!.outerHTML).toBe(pathBefore);
     expect(f.node.outerHTML).toBe(nodeBefore);
     expect(onPlacement).toHaveBeenCalledOnce();
-    stop();
+    observation.disconnect();
   });
 
   it('handles fonts discovered after ready and coalesces size/font events', () => {
     fonts.status = 'loaded';
     const f = fixture();
     const onPlacement = vi.fn();
-    const stop = observeRenderedEdgeLabels(f.container, onPlacement);
+    const observation = observeRenderedEdgeLabels(f.container, onPlacement);
     f.widerFont();
     fonts.dispatchEvent(new Event('loadingdone'));
     fonts.dispatchEvent(new Event('loadingerror'));
@@ -107,7 +107,7 @@ describe('late edge-label geometry', () => {
     expect(labelOverlap(f.text.getBBox(), f.obstacle)).toBe(0);
     expect(onPlacement).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
-    stop();
+    observation.disconnect();
   });
 
   it.each(['hidden', 'detached', 'no text geometry'] as const)('recovers from %s without polling', state => {
@@ -115,7 +115,7 @@ describe('late edge-label geometry', () => {
     f.widerFont();
     if (state === 'hidden') f.hide();
     if (state === 'no text geometry') f.measurable(false);
-    const stop = observeRenderedEdgeLabels(f.container, vi.fn());
+    const observation = observeRenderedEdgeLabels(f.container, vi.fn());
     expect(f.text.getAttribute('x')).toBe('50');
     expect(f.text.getAttribute('y')).toBe('0');
     f.notifyResize(); flushFrame();
@@ -125,15 +125,15 @@ describe('late edge-label geometry', () => {
     expect(labelOverlap(f.text.getBBox(), f.obstacle)).toBe(0);
     expect(observers[0].targets).toContain(f.text);
     expect(observers[0].targets).toContain(f.svg);
-    stop();
+    observation.disconnect();
   });
 
   it('cancels queued refreshes, font promises, and subscriptions on cleanup', async () => {
     const f = fixture();
     const onPlacement = vi.fn();
-    const stop = observeRenderedEdgeLabels(f.container, onPlacement);
+    const observation = observeRenderedEdgeLabels(f.container, onPlacement);
     f.widerFont(); f.notifyResize();
-    stop();
+    observation.disconnect();
     expect(observers[0].disconnect).toHaveBeenCalledOnce();
     expect(frames.size).toBe(0);
     fontReady(); await Promise.resolve();
@@ -147,12 +147,12 @@ describe('late edge-label geometry', () => {
     const f = fixture();
     f.widerFont();
     f.svg.style.visibility = 'hidden';
-    const stop = observeRenderedEdgeLabels(f.container, vi.fn());
+    const observation = observeRenderedEdgeLabels(f.container, vi.fn());
     expect(f.text.getAttribute('x')).toBe('50');
     f.svg.style.visibility = 'visible';
     await Promise.resolve(); flushFrame();
     expect(labelOverlap(f.text.getBBox(), f.obstacle)).toBe(0);
-    stop();
+    observation.disconnect();
   });
 
   it('disconnects old observers when a renderer reroutes, clears, or disposes', () => {

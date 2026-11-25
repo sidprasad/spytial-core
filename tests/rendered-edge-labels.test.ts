@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { arrowheadBounds, placeRenderedEdgeLabels } from '../src/translators/webcola/edge-labels';
 import { labelOverlap, type LabelRect } from '../src/translators/webcola/routing/edge-label-placement';
@@ -70,6 +70,37 @@ describe('measured SVG edge labels', () => {
     placeRenderedEdgeLabels(container);
     expect(text.getAttribute('x')).toBe('50');
     expect(text.getAttribute('y')).toBe('-2');
+  });
+
+  it('sizes a settled caption and its highlight on zoom and rechecks clearance after routing', async () => {
+    const { graph, edge, obstacle } = fixture();
+    const { path, text } = edge('e');
+    text.style.fontSize = '17px'; // authored edge size
+    path.getTotalLength = () => 200;
+    const sample = vi.spyOn(path, 'getPointAtLength');
+    graph.zoomBehavior.extent([[0, 0], [800, 600]]);
+    const identity = graph.svg.node().__zoom;
+    const zoom = (k: number) => graph.svg.call(graph.zoomBehavior.transform, identity.scale(k));
+    zoom(0.5); // a restored camera, before the route is ready
+    graph.updateLinkLabelsAfterRouting();
+    expect(text.getAttribute('transform')).toBe('matrix(2 0 0 2 -100 0)');
+    graph.labelHighlights.register({ kind: 'edge', edgeId: 'e' }, text);
+    graph.highlightLabels([{ kind: 'edge', edgeId: 'e' }]);
+    const mark = text.previousElementSibling!;
+    expect(mark.getAttribute('transform')).toBe(text.getAttribute('transform'));
+    sample.mockClear();
+    zoom(1.5);
+    await Promise.resolve();
+    expect(text.hasAttribute('transform')).toBe(false);
+    expect(mark.hasAttribute('transform')).toBe(false);
+    expect(text.style.fontSize).toBe('17px');
+    zoom(0.25);
+    expect(text.getAttribute('transform')).toBe('matrix(2 0 0 2 -100 0)');
+    expect(sample).not.toHaveBeenCalled();
+    obstacle('node', { x: 124, y: -10, width: 15, height: 20 });
+    graph.updateLinkLabelsAfterRouting();
+    expect(text.hasAttribute('transform')).toBe(false);
+    expect(text.getAttribute('x')).toBe('100');
   });
 
   it('protects captions but permits the empty interior of groups', () => {

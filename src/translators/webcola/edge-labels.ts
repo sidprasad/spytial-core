@@ -31,9 +31,10 @@ export function measuredBox(element: SVGGraphicsElement): LabelRect | null {
  * final routing in both pipelines (including grid fallback), and again when
  * rendered text geometry changes, not on solver ticks. Every measurement is
  * in the zoomable container's diagram coordinates.
- * Labels remain in their edge groups, preserving lookup, theming and morphs.
+ * The returned zoom handler scales text around its measured center without
+ * invalidating getBBox(), waking ResizeObserver, or resampling paths.
  */
-export function placeRenderedEdgeLabels(container: SVGGElement): void {
+export function placeRenderedEdgeLabels(container: SVGGElement): (zoom: number) => void {
   const obstacles: LabelRect[] = [];
   // Protect complete node content, including icons and overflowing text. Group
   // interiors are usable whitespace; protect captions and border strips only.
@@ -69,7 +70,10 @@ export function placeRenderedEdgeLabels(container: SVGGElement): void {
         return { x: p.x, y: p.y };
       });
       if (!points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) continue;
-      const route = { id, points: simplifyCollinear(points) };
+      const stroke = container.ownerDocument.defaultView?.getComputedStyle(path).strokeWidth;
+      const underlay = group.querySelector<SVGPathElement>('.highlight-underlay');
+      const strokeWidth = Math.max(parseFloat(stroke ?? '') || 0, parseFloat(underlay?.style.strokeWidth ?? '') || 0);
+      const route = { id, points: simplifyCollinear(points), strokeWidth };
       routes.push(route);
       // Marker attributes remain authoritative even after the arrowhead layer
       // suppresses the lower marker copy using inline styles.
@@ -96,9 +100,26 @@ export function placeRenderedEdgeLabels(container: SVGGElement): void {
       // Leave the tick/midpoint fallback in place if geometry is unavailable.
     }
   }
+  const resizable: Array<{ element: SVGTextElement; center: Point; maxScale: number; scale: number }> = [];
   for (const [id, placement] of placeEdgeLabels(labels, obstacles, routes)) {
     const { element, offset } = elements.get(id)!;
     element.setAttribute('x', String(placement.x - offset.x));
     element.setAttribute('y', String(placement.y - offset.y));
+    if (placement.maxScale > 1) {
+      resizable.push({ element, center: placement, maxScale: placement.maxScale, scale: 1 });
+    }
   }
+  return zoom => {
+    const target = Math.max(1, 1 / zoom);
+    for (const label of resizable) {
+      const scale = Math.min(target, label.maxScale);
+      if (scale === label.scale) continue;
+      label.scale = scale;
+      if (scale === 1) label.element.removeAttribute('transform');
+      else {
+        const { x, y } = label.center;
+        label.element.setAttribute('transform', `matrix(${scale} 0 0 ${scale} ${x * (1 - scale)} ${y * (1 - scale)})`);
+      }
+    }
+  };
 }

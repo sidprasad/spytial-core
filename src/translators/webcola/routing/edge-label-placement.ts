@@ -1,9 +1,9 @@
 import type { Point } from './types';
 
 export interface LabelRect { x: number; y: number; width: number; height: number }
-export interface LabelRoute { id: string; points: readonly Point[] }
+export interface LabelRoute { id: string; points: readonly Point[]; strokeWidth?: number }
 export interface EdgeLabelBox { id: string; width: number; height: number; route: LabelRoute }
-export interface LabelPlacement extends Point { box: LabelRect }
+export interface LabelPlacement extends Point { box: LabelRect; maxScale: number }
 
 // A text halo is part of the occupied space, not just the glyph bounding box.
 export const LABEL_CLEARANCE = 3;
@@ -17,22 +17,23 @@ export function labelOverlap(a: LabelRect, b: LabelRect): number {
     * Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
 }
 
-function intersects(a: Point, b: Point, box: LabelRect): boolean {
+/** Fraction of a segment inside the box, or -1 when they are disjoint. */
+function fractionInside(a: Point, b: Point, box: LabelRect): number {
   let lo = 0, hi = 1;
   for (const [origin, delta, min, max] of [
     [a.x, b.x - a.x, box.x, box.x + box.width],
     [a.y, b.y - a.y, box.y, box.y + box.height],
   ]) {
     if (Math.abs(delta) < 1e-9) {
-      if (origin < min || origin > max) return false;
+      if (origin < min || origin > max) return -1;
     } else {
       const t1 = (min - origin) / delta, t2 = (max - origin) / delta;
       lo = Math.max(lo, Math.min(t1, t2));
       hi = Math.min(hi, Math.max(t1, t2));
-      if (lo > hi) return false;
+      if (lo > hi) return -1;
     }
   }
-  return true;
+  return hi - lo;
 }
 
 function bounds(points: readonly Point[]): LabelRect {
@@ -44,6 +45,39 @@ function bounds(points: readonly Point[]): LabelRect {
 function touches(a: LabelRect, b: LabelRect): boolean {
   return a.x <= b.x + b.width && a.x + a.width >= b.x
     && a.y <= b.y + b.height && a.y + a.height >= b.y;
+}
+
+/** Scale a measured box about its visual center. */
+export function scaleLabelBox(box: LabelRect, scale: number): LabelRect {
+  const width = box.width * scale, height = box.height * scale;
+  return { x: box.x + (box.width - width) / 2, y: box.y + (box.height - height) / 2, width, height };
+}
+
+type BoundedRoute = LabelRoute & { bounds: LabelRect };
+
+function padForStroke(box: LabelRect, strokeWidth = 0): LabelRect {
+  if (!strokeWidth) return box;
+  return { x: box.x - strokeWidth / 2, y: box.y - strokeWidth / 2,
+    width: box.width + strokeWidth, height: box.height + strokeWidth };
+}
+
+function crossesRoute(box: LabelRect, route: BoundedRoute): boolean {
+  if (!touches(box, route.bounds)) return false;
+  const padded = padForStroke(box, route.strokeWidth);
+  for (let i = 1; i < route.points.length; i++) {
+    if (fractionInside(route.points[i - 1], route.points[i], padded) >= 0) return true;
+  }
+  return false;
+}
+
+function coveredLength(points: readonly Point[], box: LabelRect): number {
+  let length = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1], b = points[i];
+    const fraction = fractionInside(a, b, box);
+    if (fraction > 0) length += fraction * Math.hypot(b.x - a.x, b.y - a.y);
+  }
+  return length;
 }
 
 function routeSampler(points: readonly Point[]) {
@@ -67,13 +101,14 @@ function routeSampler(points: readonly Point[]) {
   return { length, at };
 }
 
-interface Candidate extends LabelPlacement {
+interface Candidate extends Point {
+  box: LabelRect;
   fixedOverlap: number;
   crossings: number;
   preference: number;
 }
 
-function candidates(label: EdgeLabelBox, obstacles: readonly LabelRect[], routes: readonly (LabelRoute & { bounds: LabelRect })[]): Candidate[] {
+function candidates(label: EdgeLabelBox, obstacles: readonly LabelRect[], routes: readonly BoundedRoute[]) {
   const sample = routeSampler(label.route.points);
   const width = label.width + 2 * LABEL_CLEARANCE, height = label.height + 2 * LABEL_CLEARANCE;
   const result: Candidate[] = [];
@@ -95,16 +130,13 @@ function candidates(label: EdgeLabelBox, obstacles: readonly LabelRect[], routes
       const fixedOverlap = obstacles.reduce((sum, obstacle) => sum + labelOverlap(box, obstacle), 0);
       let crossings = 0;
       for (const route of routes) {
-        if (route.id === label.route.id || !touches(box, route.bounds)) continue;
-        for (let i = 1; i < route.points.length; i++) {
-          if (intersects(route.points[i - 1], route.points[i], box)) { crossings++; break; }
-        }
+        if (route.id !== label.route.id && crossesRoute(box, route)) crossings++;
       }
       result.push({ x, y, box, fixedOverlap, crossings,
         preference: Math.abs(distance - sample.length / 2) + Math.abs(shift) * 1.5 });
     }
   }
-  return result;
+  return { choices: result, routeLength: sample.length };
 }
 
 /**
@@ -122,13 +154,13 @@ function candidates(label: EdgeLabelBox, obstacles: readonly LabelRect[], routes
 export function placeEdgeLabels(
   labels: readonly EdgeLabelBox[], obstacles: readonly LabelRect[], routes: readonly LabelRoute[],
 ): Map<string, LabelPlacement> {
-  const boundedRoutes = routes.map(route => ({ ...route, bounds: bounds(route.points) }));
+  const boundedRoutes = routes.map(route => ({ ...route, bounds: padForStroke(bounds(route.points), route.strokeWidth) }));
   const work = labels.filter(label => label.width > 0 && label.height > 0
     && Number.isFinite(label.width + label.height) && label.route.points.length > 0
     && label.route.points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y)))
     .map(label => {
-      const choices = candidates(label, obstacles, boundedRoutes);
-      return { label, choices, bounds: bounds(choices.flatMap(c => [
+      const { choices, routeLength } = candidates(label, obstacles, boundedRoutes);
+      return { label, choices, routeLength, bounds: bounds(choices.flatMap(c => [
         { x: c.box.x, y: c.box.y }, { x: c.box.x + c.box.width, y: c.box.y + c.box.height },
       ])) };
     });
@@ -169,5 +201,26 @@ export function placeEdgeLabels(
     }
     if (!changed) break;
   }
-  return new Map([...selected].map(([id, { x, y, box }]) => [id, { x, y, box }]));
+  // Keep the settled anchors throughout a zoom gesture. Reserve every label's
+  // base footprint first, then grant extra room in the same stable order as
+  // placement. Any intermediate zoom fits inside these maximum footprints.
+  const occupied = work.map(({ label }) => selected.get(label.id)!.box);
+  const placements = new Map<string, LabelPlacement>();
+  for (const [index, { label, routeLength }] of work.entries()) {
+    const { x, y, box } = selected.get(label.id)!;
+    let maxScale = 1;
+    for (const scale of [2, 1.75, 1.5, 1.25]) {
+      const grown = scaleLabelBox(box, scale);
+      // Even in empty space a caption should leave its connection legible.
+      if (routeLength === 0 || coveredLength(label.route.points, grown) > routeLength / 2) continue;
+      if (obstacles.some(o => touches(grown, o))) continue;
+      if (boundedRoutes.some(r => r.id !== label.route.id && crossesRoute(grown, r))) continue;
+      if (occupied.some((other, i) => i !== index && touches(grown, other))) continue;
+      maxScale = scale;
+      break;
+    }
+    occupied[index] = scaleLabelBox(box, maxScale);
+    placements.set(label.id, { x, y, box, maxScale });
+  }
+  return placements;
 }

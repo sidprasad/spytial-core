@@ -22,7 +22,8 @@ import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewO
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
-import { observeRenderedEdgeLabels } from './edge-label-observer';
+import { scaleLabelBox } from './routing/edge-label-placement';
+import { observeRenderedEdgeLabels, type EdgeLabelObservation } from './edge-label-observer';
 import {
   type EdgeRouter as SpytialEdgeRouter,
   type RouterHost,
@@ -950,7 +951,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
   private textMeasurementCanvas: HTMLCanvasElement | null = null;
   private singleLineLabels: Array<{ span: SVGTSpanElement; width: number; height: number; maxSize: number }> = [];
   private lastLabelTarget = 0;
-  private stopEdgeLabelObservation?: () => void;
+  private edgeLabelObservation?: EdgeLabelObservation;
 
   private get root(): ShadowRoot {
     if (!this.shadowRoot) {
@@ -1228,22 +1229,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
         }
       }
     });
-  }
-
-  /**
-   * Gets the current zoom scale factor
-   * @returns Current zoom scale (k value from transform)
-   */
-  private getCurrentZoomScale(): number {
-    if (this.svg && this.svg.node()) {
-      try {
-        const transform = d3.zoomTransform(this.svg.node());
-        return transform.k;
-      } catch (e) {
-        return 1;
-      }
-    }
-    return 1;
   }
 
   private isErrorGroup(_group: {name: string}): boolean {
@@ -1651,6 +1636,7 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .on('zoom', () => {
         this.container.attr('transform', d3.event.transform);
         this.sizeSingleLineLabels(d3.event.transform.k);
+        this.edgeLabelObservation?.setZoom(d3.event.transform.k);
         // Update zoom control states when zoom changes
         this.updateZoomControlStates();
         // Update small node classes based on new zoom level
@@ -3385,8 +3371,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     this.ownerDocument?.fonts?.removeEventListener('loadingdone', this.measureSingleLineLabels);
     this.singleLineLabels = [];
     this.labelHighlights.clear();
-    this.stopEdgeLabelObservation?.();
-    this.stopEdgeLabelObservation = undefined;
+    this.edgeLabelObservation?.disconnect();
+    this.edgeLabelObservation = undefined;
     if (this.colaLayout) {
       try {
         (this.colaLayout as any).stop?.();
@@ -4951,8 +4937,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private updatePositions(): void {
-    this.stopEdgeLabelObservation?.();
-    this.stopEdgeLabelObservation = undefined;
+    this.edgeLabelObservation?.disconnect();
+    this.edgeLabelObservation = undefined;
     // Update group positions and sizes first (lower layer)
     this.svgGroups
       .attr('x', (d: any) => d.bounds.x)
@@ -5058,20 +5044,6 @@ export class WebColaCnDGraph extends HTMLElementBase {
       .attr('y', (d: EdgeWithMetadata, i: number, nodes: any) => {
         const pathElement = this.getLinkPathElement(nodes[i]);
         return pathElement ? this.calculateNewPosition(pathElement, 'y') : (d.source.y + d.target.y) / 2;
-      })
-      .style('font-size', (d: EdgeWithMetadata) => {
-        // Zoom-aware font sizing: scale up slightly when zoomed out. Base off the
-        // edge's own textStyle tier when it set one — this runs on every tick and
-        // would otherwise clobber the size setupLinkLabels applied, collapsing
-        // every tier back to the 12px default.
-        const baseFontSize = d?.textStyle?.size ? resolveAttrFontSize(d.textStyle.size) : 12;
-        const zoomScale = this.getCurrentZoomScale();
-        // When zoomed out (scale < 1), increase font size slightly to maintain readability
-        // When zoomed in (scale > 1), keep base size
-        const adjustedSize = zoomScale < 1 ? baseFontSize / Math.sqrt(zoomScale) : baseFontSize;
-        // Cap the zoom-out boost at a third above the base rather than a fixed
-        // ceiling, so a `large` tier isn't shrunk back below its authored size.
-        return `${Math.min(adjustedSize, baseFontSize * 4 / 3)}px`;
       })
       .raise();
 
@@ -5193,8 +5165,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
   }
 
   private gridUpdatePositions() {
-    this.stopEdgeLabelObservation?.();
-    this.stopEdgeLabelObservation = undefined;
+    this.edgeLabelObservation?.disconnect();
+    this.edgeLabelObservation = undefined;
 
     // Force recompute node bounds from current positions
     // This is critical for grid mode to work correctly with all node types
@@ -6571,11 +6543,13 @@ export class WebColaCnDGraph extends HTMLElementBase {
 
   /** Choose readable label positions on the final routes without moving nodes. */
   private updateLinkLabelsAfterRouting(): void {
-    this.stopEdgeLabelObservation?.();
-    this.stopEdgeLabelObservation = undefined;
+    this.edgeLabelObservation?.disconnect();
+    this.edgeLabelObservation = undefined;
     const container = this.container?.node() as SVGGElement | null;
     if (container) {
-      this.stopEdgeLabelObservation = observeRenderedEdgeLabels(container, () => this.fitViewportToContent());
+      this.edgeLabelObservation = observeRenderedEdgeLabels(
+        container, () => this.fitViewportToContent(), this.getCurrentTransform().k,
+      );
     }
     this.container.selectAll('.link-group .linklabel').raise();
   }
@@ -6757,7 +6731,12 @@ export class WebColaCnDGraph extends HTMLElementBase {
           }
 
           try {
-            const bbox = this.getBBox();
+            let bbox: { x: number; y: number; width: number; height: number } = this.getBBox();
+            // getBBox omits the element's own transform. Edge labels zoom
+            // around their glyph center, so include that scale in the fit.
+            if (this.classList.contains('linklabel') && this.transform?.baseVal.numberOfItems) {
+              bbox = scaleLabelBox(bbox, this.transform.baseVal.getItem(0).matrix.a);
+            }
             if (bbox.width > 0 || bbox.height > 0) {
               // Add extra padding for text elements due to font metrics
               const textPadding = 5;
