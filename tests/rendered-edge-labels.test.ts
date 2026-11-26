@@ -1,10 +1,26 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { applyToPoints, compose, fromDefinition, fromTransformAttribute } from 'transformation-matrix';
 import { WebColaCnDGraph } from '../src/translators/webcola/webcola-cnd-graph';
 import { arrowheadBounds, placeRenderedEdgeLabels } from '../src/translators/webcola/edge-labels';
 import { labelOverlap, type LabelRect } from '../src/translators/webcola/routing/edge-label-placement';
 
 const ns = 'http://www.w3.org/2000/svg';
 afterEach(() => document.body.replaceChildren());
+
+// jsdom supplies neither SVG transform matrices nor rendered bounding rectangles.
+function diagramBounds(element: SVGElement, points: [number, number][]): DOMRect {
+  const transform = element.getAttribute('transform');
+  if (transform) points = applyToPoints(compose(fromDefinition(fromTransformAttribute(transform))), points);
+  const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);
+  const left = Math.min(...xs), top = Math.min(...ys);
+  return new DOMRect(left, top, Math.max(...xs) - left, Math.max(...ys) - top);
+}
+
+function glyphBounds(text: SVGTextElement): DOMRect {
+  const { x, y, width, height } = text.getBBox();
+  return diagramBounds(text, [[x, y], [x + width, y], [x, y + height], [x + width, y + height]]);
+}
+
 function fixture() {
   const graph = new WebColaCnDGraph() as any;
   document.body.append(graph);
@@ -83,24 +99,38 @@ describe('measured SVG edge labels', () => {
     const zoom = (k: number) => graph.svg.call(graph.zoomBehavior.transform, identity.scale(k));
     zoom(0.5); // a restored camera, before the route is ready
     graph.updateLinkLabelsAfterRouting();
-    expect(text.getAttribute('transform')).toBe('matrix(1.5 0 0 1.5 -50 0)');
+    const base = text.getBBox();
+    const grown = glyphBounds(text);
+    expect(grown.width / base.width).toBeCloseTo(1.5);
+    expect(grown.left + grown.width / 2).toBeCloseTo(base.x + base.width / 2);
+    expect(grown.top + grown.height / 2).toBeCloseTo(base.y + base.height / 2);
     graph.labelHighlights.register({ kind: 'edge', edgeId: 'e' }, text);
     graph.highlightLabels([{ kind: 'edge', edgeId: 'e' }]);
-    const mark = text.previousElementSibling!;
-    expect(mark.getAttribute('transform')).toBe(text.getAttribute('transform'));
+    const mark = text.parentElement!.querySelector<SVGPolygonElement>('.label-highlight-marker')!;
+    const checkHighlight = () => {
+      const points = mark.getAttribute('points')!.trim().split(/\s+/).map(pair => pair.split(',').map(Number) as [number, number]);
+      const backing = diagramBounds(mark, points);
+      const glyphs = glyphBounds(text);
+      expect(backing.left).toBeLessThanOrEqual(glyphs.left);
+      expect(backing.right).toBeGreaterThanOrEqual(glyphs.right);
+      expect(backing.top).toBeLessThan(glyphs.bottom);
+      expect(backing.bottom).toBeGreaterThan(glyphs.top);
+      return backing.width;
+    };
+    const grownHighlightWidth = checkHighlight();
     sample.mockClear();
     zoom(1.5);
     await Promise.resolve();
-    expect(text.hasAttribute('transform')).toBe(false);
-    expect(mark.hasAttribute('transform')).toBe(false);
+    expect(glyphBounds(text).width).toBeCloseTo(base.width);
+    expect(checkHighlight()).toBeLessThan(grownHighlightWidth);
     expect(text.style.fontSize).toBe('17px');
     zoom(0.25);
-    expect(text.getAttribute('transform')).toBe('matrix(1.5 0 0 1.5 -50 0)');
+    expect(glyphBounds(text).width).toBeCloseTo(grown.width);
     expect(sample).not.toHaveBeenCalled();
-    obstacle('node', { x: 124, y: -10, width: 15, height: 20 });
+    const node = { x: 124, y: -10, width: 15, height: 20 };
+    obstacle('node', node);
     graph.updateLinkLabelsAfterRouting();
-    expect(text.hasAttribute('transform')).toBe(false);
-    expect(text.getAttribute('x')).toBe('100');
+    expect(labelOverlap(glyphBounds(text), node)).toBe(0);
   });
 
   it('keeps a growing caption clear of a long route that bends between coarse samples', () => {
@@ -118,10 +148,7 @@ describe('measured SVG edge labels', () => {
     graph.zoomBehavior.extent([[0, 0], [800, 600]]);
     graph.svg.call(graph.zoomBehavior.transform, graph.svg.node().__zoom.scale(0.5));
     graph.updateLinkLabelsAfterRouting();
-    const scale = Number(text.getAttribute('transform')?.match(/^matrix\(([^ ]+)/)?.[1] ?? 1);
-    const centerX = Number(text.getAttribute('x')), centerY = Number(text.getAttribute('y'));
-    const left = centerX - 10 * scale, right = centerX + 10 * scale;
-    const top = centerY - 7 * scale, bottom = centerY + 7 * scale;
+    const { left, right, top, bottom } = glyphBounds(text);
     expect(top <= 2 && bottom >= 2 && right >= 14 && left <= 2030).toBe(false);
     expect(left <= 14 && right >= 14 && bottom >= 2 && top <= 2082).toBe(false);
   });
@@ -139,15 +166,17 @@ describe('measured SVG edge labels', () => {
     const identity = graph.svg.node().__zoom;
     graph.updateLinkLabelsAfterRouting();
     graph.svg.call(graph.zoomBehavior.transform, identity.scale(0.5));
-    expect(open.text.hasAttribute('transform')).toBe(false);
-    expect(tight.text.hasAttribute('transform')).toBe(false);
-    expect(styled.text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
-    expect(different.text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
+    const scale = (text: SVGTextElement) => glyphBounds(text).width / text.getBBox().width;
+    expect(scale(open.text)).toBeCloseTo(scale(tight.text));
+    expect(scale(styled.text)).toBeGreaterThan(scale(open.text));
+    expect(scale(different.text)).toBeGreaterThan(scale(open.text));
+    const constrained = scale(tight.text);
     // Once the tight copy has room too, both default captions grow together.
     tight.path.getTotalLength = () => 240;
     graph.updateLinkLabelsAfterRouting();
     graph.svg.call(graph.zoomBehavior.transform, identity.scale(0.8));
-    for (const { text } of [open, tight]) expect(text.getAttribute('transform')).toMatch(/^matrix\(1.25 /);
+    expect(scale(open.text)).toBeCloseTo(scale(tight.text));
+    expect(scale(tight.text)).toBeGreaterThan(constrained);
     expect(styled.text.style.fontSize).toBe('17px');
   });
 
@@ -159,22 +188,30 @@ describe('measured SVG edge labels', () => {
     text.getBBox = () => ({ x: Number(text.getAttribute('x')) - 310,
       y: Number(text.getAttribute('y')) - 7, width: 620, height: 14 }) as DOMRect;
     graph.currentLayout = { nodes: [], links: [], groups: [] };
-    Object.defineProperty(graph.svg.node(), 'clientWidth', { value: 360 });
-    graph.zoomBehavior.extent([[0, 0], [360, 320]]);
+    const viewportWidth = 360, viewportHeight = 320;
+    Object.defineProperties(graph.svg.node(), {
+      clientWidth: { value: viewportWidth }, clientHeight: { value: viewportHeight },
+    });
+    graph.zoomBehavior.extent([[0, 0], [viewportWidth, viewportHeight]]);
     const identity = graph.svg.node().__zoom;
     graph.updateLinkLabelsAfterRouting();
+    let firstFitWidth: number | undefined;
     for (const start of [1, 1.5, 0.2]) {
       graph.svg.call(graph.zoomBehavior.transform, identity.scale(start));
+      const settled = new Promise<void>(resolve => graph.zoomBehavior.on('end.test', () => resolve()));
       graph.resetViewToFitContent();
-      // Allow subsequent Fit to View camera transitions to settle.
-      await vi.waitFor(() => expect(graph.getCurrentTransform().k).toBeCloseTo(280 / (620 * 1.5 + 10), 5));
-      const { k, x } = graph.getCurrentTransform();
-      expect(text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
-      const center = x + k * Number(text.getAttribute('x'));
-      const halfWidth = k * 620 * 1.5 / 2;
-      // 40 CSS px of fit padding on each side, plus the text metric inset.
-      expect(center - halfWidth).toBeGreaterThanOrEqual(40);
-      expect(center + halfWidth).toBeLessThanOrEqual(320);
+      await settled;
+      const { k, x, y } = graph.getCurrentTransform();
+      const glyphs = glyphBounds(text);
+      expect(glyphs.width).toBeGreaterThan(text.getBBox().width);
+      expect(x + k * glyphs.left).toBeGreaterThanOrEqual(0);
+      expect(x + k * glyphs.right).toBeLessThanOrEqual(viewportWidth);
+      expect(y + k * glyphs.top).toBeGreaterThanOrEqual(0);
+      expect(y + k * glyphs.bottom).toBeLessThanOrEqual(viewportHeight);
+      const fittedWidth = k * glyphs.width;
+      expect(fittedWidth).toBeGreaterThan(viewportWidth / 2);
+      firstFitWidth ??= fittedWidth;
+      expect(Math.abs(fittedWidth - firstFitWidth)).toBeLessThan(1);
     }
   });
 

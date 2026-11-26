@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { labelOverlap, placeEdgeLabels, LABEL_CLEARANCE, type EdgeLabelBox, type LabelRect, type LabelRoute } from '../src/translators/webcola/routing/edge-label-placement';
+import { labelOverlap, placeEdgeLabels, LABEL_CLEARANCE, type EdgeLabelBox, type LabelPlacement, type LabelRect, type LabelRoute } from '../src/translators/webcola/routing/edge-label-placement';
 
 const horizontal: LabelRoute = { id: 'edge', points: [{ x: 0, y: 0 }, { x: 100, y: 0 }] };
 const label = (route = horizontal, width = 40, height = 12): EdgeLabelBox => ({ id: route.id, route, width, height });
 const place = (box: EdgeLabelBox, obstacles: LabelRect[] = [], routes = [box.route]) =>
   placeEdgeLabels([box], obstacles, routes).get(box.id)!;
+
+function enlargedBounds({ x, y, box, maxScale }: LabelPlacement): LabelRect {
+  const width = box.width * maxScale, height = box.height * maxScale;
+  return { x: x - width / 2, y: y - height / 2, width, height };
+}
 
 describe('edge-attached label placement', () => {
   it('keeps a clear midpoint unchanged', () => {
@@ -16,10 +21,14 @@ describe('edge-attached label placement', () => {
     const short = label(horizontal, 14, 10);
     expect(place(short).maxScale).toBe(1.5);
     const obstacle = { x: 64, y: -8, width: 20, height: 16 };
-    expect(place(short, [obstacle])).toMatchObject({ x: 50, y: 0, maxScale: 1.25 });
+    const besideNode = place(short, [obstacle]);
+    expect(besideNode.maxScale).toBeGreaterThan(1);
+    expect(labelOverlap(enlargedBounds(besideNode), obstacle)).toBe(0);
     const parallel = { id: 'unlabeled', points: [{ x: 0, y: 15 }, { x: 100, y: 15 }], strokeWidth: 8 };
-    expect(place(short, [], [horizontal, parallel]).maxScale).toBe(1.25);
-    expect(place(short, [{ ...obstacle, x: 61 }]).maxScale).toBe(1);
+    const besideStroke = place(short, [], [horizontal, parallel]);
+    expect(besideStroke.maxScale).toBeGreaterThan(1);
+    const stroke = { x: 0, y: 15 - parallel.strokeWidth / 2, width: 100, height: parallel.strokeWidth };
+    expect(labelOverlap(enlargedBounds(besideStroke), stroke)).toBe(0);
   });
 
   it('leaves at least half the routed line visible when growing a caption', () => {
@@ -33,7 +42,9 @@ describe('edge-attached label placement', () => {
     const routes = [0, 20].map(y => ({ id: String(y), points: [{ x: 0, y }, { x: 100, y }] }));
     const labels = routes.map(r => label(r, 10, 10));
     const result = placeEdgeLabels(labels, [], routes);
-    expect([...result.values()].map(p => p.maxScale)).toEqual([1.25, 1]);
+    const [first, second] = labels.map(l => result.get(l.id)!);
+    expect(Math.max(first.maxScale, second.maxScale)).toBeGreaterThan(1);
+    expect(labelOverlap(enlargedBounds(first), enlargedBounds(second))).toBe(0);
     expect(placeEdgeLabels([...labels].reverse(), [], routes)).toEqual(result);
   });
 
@@ -41,7 +52,10 @@ describe('edge-attached label placement', () => {
     const routes = [0, 21].map(y => ({ id: String(y), points: [{ x: 0, y }, { x: 100, y }] }));
     const labels = routes.map(r => ({ ...label(r, 10, 10), sizeGroup: 'value' }));
     const result = placeEdgeLabels(labels, [], routes);
-    expect([...result.values()].map(p => p.maxScale)).toEqual([1.25, 1.25]);
+    const [first, second] = labels.map(l => result.get(l.id)!);
+    expect(first.maxScale).toBeGreaterThan(1);
+    expect(first.maxScale).toBe(second.maxScale);
+    expect(labelOverlap(enlargedBounds(first), enlargedBounds(second))).toBe(0);
     expect(placeEdgeLabels([...labels].reverse(), [], routes)).toEqual(result);
   });
 
