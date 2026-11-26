@@ -34,7 +34,12 @@ function mark(label: Label): () => void {
     marker.setAttribute('points',
       `${x - 1},${top} ${x + width + 2},${top} ${x + width + 1},${bottom} ${x - 2},${bottom}`);
     // The renderer raises paths and labels when it reroutes an edge.
-    if (edge && text.previousSibling !== marker) text.before(marker);
+    if (edge) {
+      const transform = text.getAttribute('transform');
+      if (transform) marker.setAttribute('transform', transform);
+      else marker.removeAttribute('transform');
+      if (text.previousSibling !== marker) text.before(marker);
+    }
   };
   position();
   const view = label.ownerDocument.defaultView!;
