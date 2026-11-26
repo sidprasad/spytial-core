@@ -12,9 +12,9 @@ export function arrowheadBounds(tip: Point, inside: Point): LabelRect | null {
     width: Math.max(...xs) - Math.min(...xs) + 2, height: Math.max(...ys) - Math.min(...ys) + 2 };
 }
 
-export function measuredBox(element: SVGGraphicsElement): LabelRect | null {
+export function measuredBox(element: SVGGraphicsElement, style?: CSSStyleDeclaration): LabelRect | null {
   try {
-    const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+    style ??= element.ownerDocument.defaultView?.getComputedStyle(element);
     if (style?.display === 'none' || style?.visibility === 'hidden') return null;
     const box = element.getBBox();
     if (box.width <= 0 || box.height <= 0 || ![box.x, box.y, box.width, box.height].every(Number.isFinite)) return null;
@@ -143,13 +143,16 @@ export function placeRenderedEdgeLabels(container: SVGGElement): ZoomableEdgeLab
 
       const element = group.querySelector<SVGTextElement>('text.linklabel');
       if (!element?.textContent?.trim()) continue;
-      const box = measuredBox(element);
+      const textStyle = element.ownerDocument.defaultView?.getComputedStyle(element);
+      const box = measuredBox(element, textStyle);
       if (!box) continue;
       // SVG's dominant-baseline is font-dependent. Preserve the measured offset
       // from the x/y anchor to the actual visual center, rather than assuming it.
       const x = Number(element.getAttribute('x') ?? 0), y = Number(element.getAttribute('y') ?? 0);
       elements.set(id, { element, box, offset: { x: box.x + box.width / 2 - x, y: box.y + box.height / 2 - y } });
-      labels.push({ id, width: box.width, height: box.height, route });
+      // Match the rendered caption and its base font size, including any textStyle.size directive.
+      const sizeGroup = JSON.stringify([element.textContent, textStyle?.fontSize]);
+      labels.push({ id, width: box.width, height: box.height, route, sizeGroup });
     } catch {
       // Leave the tick/midpoint fallback in place if geometry is unavailable.
     }

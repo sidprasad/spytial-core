@@ -2,7 +2,7 @@ import type { Point } from './types';
 
 export interface LabelRect { x: number; y: number; width: number; height: number }
 export interface LabelRoute { id: string; points: readonly Point[]; strokeWidth?: number }
-export interface EdgeLabelBox { id: string; width: number; height: number; route: LabelRoute }
+export interface EdgeLabelBox { id: string; width: number; height: number; route: LabelRoute; sizeGroup?: string }
 export interface LabelPlacement extends Point { box: LabelRect; maxScale: number }
 
 // A text halo is part of the occupied space, not just the glyph bounding box.
@@ -204,23 +204,35 @@ export function placeEdgeLabels(
   // Keep the settled anchors throughout a zoom gesture. Reserve every label's
   // base footprint first, then grant extra room in the same stable order as
   // placement. Any intermediate zoom fits inside these maximum footprints.
-  const occupied = work.map(({ label }) => selected.get(label.id)!.box);
+  const baseBoxes = work.map(({ label }) => selected.get(label.id)!.box);
+  const occupied = [...baseBoxes];
+  const sizeGroups = new Map<string | EdgeLabelBox, number[]>();
+  for (const [index, { label }] of work.entries()) {
+    const key = label.sizeGroup ?? label;
+    const group = sizeGroups.get(key);
+    if (group) group.push(index);
+    else sizeGroups.set(key, [index]);
+  }
   const placements = new Map<string, LabelPlacement>();
-  for (const [index, { label, routeLength }] of work.entries()) {
-    const { x, y, box } = selected.get(label.id)!;
-    let maxScale = 1;
-    for (const scale of [1.5, 1.25]) {
-      const grown = scaleLabelBox(box, scale);
-      // Even in empty space a caption should leave its connection legible.
-      if (routeLength === 0 || coveredLength(label.route.points, grown) > routeLength / 2) continue;
-      if (obstacles.some(o => touches(grown, o))) continue;
-      if (boundedRoutes.some(r => r.id !== label.route.id && crossesRoute(grown, r))) continue;
-      if (occupied.some((other, i) => i !== index && touches(grown, other))) continue;
-      maxScale = scale;
-      break;
+  for (const members of sizeGroups.values()) {
+    const maxScale = [1.5, 1.25].find(scale => {
+      // Test all copies at the same size, including their clearance from each other.
+      for (const i of members) occupied[i] = scaleLabelBox(baseBoxes[i], scale);
+      return members.every(i => {
+        const { label, routeLength } = work[i];
+        const grown = occupied[i];
+        return routeLength > 0 && coveredLength(label.route.points, grown) <= routeLength / 2
+          && !obstacles.some(o => touches(grown, o))
+          && !boundedRoutes.some(r => r.id !== label.route.id && crossesRoute(grown, r))
+          && !occupied.some((other, j) => i !== j && touches(grown, other));
+      });
+    }) ?? 1;
+    for (const i of members) {
+      if (maxScale === 1) occupied[i] = baseBoxes[i];
+      const id = work[i].label.id;
+      const { x, y, box } = selected.get(id)!;
+      placements.set(id, { x, y, box, maxScale });
     }
-    occupied[index] = scaleLabelBox(box, maxScale);
-    placements.set(label.id, { x, y, box, maxScale });
   }
   return placements;
 }

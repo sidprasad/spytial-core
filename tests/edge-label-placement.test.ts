@@ -37,6 +37,14 @@ describe('edge-attached label placement', () => {
     expect(placeEdgeLabels([...labels].reverse(), [], routes)).toEqual(result);
   });
 
+  it('chooses the largest scale that neighboring copies of the same caption can use together', () => {
+    const routes = [0, 21].map(y => ({ id: String(y), points: [{ x: 0, y }, { x: 100, y }] }));
+    const labels = routes.map(r => ({ ...label(r, 10, 10), sizeGroup: 'value' }));
+    const result = placeEdgeLabels(labels, [], routes);
+    expect([...result.values()].map(p => p.maxScale)).toEqual([1.25, 1.25]);
+    expect(placeEdgeLabels([...labels].reverse(), [], routes)).toEqual(result);
+  });
+
   it('makes a long label readable beside a short vertical connection', () => {
     const route = { id: 'short', points: [{ x: 0, y: 0 }, { x: 0, y: 18 }] };
     const obstacles = [

@@ -126,6 +126,31 @@ describe('measured SVG edge labels', () => {
     expect(left <= 14 && right >= 14 && bottom >= 2 && top <= 2082).toBe(false);
   });
 
+  it('shares zoom sizing by displayed caption and respects an explicit font-size directive', () => {
+    const { graph, edge } = fixture();
+    const open = edge('long', 'value');
+    const tight = edge('short', 'value', 100);
+    const styled = edge('large', 'value', 200);
+    const different = edge('different', 'entry', 300);
+    for (const { path } of [open, styled, different]) path.getTotalLength = () => 240;
+    open.text.style.fill = 'purple'; // a color directive still shares the default size
+    styled.text.style.fontSize = '17px'; // the renderer's textStyle.size override
+    graph.zoomBehavior.extent([[0, 0], [800, 600]]);
+    const identity = graph.svg.node().__zoom;
+    graph.updateLinkLabelsAfterRouting();
+    graph.svg.call(graph.zoomBehavior.transform, identity.scale(0.5));
+    expect(open.text.hasAttribute('transform')).toBe(false);
+    expect(tight.text.hasAttribute('transform')).toBe(false);
+    expect(styled.text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
+    expect(different.text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
+    // Once the tight copy has room too, both default captions grow together.
+    tight.path.getTotalLength = () => 240;
+    graph.updateLinkLabelsAfterRouting();
+    graph.svg.call(graph.zoomBehavior.transform, identity.scale(0.8));
+    for (const { text } of [open, tight]) expect(text.getAttribute('transform')).toMatch(/^matrix\(1.25 /);
+    expect(styled.text.style.fontSize).toBe('17px');
+  });
+
   it('fits the enlarged caption at the destination zoom on initial fit and after zooming in', async () => {
     const { graph, edge } = fixture();
     const { path, text } = edge('long');

@@ -130,6 +130,8 @@ Customizes the appearance of edges for a specific field (relation). Use `edgeSty
 | `showLabel` | No | boolean | `true` | Whether to display the edge label |
 | `hidden` | No | boolean | `false` | Hide the edge entirely |
 
+At reduced zoom, edge labels with the same text share the largest size that fits every copy, up to 1.5× their base size. Set `textStyle.size` on selected edges to give their labels a separate size tier.
+
 When several `edgeStyle` rules match one edge their set properties **compose**; setting the *same* property two different ways is an error — no silent override.
 
 > **`edgeColor` is the legacy form** and still works: `value`→`lineStyle.color`, `style`→`lineStyle.pattern`, `weight`→`lineStyle.weight`, `highlight`→`lineStyle.highlight`. It will desugar to `edgeStyle` with a deprecation warning.
