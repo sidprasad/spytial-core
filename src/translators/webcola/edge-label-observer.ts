@@ -1,6 +1,7 @@
-import { placeRenderedEdgeLabels } from './edge-labels';
+import { placeRenderedEdgeLabels, sizeEdgeLabels, type ZoomableEdgeLabel } from './edge-labels';
 
 export interface EdgeLabelObservation {
+  readonly labels: readonly ZoomableEdgeLabel[];
   setZoom(scale: number): void;
   disconnect(): void;
 }
@@ -16,13 +17,13 @@ export function observeRenderedEdgeLabels(
 ): EdgeLabelObservation {
   const hasEdgeLabels = !!container.querySelector('text.linklabel');
   // A viewport resize can change the fitted zoom even in an edgeless graph.
-  if (!hasEdgeLabels && !container.querySelector('.node, .error-node')) return { setZoom() {}, disconnect() {} };
+  if (!hasEdgeLabels && !container.querySelector('.node, .error-node')) return { labels: [], setZoom() {}, disconnect() {} };
   const document = container.ownerDocument;
   const view = document.defaultView;
   const svg = container.ownerSVGElement;
   let active = true;
   let frame: number | undefined;
-  let sizeLabels: ((zoom: number) => void) | undefined;
+  let labels: ZoomableEdgeLabel[] = [];
 
   const placeIfRendered = (): boolean => {
     if (!active || !svg?.isConnected) return false;
@@ -31,9 +32,9 @@ export function observeRenderedEdgeLabels(
     const rect = svg.getClientRects()[0];
     if (!rect || rect.width <= 0 || rect.height <= 0) return false;
     if (hasEdgeLabels) {
-      sizeLabels?.(1);
-      sizeLabels = placeRenderedEdgeLabels(container);
-      sizeLabels(zoom);
+      sizeEdgeLabels(labels, 1);
+      labels = placeRenderedEdgeLabels(container);
+      sizeEdgeLabels(labels, zoom);
     }
     return true;
   };
@@ -84,8 +85,8 @@ export function observeRenderedEdgeLabels(
 
   const disconnect = () => {
     active = false;
-    sizeLabels?.(1);
-    sizeLabels = undefined;
+    sizeEdgeLabels(labels, 1);
+    labels = [];
     observer?.disconnect();
     visibilityObserver?.disconnect();
     fonts?.removeEventListener('loadingdone', schedule);
@@ -94,11 +95,12 @@ export function observeRenderedEdgeLabels(
     frame = undefined;
   };
   return {
+    get labels() { return labels; },
     disconnect,
     setZoom(scale) {
       if (scale === zoom) return;
       zoom = scale;
-      sizeLabels?.(zoom);
+      sizeEdgeLabels(labels, zoom);
     },
   };
 }

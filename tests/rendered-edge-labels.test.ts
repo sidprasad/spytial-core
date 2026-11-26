@@ -83,7 +83,7 @@ describe('measured SVG edge labels', () => {
     const zoom = (k: number) => graph.svg.call(graph.zoomBehavior.transform, identity.scale(k));
     zoom(0.5); // a restored camera, before the route is ready
     graph.updateLinkLabelsAfterRouting();
-    expect(text.getAttribute('transform')).toBe('matrix(2 0 0 2 -100 0)');
+    expect(text.getAttribute('transform')).toBe('matrix(1.5 0 0 1.5 -50 0)');
     graph.labelHighlights.register({ kind: 'edge', edgeId: 'e' }, text);
     graph.highlightLabels([{ kind: 'edge', edgeId: 'e' }]);
     const mark = text.previousElementSibling!;
@@ -95,12 +95,62 @@ describe('measured SVG edge labels', () => {
     expect(mark.hasAttribute('transform')).toBe(false);
     expect(text.style.fontSize).toBe('17px');
     zoom(0.25);
-    expect(text.getAttribute('transform')).toBe('matrix(2 0 0 2 -100 0)');
+    expect(text.getAttribute('transform')).toBe('matrix(1.5 0 0 1.5 -50 0)');
     expect(sample).not.toHaveBeenCalled();
     obstacle('node', { x: 124, y: -10, width: 15, height: 20 });
     graph.updateLinkLabelsAfterRouting();
     expect(text.hasAttribute('transform')).toBe(false);
     expect(text.getAttribute('x')).toBe('100');
+  });
+
+  it('keeps a growing caption clear of a long route that bends between coarse samples', () => {
+    const { graph, edge } = fixture();
+    const { path, text } = edge('caption', 'M');
+    path.getTotalLength = () => 200;
+    path.getPointAtLength = d => ({ x: d - 100, y: 0 }) as DOMPoint;
+    text.getBBox = () => ({ x: Number(text.getAttribute('x')) - 10,
+      y: Number(text.getAttribute('y')) - 7, width: 20, height: 14 }) as DOMRect;
+    const foreign = edge('neighbor', '').path;
+    // At 4096 units the old 64 segments cut this corner diagonally.
+    foreign.setAttribute('d', 'M2030,2 H14 V2082');
+    foreign.getTotalLength = () => 4096;
+    foreign.getPointAtLength = d => (d <= 2016 ? { x: 2030 - d, y: 2 } : { x: 14, y: 2 + d - 2016 }) as DOMPoint;
+    graph.zoomBehavior.extent([[0, 0], [800, 600]]);
+    graph.svg.call(graph.zoomBehavior.transform, graph.svg.node().__zoom.scale(0.5));
+    graph.updateLinkLabelsAfterRouting();
+    const scale = Number(text.getAttribute('transform')?.match(/^matrix\(([^ ]+)/)?.[1] ?? 1);
+    const centerX = Number(text.getAttribute('x')), centerY = Number(text.getAttribute('y'));
+    const left = centerX - 10 * scale, right = centerX + 10 * scale;
+    const top = centerY - 7 * scale, bottom = centerY + 7 * scale;
+    expect(top <= 2 && bottom >= 2 && right >= 14 && left <= 2030).toBe(false);
+    expect(left <= 14 && right >= 14 && bottom >= 2 && top <= 2082).toBe(false);
+  });
+
+  it('fits the enlarged caption at the destination zoom on initial fit and after zooming in', async () => {
+    const { graph, edge } = fixture();
+    const { path, text } = edge('long');
+    path.getTotalLength = () => 220;
+    path.getPointAtLength = d => ({ x: 0, y: d }) as DOMPoint;
+    text.getBBox = () => ({ x: Number(text.getAttribute('x')) - 310,
+      y: Number(text.getAttribute('y')) - 7, width: 620, height: 14 }) as DOMRect;
+    graph.currentLayout = { nodes: [], links: [], groups: [] };
+    Object.defineProperty(graph.svg.node(), 'clientWidth', { value: 360 });
+    graph.zoomBehavior.extent([[0, 0], [360, 320]]);
+    const identity = graph.svg.node().__zoom;
+    graph.updateLinkLabelsAfterRouting();
+    for (const start of [1, 1.5, 0.2]) {
+      graph.svg.call(graph.zoomBehavior.transform, identity.scale(start));
+      graph.resetViewToFitContent();
+      // Allow subsequent Fit to View camera transitions to settle.
+      await vi.waitFor(() => expect(graph.getCurrentTransform().k).toBeCloseTo(280 / (620 * 1.5 + 10), 5));
+      const { k, x } = graph.getCurrentTransform();
+      expect(text.getAttribute('transform')).toMatch(/^matrix\(1.5 /);
+      const center = x + k * Number(text.getAttribute('x'));
+      const halfWidth = k * 620 * 1.5 / 2;
+      // 40 CSS px of fit padding on each side, plus the text metric inset.
+      expect(center - halfWidth).toBeGreaterThanOrEqual(40);
+      expect(center + halfWidth).toBeLessThanOrEqual(320);
+    }
   });
 
   it('protects captions but permits the empty interior of groups', () => {

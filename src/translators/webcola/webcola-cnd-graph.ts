@@ -22,7 +22,7 @@ import { defaultGraphViewOptions, type GraphViewOptions, type ResolvedGraphViewO
 export type { GraphViewOptions, ResolvedGraphViewOptions, GraphControl } from './graph-view-options';
 import { getGraphCSS } from './webcola-cnd-graph.styles';
 import { syncArrowheadLayer } from './arrowheads';
-import { scaleLabelBox } from './routing/edge-label-placement';
+import { FIT_TEXT_PADDING, projectedLabelBounds } from './edge-labels';
 import { observeRenderedEdgeLabels, type EdgeLabelObservation } from './edge-label-observer';
 import {
   type EdgeRouter as SpytialEdgeRouter,
@@ -6574,8 +6574,8 @@ export class WebColaCnDGraph extends HTMLElementBase {
     }
 
     // Calculate content bounds
-    const bounds = this.calculateContentBounds();
-    if (!bounds) return;
+    const baseBounds = this.calculateContentBounds();
+    if (!baseBounds) return;
     
     // Get container dimensions
     const containerWidth = svgElement.clientWidth || svgElement.parentElement?.clientWidth || 800;
@@ -6584,15 +6584,30 @@ export class WebColaCnDGraph extends HTMLElementBase {
     // Calculate padding
     const padding = WebColaCnDGraph.VIEWBOX_PADDING * 4; // Increase padding for comfortable view
     
-    // Calculate scale to fit content
-    const scaleX = (containerWidth - padding * 2) / bounds.width;
-    const scaleY = (containerHeight - padding * 2) / bounds.height;
-    const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1:1
-    
-    // Clamp scale to zoom extent
+    const availableWidth = containerWidth - padding * 2;
+    const availableHeight = containerHeight - padding * 2;
     const [minScale, maxScale] = this.zoomBehavior.scaleExtent();
-    const clampedScale = Math.max(minScale, Math.min(maxScale, scale));
-    
+    const fitScale = (box: { width: number; height: number }) =>
+      Math.min(availableWidth / box.width, availableHeight / box.height, 1, maxScale);
+    let clampedScale = Math.max(minScale, fitScale(baseBounds));
+    let bounds = baseBounds;
+    const labels = this.edgeLabelObservation?.labels;
+    if (labels?.length) {
+      bounds = projectedLabelBounds(baseBounds, labels, clampedScale);
+      if (fitScale(bounds) < clampedScale && clampedScale > minScale) {
+        // Screen extents grow monotonically with camera scale. Find the
+        // largest scale that fits, using cached geometry throughout.
+        let low = minScale, high = clampedScale;
+        for (let i = 0; i < 20; i++) {
+          const mid = (low + high) / 2;
+          if (mid <= fitScale(projectedLabelBounds(baseBounds, labels, mid))) low = mid;
+          else high = mid;
+        }
+        clampedScale = low;
+        bounds = projectedLabelBounds(baseBounds, labels, clampedScale);
+      }
+    }
+
     // Calculate center of content
     const contentCenterX = bounds.x + bounds.width / 2;
     const contentCenterY = bounds.y + bounds.height / 2;
@@ -6731,20 +6746,15 @@ export class WebColaCnDGraph extends HTMLElementBase {
           }
 
           try {
-            let bbox: { x: number; y: number; width: number; height: number } = this.getBBox();
-            // getBBox omits the element's own transform. Edge labels zoom
-            // around their glyph center, so include that scale in the fit.
-            if (this.classList.contains('linklabel') && this.transform?.baseVal.numberOfItems) {
-              bbox = scaleLabelBox(bbox, this.transform.baseVal.getItem(0).matrix.a);
-            }
+            // Measure base text here. Fit projects growing labels at its destination zoom.
+            const bbox = this.getBBox();
             if (bbox.width > 0 || bbox.height > 0) {
               // Add extra padding for text elements due to font metrics
-              const textPadding = 5;
               updateBounds(
-                bbox.x - textPadding,
-                bbox.x + bbox.width + textPadding,
-                bbox.y - textPadding,
-                bbox.y + bbox.height + textPadding
+                bbox.x - FIT_TEXT_PADDING,
+                bbox.x + bbox.width + FIT_TEXT_PADDING,
+                bbox.y - FIT_TEXT_PADDING,
+                bbox.y + bbox.height + FIT_TEXT_PADDING
               );
             }
           } catch (e) {

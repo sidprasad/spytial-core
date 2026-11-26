@@ -209,7 +209,7 @@ export function placeEdgeLabels(
   for (const [index, { label, routeLength }] of work.entries()) {
     const { x, y, box } = selected.get(label.id)!;
     let maxScale = 1;
-    for (const scale of [2, 1.75, 1.5, 1.25]) {
+    for (const scale of [1.5, 1.25]) {
       const grown = scaleLabelBox(box, scale);
       // Even in empty space a caption should leave its connection legible.
       if (routeLength === 0 || coveredLength(label.route.points, grown) > routeLength / 2) continue;
